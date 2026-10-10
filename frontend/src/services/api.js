@@ -19,6 +19,7 @@ async function request(path, options) {
   }
   if (!res.ok) {
     const detail = body && (body.detail || body.error);
+    if (Array.isArray(detail)) throw new Error(detail.map((d) => `${(d.loc || []).slice(1).join('.')} ${d.msg}`.trim()).join('; '));
     throw new Error(typeof detail === 'string' ? detail : `Backend returned HTTP ${res.status}`);
   }
   return body;
@@ -129,6 +130,8 @@ function rowToAsset(r) {
     spark: r.spark || null,
     posMass: r.pos_mass,
     negMass: r.neg_mass,
+    ticker: r.ticker || null,
+    userAdded: !!r.user_added,
   };
 }
 
@@ -279,6 +282,20 @@ export const api = {
   getGraph: () => request('/api/graph'),
   resetGraph: () => request('/api/reset', { method: 'POST' }),
 
+  // live quotes (Yahoo Finance via yfinance on the backend)
+  getQuotes: (symbols) => request(`/api/quotes?symbols=${encodeURIComponent(symbols.join(','))}`),
+  getWatchlist: () => request('/api/watchlist'),
+  addWatch: (symbol) => request('/api/watchlist', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ symbol }) }),
+  removeWatch: (symbol) => request(`/api/watchlist/${encodeURIComponent(symbol)}`, { method: 'DELETE' }),
+
+  // dynamic knowledge base
+  getKb: () => request('/api/kb'),
+  setKbMode: (mode) => request('/api/kb/mode', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ mode }) }),
+  revertKb: (to) => request('/api/kb/revert', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ to }) }),
+  addAsset: (ticker, name, sector) =>
+    request('/api/kb/asset', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ticker, name: name || null, sector: sector || null }) }),
+  removeAsset: (id) => request(`/api/kb/asset/${encodeURIComponent(id)}`, { method: 'DELETE' }),
+
   // Returns the raw backend result plus adapted views for the pages. Throws on any failure.
   async analyze(text, live = prefs.getLive(), source = null, link = null) {
     const res = await request('/api/analyze', {
@@ -298,6 +315,7 @@ export const api = {
       assetView: toAssetView(res),
       graphView: toGraphView(res),
       marketSectors: toMarketSectors(res),
+      kbGuard: res.kb_guard || null,
       noEvent: !(res.paths && res.paths.length),
     };
   },

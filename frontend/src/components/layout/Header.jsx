@@ -34,7 +34,7 @@ export default function Header({
   let pill = { text: 'Connecting…', color: '#a1a1aa', title: 'Checking the backend' };
   if (status && status.error) pill = { text: 'Backend offline', color: '#dc2626', title: status.error };
   else if (status && status.llm_required && !status.llm) pill = { text: 'LLM key missing', color: '#d97706', title: 'The LLM is required for graph building but no key is configured in .env' };
-  else if (status) pill = { text: status.llm ? `Engine live · ${status.llm}` : 'Engine live · rules only', color: '#16a34a', title: `LLM: ${status.llm ? `${status.llm} (${status.llm_model || 'default model'})` : 'none'} · FRED key: ${status.fred_key ? 'set' : 'not set'} · NewsAPI key: ${status.news_key ? 'set' : 'not set'}` };
+  else if (status) pill = { text: `Engine live · ${status.llm || 'rules only'}${status.kb && status.kb.mode === 'static' ? ' · static KB' : ''}`, color: '#16a34a', title: `LLM: ${status.llm ? `${status.llm} (${status.llm_model || 'default model'})` : 'none'} · knowledge base: ${status.kb ? status.kb.mode : '?'} · FRED key: ${status.fred_key ? 'set' : 'not set'} · NewsAPI key: ${status.news_key ? 'set' : 'not set'}` };
 
   return (
     <header className={`top-header ${isChat ? 'chatgpt-header' : ''}`}>

@@ -55,7 +55,7 @@ export default function Layout({
   };
 
   return (
-    <UiContext.Provider value={{ search, setSearch, refreshTick, status }}>
+    <UiContext.Provider value={{ search, setSearch, refreshTick, status, refreshStatus: loadStatus }}>
       <div className={`app-container ${isSidebarCollapsed ? 'sidebar-is-collapsed' : ''}`}>
         {/* Mobile Drawer Backdrop */}
         <div

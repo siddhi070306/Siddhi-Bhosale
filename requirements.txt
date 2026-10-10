@@ -3,5 +3,5 @@ uvicorn>=0.27
 networkx>=2.6
 numpy>=1.24
 requests>=2.31
-yfinance>=0.2.50
+yfinance>=0.2.66
 pandas>=2.0

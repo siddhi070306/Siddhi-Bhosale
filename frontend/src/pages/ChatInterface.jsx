@@ -83,6 +83,7 @@ export default function ChatInterface({
         entities: result.view.extractedEntities,
         details: result.view.details,
         noEvent: result.noEvent,
+        kbGuard: result.kbGuard,
       };
       setMessages((prev) => [...prev, aiMsg]);
       // Note: We stay on the chat page like ChatGPT, revealing the dashboards in the sidebar and action buttons
@@ -184,6 +185,19 @@ export default function ChatInterface({
                       {msg.summary}
                     </p>
                     {msg.llmNote && <p style={{ fontSize: 11.5, color: '#71717a' }}>{msg.llmNote}</p>}
+                    {msg.kbGuard && msg.kbGuard.rolled_back && (
+                      <p style={{ fontSize: 11.5, color: '#991b1b' }}>
+                        Knowledge-base guard: what the graph would have learned from this text was rolled back ({msg.kbGuard.failed.map((c) => c.name).join('; ')}). The answer above uses the last good graph.
+                      </p>
+                    )}
+                    {msg.kbGuard && msg.kbGuard.pruned && msg.kbGuard.pruned.length > 0 && (
+                      <p style={{ fontSize: 11.5, color: '#92400e' }}>
+                        Knowledge-base guard: removed {msg.kbGuard.pruned.length} learned link(s) that market data contradicts: {msg.kbGuard.pruned.join(', ')}.
+                      </p>
+                    )}
+                    {msg.kbGuard && msg.kbGuard.mode === 'static' && (
+                      <p style={{ fontSize: 11.5, color: '#71717a' }}>Static mode: the graph is frozen at the curated baseline and learned nothing from this text.</p>
+                    )}
 
                     {/* Extracted metadata box */}
                     <div className="chat-extracted-meta-grid">

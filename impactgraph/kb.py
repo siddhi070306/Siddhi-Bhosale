@@ -101,7 +101,7 @@ for _id, _label, _al, _tk in [
     ("jpm", "JPMorgan Chase", ["jpmorgan chase", "jpmorgan"], "JPM"),
     ("hdfcbank", "HDFC Bank", ["hdfc bank"], "HDFCBANK.NS"),
     ("sbi", "State Bank of India", ["state bank of india", "!SBI"], "SBIN.NS"),
-    ("tatamotors", "Tata Motors", ["tata motors"], "TATAMOTORS.NS"),
+    ("tatamotors", "Tata Motors", ["tata motors"], "TMPV.NS"),   # old TATAMOTORS.NS is gone from Yahoo after the demerger
     ("dlf", "DLF", ["!DLF"], "DLF.NS"),
     ("hul", "Hindustan Unilever", ["hindustan unilever", "!HUL"], "HINDUNILVR.NS"),
     ("infosys", "Infosys", ["infosys"], "INFY.NS"),
@@ -214,6 +214,25 @@ _E = [
 ]
 
 NODES = {n["id"]: n for n in _N}
+STATIC_IDS = frozenset(NODES)   # the curated baseline; anything else in NODES was added at runtime (user assets)
+
+
+def yf_symbol(node_id):
+    """First Yahoo Finance ticker for a node, or None."""
+    n = NODES.get(node_id)
+    for src, sid, _ in (n["series"] if n else []):
+        if src == "yf":
+            return sid
+    return None
+
+
+def dynamic_specs():
+    return [v for k, v in NODES.items() if k not in STATIC_IDS]
+
+
+def drop_dynamic_nodes():
+    for k in [k for k in NODES if k not in STATIC_IDS]:
+        del NODES[k]
 
 _IN_IDS = {"nifty50", "sensex", "nifty_bank", "nifty_realty", "rbi"}
 
@@ -223,7 +242,7 @@ def market_of(node_id):
     n = NODES.get(node_id)
     if not n:
         return "GLOBAL"
-    if node_id in _IN_IDS or any(sid.endswith(".NS") for _, sid, _ in n["series"]):
+    if node_id in _IN_IDS or any(sid.endswith((".NS", ".BO")) for _, sid, _ in n["series"]):
         return "IN"
     if n["type"] in ("company", "index", "instrument"):
         return "US"
