@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { ArrowUpRight, ArrowDownRight, ChevronRight, Zap, Sparkles } from 'lucide-react';
+import { ArrowUpRight, ArrowDownRight, ChevronRight, Zap } from 'lucide-react';
 import Sparkline from '../components/common/Sparkline';
 import { api } from '../services/api';
 

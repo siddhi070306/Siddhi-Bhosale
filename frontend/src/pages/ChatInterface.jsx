@@ -2,15 +2,19 @@ import React, { useState, useRef, useEffect } from 'react';
 import {
   Sparkles,
   ArrowUp,
-  Triangle,
   GitBranch,
   TrendingUp,
   Sliders,
   Layers,
   ArrowRight,
   ShieldCheck,
-  CheckCircle2,
   RefreshCw,
+  Fuel,
+  Landmark,
+  Building2,
+  Cpu,
+  User,
+  Home,
 } from 'lucide-react';
 import { api } from '../services/api';
 
@@ -23,22 +27,26 @@ export default function ChatInterface({ onOpenDashboard, onSelectEventText, onAn
   const starters = [
     {
       title: 'Crude Oil Shock',
-      icon: '🛢️',
+      icon: Fuel,
+      colorClass: 'starter-icon-amber',
       text: 'Brent crude jumped 12% after escalating tensions in the Middle East raised fears of supply disruptions.',
     },
     {
       title: 'Federal Reserve Policy',
-      icon: '🏛️',
+      icon: Landmark,
+      colorClass: 'starter-icon-indigo',
       text: 'The Federal Reserve raised interest rates by 50 basis points on Wednesday, more than markets had expected.',
     },
     {
       title: 'Banking & Risk Regulation',
-      icon: '🏦',
+      icon: Building2,
+      colorClass: 'starter-icon-emerald',
       text: 'The RBI imposed tighter rules on banks, raising risk weights on unsecured consumer loans. Bank stocks fell 2.5%.',
     },
     {
       title: 'Semiconductor Demand',
-      icon: '💻',
+      icon: Cpu,
+      colorClass: 'starter-icon-cyan',
       text: 'TSMC reported record quarterly net profits, forecasting a 25% surge in AI chip demand across global suppliers.',
     },
   ];
@@ -55,7 +63,8 @@ export default function ChatInterface({ onOpenDashboard, onSelectEventText, onAn
     const text = textToSend || inputText;
     if (!text.trim() || loading) return;
 
-    const userMsg = { id: Date.now(), sender: 'user', text };
+    const userMsgId = `usr-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`;
+    const userMsg = { id: userMsgId, sender: 'user', text };
     setMessages((prev) => [...prev, userMsg]);
     setInputText('');
     setLoading(true);
@@ -69,8 +78,9 @@ export default function ChatInterface({ onOpenDashboard, onSelectEventText, onAn
       if (onAnalysisComplete) {
         onAnalysisComplete(text, result);
       }
+      const aiMsgId = `ai-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`;
       const aiMsg = {
-        id: Date.now() + 1,
+        id: aiMsgId,
         sender: 'ai',
         eventText: text,
         summary: result.summary,
@@ -86,7 +96,8 @@ export default function ChatInterface({ onOpenDashboard, onSelectEventText, onAn
         }, 400);
       }
     } catch (e) {
-      setMessages((prev) => [...prev, { id: Date.now() + 1, sender: 'ai', error: e.message }]);
+      const errId = `err-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`;
+      setMessages((prev) => [...prev, { id: errId, sender: 'ai', error: e.message }]);
     } finally {
       setLoading(false);
     }
@@ -105,7 +116,7 @@ export default function ChatInterface({ onOpenDashboard, onSelectEventText, onAn
         /* Welcome / Empty State Screen */
         <div className="chat-welcome-wrapper">
           <div className="chat-welcome-avatar">
-            <Triangle size={28} fill="#ffffff" stroke="#ffffff" />
+            <Sparkles size={26} color="#ffffff" />
           </div>
           <h1 className="chat-welcome-title">
             What financial event are you analyzing today?
@@ -116,19 +127,24 @@ export default function ChatInterface({ onOpenDashboard, onSelectEventText, onAn
 
           {/* 4 Clickable Starter Cards */}
           <div className="chat-starters-grid">
-            {starters.map((s, idx) => (
-              <div
-                key={idx}
-                className="chat-starter-card"
-                onClick={() => handleSend(s.text)}
-              >
-                <div className="chat-starter-title">
-                  <span>{s.icon}</span>
-                  <span>{s.title}</span>
+            {starters.map((s, idx) => {
+              const Icon = s.icon;
+              return (
+                <div
+                  key={idx}
+                  className="chat-starter-card"
+                  onClick={() => handleSend(s.text)}
+                >
+                  <div className="chat-starter-title">
+                    <div className={`chat-starter-icon-badge ${s.colorClass}`}>
+                      <Icon size={16} />
+                    </div>
+                    <span>{s.title}</span>
+                  </div>
+                  <div className="chat-starter-snippet">"{s.text}"</div>
                 </div>
-                <div className="chat-starter-snippet">"{s.text}"</div>
-              </div>
-            ))}
+              );
+            })}
           </div>
         </div>
       ) : (
@@ -140,12 +156,14 @@ export default function ChatInterface({ onOpenDashboard, onSelectEventText, onAn
                 <div className="chat-msg-body" style={{ alignItems: 'flex-end' }}>
                   <div className="chat-bubble-user">{msg.text}</div>
                 </div>
-                <div className="chat-msg-avatar user-avatar">U</div>
+                <div className="chat-msg-avatar user-avatar" title="Analyst">
+                  <User size={15} />
+                </div>
               </div>
             ) : msg.error ? (
               <div key={msg.id} className="chat-message-row">
                 <div className="chat-msg-avatar ai">
-                  <Triangle size={15} fill="#ffffff" stroke="#ffffff" />
+                  <Sparkles size={15} color="#ffffff" />
                 </div>
                 <div className="chat-msg-body">
                   <div className="chat-bubble-ai">
@@ -156,7 +174,7 @@ export default function ChatInterface({ onOpenDashboard, onSelectEventText, onAn
             ) : (
               <div key={msg.id} className="chat-message-row">
                 <div className="chat-msg-avatar ai">
-                  <Triangle size={15} fill="#ffffff" stroke="#ffffff" />
+                  <Sparkles size={15} color="#ffffff" />
                 </div>
                 <div className="chat-msg-body">
                   <div className="chat-bubble-ai">
@@ -250,6 +268,7 @@ export default function ChatInterface({ onOpenDashboard, onSelectEventText, onAn
                           className="chat-launch-btn"
                           onClick={() => onOpenDashboard('home')}
                         >
+                          <Home size={13} />
                           <span>Overview Dashboard</span>
                         </button>
                       </div>
@@ -263,7 +282,7 @@ export default function ChatInterface({ onOpenDashboard, onSelectEventText, onAn
           {loading && (
             <div className="chat-message-row">
               <div className="chat-msg-avatar ai">
-                <Triangle size={15} fill="#ffffff" stroke="#ffffff" />
+                <Sparkles size={15} color="#ffffff" />
               </div>
               <div className="chat-msg-body">
                 <div className="chat-bubble-ai" style={{ display: 'flex', alignItems: 'center', gap: 10, padding: 14 }}>

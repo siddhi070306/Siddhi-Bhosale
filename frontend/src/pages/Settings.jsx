@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Settings as SettingsIcon, Database, Key, Server, RefreshCw, Check } from 'lucide-react';
+import { Database, Key, Server, RefreshCw, Check } from 'lucide-react';
 import { api, prefs } from '../services/api';
 
 export default function Settings() {
@@ -62,14 +62,20 @@ export default function Settings() {
           </div>
 
           <div className="event-detail-row">
-            <span className="detail-key">FRED API Key</span>
+            <span className="detail-key" style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+              <Key size={13} color="#71717a" />
+              <span>FRED API Key</span>
+            </span>
             <span className="detail-val">
               {!status ? '…' : status.fred_key ? 'Configured (official FRED API)' : 'Not set: public CSV download'}
             </span>
           </div>
 
           <div className="event-detail-row">
-            <span className="detail-key">NewsAPI Key</span>
+            <span className="detail-key" style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+              <Key size={13} color="#71717a" />
+              <span>NewsAPI Key</span>
+            </span>
             <span className="detail-val">
               {!status ? '…' : status.news_key ? 'Configured (NewsAPI)' : 'Not set: public RSS feeds'}
             </span>

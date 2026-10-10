@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Search, ArrowUpRight, ArrowDownRight, Layers, PieChart } from 'lucide-react';
+import { Search, ArrowUpRight, ArrowDownRight } from 'lucide-react';
 import TrendChart from '../components/charts/TrendChart';
 import ExposureHeatmap from '../components/charts/ExposureHeatmap';
 

@@ -236,8 +236,14 @@ export default function EventAnalysis({
       {/* Card 4: Model vs Article Checks (matching checks() in public/index.html) */}
       <div className="card" style={{ marginTop: 24 }}>
         <div className="card-title">
-          <span>Model vs Article Checks & Provenance</span>
-          <span className="badge badge-positive">Validated</span>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+            <ShieldCheck size={16} color="#18181b" />
+            <span>Model vs Article Checks & Provenance</span>
+          </div>
+          <span className="badge badge-positive" style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+            <CheckCircle2 size={12} />
+            <span>Validated</span>
+          </span>
         </div>
 
         <table className="data-table">

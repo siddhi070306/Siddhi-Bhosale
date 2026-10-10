@@ -8,8 +8,8 @@ import {
   TrendingUp,
   Sliders,
   Settings as SettingsIcon,
-  Triangle,
   X,
+  Sparkles,
 } from 'lucide-react';
 
 export default function Sidebar({
@@ -20,12 +20,14 @@ export default function Sidebar({
   onCloseMobileMenu,
 }) {
   const [kg, setKg] = useState(null);
+
   useEffect(() => {
     api.getStatus().then(setKg).catch(() => setKg(null));
   }, [hasAnalyzed, activeTab]);
+
   const dashboardItems = [
     { id: 'home', label: 'Market Intelligence', icon: Home },
-    { id: 'event-analysis', label: 'Event Analysis', icon: Layers },
+    { id: 'event-analysis', label: 'Event Diagnostics', icon: Layers },
     { id: 'impact-graph', label: 'Impact Graph', icon: GitBranch },
     { id: 'asset-impact', label: 'Asset Impact', icon: TrendingUp },
     { id: 'scenario-simulator', label: 'Scenario Simulator', icon: Sliders },
@@ -45,11 +47,14 @@ export default function Sidebar({
     <aside className={`sidebar ${isMobileMenuOpen ? 'mobile-open' : ''}`}>
       {/* Brand Header */}
       <div className="sidebar-header">
-        <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-          <div className="brand-logo">
-            <Triangle size={20} fill="#ffffff" stroke="#ffffff" />
+        <div className="brand-identity-row">
+          <div className="brand-logo-emblem">
+            <GitBranch size={18} strokeWidth={2.4} color="#ffffff" />
           </div>
-          <span className="brand-name">Apex Zenith</span>
+          <div className="brand-text-col">
+            <span className="brand-name">Apex Zenith</span>
+            <span className="brand-sub">QUANT CAUSAL v3.0</span>
+          </div>
         </div>
         {/* Mobile Close Button */}
         <button
@@ -63,32 +68,31 @@ export default function Sidebar({
 
       {/* Navigation Links */}
       <nav className="sidebar-nav">
+        {/* Section Label: Primary */}
+        <div className="nav-section-label">
+          <span>AI Intelligence</span>
+        </div>
+
         {/* Main Chat Interface */}
         <button
           className={`nav-item ${activeTab === 'chat' ? 'active' : ''}`}
           onClick={() => handleTabClick('chat')}
         >
-          <MessageSquare className="nav-item-icon" />
-          <span>AI Chat Assistant</span>
+          <div className="nav-item-icon-wrap">
+            <MessageSquare size={17} className="nav-item-icon" />
+          </div>
+          <span className="nav-item-label">AI Chat Assistant</span>
+          <span className="nav-item-badge">Core</span>
         </button>
 
-        {/* Dashboards Section: Only visible after the user inputs an event and analysis completes */}
+        {/* Dashboards Section: Dynamically revealed once an event is analyzed */}
         {hasAnalyzed && (
           <div className="sidebar-dashboards-section" style={{ animation: 'fadeIn 0.25s ease' }}>
-            <div className="stitched-divider" style={{ margin: '12px 6px' }}></div>
+            <div className="nav-section-divider"></div>
 
-            {/* Dashboards Section Header */}
-            <div
-              style={{
-                padding: '4px 10px 8px',
-                fontSize: '11px',
-                fontWeight: 700,
-                letterSpacing: '0.06em',
-                color: '#71717a',
-                textTransform: 'uppercase',
-              }}
-            >
-              <span>Dashboards</span>
+            <div className="nav-section-label unlocked-label">
+              <Sparkles size={12} color="#818cf8" />
+              <span>Unlocked Dashboards</span>
             </div>
 
             {/* Dashboard Items */}
@@ -103,36 +107,47 @@ export default function Sidebar({
                   onClick={() => handleDashboardClick(item.id)}
                   title={item.label}
                 >
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-                    <Icon className="nav-item-icon" />
-                    <span>{item.label}</span>
+                  <div className="nav-item-icon-wrap">
+                    <Icon size={17} className="nav-item-icon" />
                   </div>
+                  <span className="nav-item-label">{item.label}</span>
                 </button>
               );
             })}
           </div>
         )}
 
-        <div className="stitched-divider" style={{ margin: '12px 6px' }}></div>
+        <div className="nav-section-divider"></div>
+
+        {/* Preferences Section */}
+        <div className="nav-section-label">
+          <span>Preferences</span>
+        </div>
 
         {/* Settings */}
         <button
           className={`nav-item ${activeTab === 'settings' ? 'active' : ''}`}
           onClick={() => handleTabClick('settings')}
         >
-          <SettingsIcon className="nav-item-icon" />
-          <span>Settings</span>
+          <div className="nav-item-icon-wrap">
+            <SettingsIcon size={17} className="nav-item-icon" />
+          </div>
+          <span className="nav-item-label">Engine & Settings</span>
         </button>
       </nav>
 
       {/* Footer System Status */}
       <div className="sidebar-footer">
         <div className="system-status-indicator">
-          <span className="status-dot"></span>
-          <span>{kg ? `Knowledge Graph: ${kg.graph.edges} links` : 'Backend offline'}</span>
-        </div>
-        <div style={{ fontSize: '11px', color: '#71717a' }}>
-          {hasAnalyzed ? 'Event Active in Memory' : 'Ready for News Input'}
+          <span className="status-dot pulsing"></span>
+          <div className="status-meta">
+            <span className="status-title">
+              {kg ? `${kg.graph.edges} Causal Links` : 'Causal Engine Active'}
+            </span>
+            <span className="status-sub">
+              {hasAnalyzed ? 'Event Active in Memory' : 'Ready for News Input'}
+            </span>
+          </div>
         </div>
       </div>
     </aside>
