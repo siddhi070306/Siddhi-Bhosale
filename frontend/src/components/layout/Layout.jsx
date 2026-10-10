@@ -12,6 +12,7 @@ export default function Layout({
   setActiveTab,
   hasAnalyzed,
   onNewChat,
+  onStartTour,
   children,
 }) {
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
@@ -87,6 +88,7 @@ export default function Layout({
             isSidebarCollapsed={isSidebarCollapsed}
             onToggleCollapse={() => setIsSidebarCollapsed(!isSidebarCollapsed)}
             onNewChat={onNewChat}
+            onStartTour={onStartTour}
           />
           <main className={`page-content ${activeTab === 'chat' ? 'chat-mode-content' : ''}`}>
             {children}
