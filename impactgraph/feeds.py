@@ -241,10 +241,15 @@ def rss_items():
 
 
 def headlines(limit=25):
-    api = _cached("newsapi:%d" % limit, 120, lambda: newsapi_headlines(limit))
-    if api:
-        return api
-    return (rss_items() or [])[:limit]
+    api = _cached("newsapi:%d" % limit, 120, lambda: newsapi_headlines(limit)) or []
+    rss = rss_items() or []
+    
+    combined = []
+    for a, b in zip(api, rss):
+        combined.extend([a, b])
+    combined.extend(api[len(rss):])
+    combined.extend(rss[len(api):])
+    return combined[:limit]
 
 
 def pool():
