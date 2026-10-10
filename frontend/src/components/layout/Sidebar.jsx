@@ -151,38 +151,21 @@ export default function Sidebar({
           </div>
         )}
 
-        <div className="nav-section-divider"></div>
+      </nav>
 
-        {/* Preferences Section */}
-        <div className="nav-section-label">
-          <span>Preferences</span>
-        </div>
-
-        {/* Settings */}
+      {/* Footer: Engine & Settings */}
+      <div className="sidebar-footer">
         <button
-          className={`nav-item ${activeTab === 'settings' ? 'active' : ''}`}
+          className={`nav-item sidebar-settings-btn ${activeTab === 'settings' ? 'active' : ''}`}
           onClick={() => handleTabClick('settings')}
+          title={kg ? `Engine & Settings (${kg.graph.nodes} entities · ${kg.graph.edges} links)` : 'Engine & Settings'}
         >
           <div className="nav-item-icon-wrap">
             <SettingsIcon size={17} className="nav-item-icon" />
           </div>
           <span className="nav-item-label">Engine & Settings</span>
+          <span className="status-dot pulsing" style={{ marginLeft: 'auto' }} title="Causal Engine Online" />
         </button>
-      </nav>
-
-      {/* Footer System Status */}
-      <div className="sidebar-footer">
-        <div className="system-status-indicator">
-          <span className="status-dot pulsing"></span>
-          <div className="status-meta">
-            <span className="status-title">
-              {kg ? `${kg.graph.nodes} entities · ${kg.graph.edges} links` : 'Backend not reachable'}
-            </span>
-            <span className="status-sub">
-              {kg ? `${kg.graph.articles_ingested} article${kg.graph.articles_ingested === 1 ? '' : 's'} learned` : 'Start the backend'}
-            </span>
-          </div>
-        </div>
       </div>
     </aside>
   );
