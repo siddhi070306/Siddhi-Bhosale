@@ -26,24 +26,23 @@
 }
 
 .chat-welcome-avatar {
-  width: 54px;
-  height: 54px;
-  border-radius: 14px;
-  background: #ffffff;
+  width: 76px;
+  height: 76px;
+  background: transparent;
   display: flex;
   align-items: center;
   justify-content: center;
-  margin-bottom: 16px;
-  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.08);
-  border: 1px solid #e4e4e7;
-  padding: 6px;
-  overflow: hidden;
+  margin-bottom: 20px;
+  border: none;
+  box-shadow: none;
+  padding: 0;
 }
 
 .welcome-logo-img {
   width: 100%;
   height: 100%;
   object-fit: contain;
+  display: block;
 }
 
 .chat-welcome-title {
