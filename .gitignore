@@ -7,4 +7,5 @@ frontend/node_modules/
 frontend/dist/
 *.log
 .claude/
-
+.venv/
+venv/
