@@ -8,6 +8,7 @@ import AssetImpact from './pages/AssetImpact';
 import ScenarioSimulator from './pages/ScenarioSimulator';
 import Settings from './pages/Settings';
 import { api } from './services/api';
+import ProductTour from './components/ui/ProductTour';
 import './styles/index.css';
 import './styles/layout.css';
 import './styles/pages.css';
@@ -20,6 +21,7 @@ export default function App() {
   const [analysis, setAnalysis] = useState(null); // real backend result (+ adapted views); null until an analysis succeeds
   const [notice, setNotice] = useState(null);
   const [messages, setMessages] = useState([]);
+  const [tourIsActive, setTourIsActive] = useState(false);
 
   const handleAnalysisComplete = (text, result) => {
     setCurrentEventText(text);
@@ -146,7 +148,14 @@ export default function App() {
       setActiveTab={setActiveTab}
       hasAnalyzed={hasAnalyzed}
       onNewChat={handleNewChat}
+      onStartTour={() => setTourIsActive(true)}
     >
+      <ProductTour 
+        isActive={tourIsActive} 
+        onComplete={() => setTourIsActive(false)} 
+        setActiveTab={setActiveTab} 
+        setHasAnalyzed={setHasAnalyzed} 
+      />
       {notice && (
         <div className="card" style={{ marginBottom: 16, padding: '10px 16px', fontSize: 13, color: notice.startsWith('Analysis failed') ? '#991b1b' : '#27272a' }}>
           {notice}
