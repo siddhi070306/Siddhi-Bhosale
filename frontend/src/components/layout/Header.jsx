@@ -1,7 +1,11 @@
 import React, { useState } from 'react';
-import { Search, RotateCw, Bell, HelpCircle } from 'lucide-react';
+import { Search, RotateCw, Bell, HelpCircle, Menu } from 'lucide-react';
 
-export default function Header({ searchPlaceholder = 'Search events, companies, sectors...', onSearch }) {
+export default function Header({
+  searchPlaceholder = 'Search events, companies, sectors...',
+  onSearch,
+  onToggleMobileMenu,
+}) {
   const [searchValue, setSearchValue] = useState('');
   const [isRefreshing, setIsRefreshing] = useState(false);
 
@@ -17,23 +21,33 @@ export default function Header({ searchPlaceholder = 'Search events, companies, 
 
   return (
     <header className="top-header">
-      {/* Search Input */}
-      <div className="header-search">
-        <Search className="header-search-icon" />
-        <input
-          type="text"
-          className="header-search-input"
-          placeholder={searchPlaceholder}
-          value={searchValue}
-          onChange={handleSearchChange}
-        />
+      {/* Left: Mobile Toggle & Search */}
+      <div className="header-left">
+        <button
+          className="mobile-menu-btn"
+          onClick={onToggleMobileMenu}
+          aria-label="Toggle navigation menu"
+          title="Toggle navigation menu"
+        >
+          <Menu size={18} />
+        </button>
+        <div className="header-search">
+          <Search className="header-search-icon" />
+          <input
+            type="text"
+            className="header-search-input"
+            placeholder={searchPlaceholder}
+            value={searchValue}
+            onChange={handleSearchChange}
+          />
+        </div>
       </div>
 
       {/* Right Actions & Meta */}
       <div className="header-right">
         {/* Live Date / Time Badge */}
         <div className="live-time-badge">
-          <span>Apr 25, 2025 10:24 AM</span>
+          <span className="live-time-text">Apr 25, 2025 10:24 AM</span>
           <button
             className={`refresh-spin-btn ${isRefreshing ? 'spinning' : ''}`}
             onClick={handleRefresh}

@@ -11,9 +11,16 @@ import {
   Lock,
   Unlock,
   CheckCircle,
+  X,
 } from 'lucide-react';
 
-export default function Sidebar({ activeTab, setActiveTab, hasAnalyzed }) {
+export default function Sidebar({
+  activeTab,
+  setActiveTab,
+  hasAnalyzed,
+  isMobileMenuOpen = false,
+  onCloseMobileMenu,
+}) {
   const dashboardItems = [
     { id: 'home', label: 'Market Intelligence', icon: Home },
     { id: 'event-analysis', label: 'Event Analysis', icon: Layers },
@@ -22,22 +29,38 @@ export default function Sidebar({ activeTab, setActiveTab, hasAnalyzed }) {
     { id: 'scenario-simulator', label: 'Scenario Simulator', icon: Sliders },
   ];
 
+  const handleTabClick = (id) => {
+    setActiveTab(id);
+    if (onCloseMobileMenu) onCloseMobileMenu();
+  };
+
   const handleDashboardClick = (id) => {
     if (!hasAnalyzed) {
       alert('Please enter or select a financial event in the AI Chat Assistant first to unlock and generate these dashboards!');
       return;
     }
     setActiveTab(id);
+    if (onCloseMobileMenu) onCloseMobileMenu();
   };
 
   return (
-    <aside className="sidebar">
+    <aside className={`sidebar ${isMobileMenuOpen ? 'mobile-open' : ''}`}>
       {/* Brand Header */}
       <div className="sidebar-header">
-        <div className="brand-logo">
-          <Triangle size={20} fill="#ffffff" stroke="#ffffff" />
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+          <div className="brand-logo">
+            <Triangle size={20} fill="#ffffff" stroke="#ffffff" />
+          </div>
+          <span className="brand-name">Apex Zenith</span>
         </div>
-        <span className="brand-name">Apex Zenith</span>
+        {/* Mobile Close Button */}
+        <button
+          className="sidebar-close-mobile-btn"
+          onClick={onCloseMobileMenu}
+          aria-label="Close sidebar navigation"
+        >
+          <X size={18} />
+        </button>
       </div>
 
       {/* Navigation Links */}
@@ -45,7 +68,7 @@ export default function Sidebar({ activeTab, setActiveTab, hasAnalyzed }) {
         {/* Main Chat Interface */}
         <button
           className={`nav-item ${activeTab === 'chat' ? 'active' : ''}`}
-          onClick={() => setActiveTab('chat')}
+          onClick={() => handleTabClick('chat')}
         >
           <MessageSquare className="nav-item-icon" />
           <span>AI Chat Assistant</span>
@@ -113,7 +136,7 @@ export default function Sidebar({ activeTab, setActiveTab, hasAnalyzed }) {
         {/* Settings */}
         <button
           className={`nav-item ${activeTab === 'settings' ? 'active' : ''}`}
-          onClick={() => setActiveTab('settings')}
+          onClick={() => handleTabClick('settings')}
         >
           <SettingsIcon className="nav-item-icon" />
           <span>Settings</span>

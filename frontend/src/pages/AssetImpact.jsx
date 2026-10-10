@@ -39,7 +39,7 @@ export default function AssetImpact() {
 
       {/* Search and Filters Bar */}
       <div className="asset-filters-bar">
-        <div style={{ position: 'relative', width: 340 }}>
+        <div style={{ position: 'relative', width: '100%', maxWidth: 340 }}>
           <Search
             size={14}
             style={{ position: 'absolute', left: 12, top: '50%', transform: 'translateY(-50%)', color: '#71717a' }}
@@ -70,54 +70,56 @@ export default function AssetImpact() {
       <div className="asset-dashboard-grid">
         {/* Table of Assets */}
         <div className="card" style={{ padding: 0, overflow: 'hidden' }}>
-          <table className="data-table">
-            <thead>
-              <tr>
-                <th>Asset</th>
-                <th>Type</th>
-                <th>Impact</th>
-                <th>Exposure</th>
-                <th>Confidence</th>
-              </tr>
-            </thead>
-            <tbody>
-              {filteredAssets.map((item) => (
-                <tr
-                  key={item.id}
-                  onClick={() => setSelectedAsset(item)}
-                  style={{
-                    cursor: 'pointer',
-                    backgroundColor: selectedAsset?.id === item.id ? '#f4f4f5' : 'transparent',
-                  }}
-                >
-                  <td style={{ fontWeight: 600 }}>{item.name}</td>
-                  <td>
-                    <span className="badge badge-subtle">{item.type}</span>
-                  </td>
-                  <td>
-                    <span
-                      style={{
-                        display: 'inline-flex',
-                        alignItems: 'center',
-                        gap: 2,
-                        fontWeight: 600,
-                        color: item.isPositive ? '#166534' : '#991b1b',
-                      }}
-                    >
-                      {item.isPositive ? <ArrowUpRight size={13} /> : <ArrowDownRight size={13} />}
-                      {item.impact}
-                    </span>
-                  </td>
-                  <td style={{ fontFamily: 'var(--font-mono)', fontSize: '12.5px' }}>
-                    {item.exposure}
-                  </td>
-                  <td style={{ fontFamily: 'var(--font-mono)', fontSize: '12.5px' }}>
-                    {item.confidence}
-                  </td>
+          <div className="table-responsive">
+            <table className="data-table">
+              <thead>
+                <tr>
+                  <th>Asset</th>
+                  <th>Type</th>
+                  <th>Impact</th>
+                  <th>Exposure</th>
+                  <th>Confidence</th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
+              </thead>
+              <tbody>
+                {filteredAssets.map((item) => (
+                  <tr
+                    key={item.id}
+                    onClick={() => setSelectedAsset(item)}
+                    style={{
+                      cursor: 'pointer',
+                      backgroundColor: selectedAsset?.id === item.id ? '#f4f4f5' : 'transparent',
+                    }}
+                  >
+                    <td style={{ fontWeight: 600 }}>{item.name}</td>
+                    <td>
+                      <span className="badge badge-subtle">{item.type}</span>
+                    </td>
+                    <td>
+                      <span
+                        style={{
+                          display: 'inline-flex',
+                          alignItems: 'center',
+                          gap: 2,
+                          fontWeight: 600,
+                          color: item.isPositive ? '#166534' : '#991b1b',
+                        }}
+                      >
+                        {item.isPositive ? <ArrowUpRight size={13} /> : <ArrowDownRight size={13} />}
+                        {item.impact}
+                      </span>
+                    </td>
+                    <td style={{ fontFamily: 'var(--font-mono)', fontSize: '12.5px' }}>
+                      {item.exposure}
+                    </td>
+                    <td style={{ fontFamily: 'var(--font-mono)', fontSize: '12.5px' }}>
+                      {item.confidence}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
         </div>
 
         {/* Right Analytics: Trend Chart & Heatmap */}

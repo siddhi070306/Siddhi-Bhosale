@@ -3,6 +3,8 @@ import Sidebar from './Sidebar';
 import Header from './Header';
 
 export default function Layout({ activeTab, setActiveTab, hasAnalyzed, children }) {
+  const [isMobileMenuOpen, setIsMobileMenuOpen] = React.useState(false);
+
   const getSearchPlaceholder = () => {
     switch (activeTab) {
       case 'chat':
@@ -24,9 +26,24 @@ export default function Layout({ activeTab, setActiveTab, hasAnalyzed, children 
 
   return (
     <div className="app-container">
-      <Sidebar activeTab={activeTab} setActiveTab={setActiveTab} hasAnalyzed={hasAnalyzed} />
+      {/* Mobile Drawer Backdrop */}
+      <div
+        className={`sidebar-backdrop ${isMobileMenuOpen ? 'active' : ''}`}
+        onClick={() => setIsMobileMenuOpen(false)}
+        aria-hidden="true"
+      />
+      <Sidebar
+        activeTab={activeTab}
+        setActiveTab={setActiveTab}
+        hasAnalyzed={hasAnalyzed}
+        isMobileMenuOpen={isMobileMenuOpen}
+        onCloseMobileMenu={() => setIsMobileMenuOpen(false)}
+      />
       <div className="main-wrapper">
-        <Header searchPlaceholder={getSearchPlaceholder()} />
+        <Header
+          searchPlaceholder={getSearchPlaceholder()}
+          onToggleMobileMenu={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
+        />
         <main className="page-content">{children}</main>
       </div>
     </div>

@@ -273,3 +273,49 @@ a {
   padding: 0;
   border-radius: var(--radius-md);
 }
+
+/* Responsive Utilities & Breakpoints */
+.table-responsive {
+  width: 100%;
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+}
+
+@media (max-width: 900px) {
+  .page-content {
+    padding: 18px 20px 36px;
+  }
+  .page-title {
+    font-size: 21px;
+  }
+  .page-subtitle {
+    font-size: 13px;
+  }
+}
+
+@media (max-width: 640px) {
+  .page-content {
+    padding: 14px 12px 28px;
+  }
+  .page-header {
+    margin-bottom: 16px;
+  }
+  .page-title {
+    font-size: 18px;
+  }
+  .page-subtitle {
+    font-size: 12px;
+  }
+  .card {
+    padding: 14px;
+    border-radius: var(--radius-sm);
+  }
+  .card-title {
+    font-size: 14px;
+    margin-bottom: 10px;
+  }
+  .btn {
+    padding: 7px 12px;
+    font-size: 12.5px;
+  }
+}

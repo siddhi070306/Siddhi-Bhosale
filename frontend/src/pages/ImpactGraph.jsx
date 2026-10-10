@@ -33,7 +33,7 @@ export default function ImpactGraph() {
         </div>
 
         {/* Node search filter */}
-        <div style={{ position: 'relative', width: 320 }}>
+        <div style={{ position: 'relative', width: '100%', maxWidth: 320 }}>
           <Search
             size={14}
             style={{ position: 'absolute', left: 12, top: '50%', transform: 'translateY(-50%)', color: '#71717a' }}

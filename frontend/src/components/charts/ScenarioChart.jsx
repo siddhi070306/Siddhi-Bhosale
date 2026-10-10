@@ -31,7 +31,7 @@ export default function ScenarioChart({ activeScenario = 'current', onScenarioCh
 
   return (
     <div className="scenario-chart-wrapper">
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: 12, marginBottom: 16 }}>
         <div>
           <div style={{ fontSize: 14, fontWeight: 700, color: '#09090b' }}>
             Compare Scenarios

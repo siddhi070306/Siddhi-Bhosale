@@ -14,7 +14,7 @@ import './styles/pages.css';
 import './styles/chat.css';
 
 export default function App() {
-  // First interface is the ChatGPT/Gemini-like AI Chat Assistant
+  
   const [activeTab, setActiveTab] = useState('chat');
   const [hasAnalyzed, setHasAnalyzed] = useState(false);
   const [currentEventText, setCurrentEventText] = useState(
