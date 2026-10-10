@@ -70,6 +70,18 @@ table{border-collapse:collapse;width:100%} td,th{border-bottom:1px solid var(--l
 .disc{margin-top:10px;color:var(--mute);font-size:11px;border-top:1px dashed var(--line);padding-top:8px}
 svg.spark{width:96px;height:26px}
 #loading{position:absolute;inset:0;background:#0d1117bb;display:none;align-items:center;justify-content:center;font-size:15px;z-index:5}
+/* Tour UI */
+#tour-focus { position:fixed; z-index:9998; border:2px solid var(--acc); border-radius:6px; box-shadow:0 0 0 9999px rgba(13, 17, 23, 0.85); display:none; pointer-events:none; transition:all 0.3s ease; }
+#tour-popover { position:fixed; z-index:10000; background:var(--panel); border:1px solid var(--line); border-radius:8px; padding:18px; width:320px; display:none; color:var(--text); box-shadow:0 8px 32px rgba(0,0,0,0.8); transition:all 0.3s cubic-bezier(0.16, 1, 0.3, 1); }
+#tour-popover h3 { margin:0 0 10px; font-size:15px; color:var(--text); }
+#tour-popover p { margin:0 0 18px; font-size:13px; color:var(--mute); line-height:1.5; }
+.tour-footer { display:flex; justify-content:space-between; align-items:center; }
+.tour-dots { display:flex; gap:6px; }
+.tour-dot { width:7px; height:7px; border-radius:50%; background:var(--line); transition:all 0.3s ease; }
+.tour-dot.act { background:var(--acc); width:14px; border-radius:4px; }
+.tour-btns button { padding:5px 12px; font-size:12.5px; margin-left:6px; border-radius:6px; background:var(--panel2); color:var(--text); border:1px solid var(--line); cursor:pointer; }
+.tour-btns button.primary { background:var(--acc); color:#04111f; border-color:var(--acc); font-weight:600; }
+.tour-btns button:hover { filter:brightness(1.15); }
 @media (max-width:1100px){main{grid-template-columns:1fr;overflow:auto}}
 </style>
 </head>
@@ -79,6 +91,7 @@ svg.spark{width:96px;height:26px}
   <span class="chip" id="chipLlm">LLM: off</span>
   <span class="chip" id="chipGraph"></span>
   <span class="spacer"></span>
+  <button id="btnTour" style="margin-right:8px; background:transparent; border-color:var(--acc); color:var(--acc);">Take a Quick Tour</button>
   <button id="btnReset" title="Drop everything learned from analysed articles">Reset graph</button>
 </header>
 <main>
@@ -364,6 +377,71 @@ function checks(){
   return h;
 }
 window.addEventListener("resize",()=>{if(R)drawGraph();});
+
+// --- Product Tour ---
+const TOUR_STEPS = [
+  { el: "#left", title: "1. The News Input", desc: "Paste any financial news article here, or select a sample event. You can also fetch live headlines to start analyzing." },
+  { el: "#hl", title: "2. Extraction & Tags", desc: "Apex Zenith uses an LLM to read the article, extracting entities (companies, sectors, commodities) and tagging them as 'Observed' or 'Expected' events." },
+  { el: "#center", title: "3. Layered Causal Graph", desc: "This interactive graph models the cascading effects of the event. It dynamically maps shocks from specific assets to broader sectors based on historical knowledge." },
+  { el: "#right", title: "4. Results Tabs", desc: "View the most affected assets, exact causal paths, and read LLM-generated explanations that verify whether each causal link makes economic sense." },
+  { el: "#live", title: "5. Live Market Data", desc: "Toggle this to fetch real-time stock prices (via Yahoo Finance/FRED). The system will overlay live market movements directly onto the causal graph." }
+];
+let tourStep = 0;
+function showTourStep(idx) {
+  if (idx < 0 || idx >= TOUR_STEPS.length) return endTour();
+  tourStep = idx;
+  const step = TOUR_STEPS[idx];
+  const target = document.querySelector(step.el);
+  if (!target) return;
+  const rect = target.getBoundingClientRect();
+  const f = $("tour-focus");
+  f.style.display = "block";
+  f.style.top = (rect.top - 6) + "px";
+  f.style.left = (rect.left - 6) + "px";
+  f.style.width = (rect.width + 12) + "px";
+  f.style.height = (rect.height + 12) + "px";
+  
+  const p = $("tour-popover");
+  p.style.display = "block";
+  $("tour-title").textContent = step.title;
+  $("tour-desc").textContent = step.desc;
+  
+  let pTop = rect.top + rect.height/2 - 80;
+  let pLeft = rect.right + 25;
+  if (pLeft + 320 > window.innerWidth) pLeft = rect.left - 345;
+  if (pLeft < 0) { pLeft = rect.left + 25; pTop = rect.bottom + 25; }
+  if (pTop < 15) pTop = 15;
+  if (pTop + 200 > window.innerHeight) pTop = window.innerHeight - 200;
+  
+  p.style.top = pTop + "px";
+  p.style.left = pLeft + "px";
+  
+  $("tour-dots").innerHTML = TOUR_STEPS.map((_, i) => `<div class="tour-dot ${i === idx ? 'act' : ''}"></div>`).join("");
+  $("tour-btn-back").style.display = idx === 0 ? "none" : "inline-block";
+  $("tour-btn-next").textContent = idx === TOUR_STEPS.length - 1 ? "Finish" : "Next";
+}
+function endTour() {
+  $("tour-focus").style.display = "none";
+  $("tour-popover").style.display = "none";
+}
+$("tour-btn-skip").onclick = endTour;
+$("tour-btn-next").onclick = () => showTourStep(tourStep + 1);
+$("tour-btn-back").onclick = () => showTourStep(tourStep - 1);
+$("btnTour").onclick = () => { window.scrollTo(0,0); showTourStep(0); };
 </script>
+
+<div id="tour-focus"></div>
+<div id="tour-popover">
+  <h3 id="tour-title"></h3>
+  <p id="tour-desc"></p>
+  <div class="tour-footer">
+    <div class="tour-dots" id="tour-dots"></div>
+    <div class="tour-btns">
+      <button id="tour-btn-skip">Skip</button>
+      <button id="tour-btn-back">Back</button>
+      <button class="primary" id="tour-btn-next">Next</button>
+    </div>
+  </div>
+</div>
 </body>
 </html>
