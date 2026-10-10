@@ -30,11 +30,14 @@ export default function Sidebar({
     api.getStatus().then(setKg).catch(() => setKg(null));
   }, [hasAnalyzed, activeTab]);
 
-  const dashboardItems = [
+  const initialDashboards = [
     { id: 'home', label: 'Market Intelligence', icon: Home },
+    { id: 'asset-impact', label: 'Asset Impact', icon: TrendingUp },
+  ];
+
+  const analysisDashboards = [
     { id: 'event-analysis', label: 'Event Diagnostics', icon: Layers },
     { id: 'impact-graph', label: 'Impact Graph', icon: GitBranch },
-    { id: 'asset-impact', label: 'Asset Impact', icon: TrendingUp },
     { id: 'scenario-simulator', label: 'Scenario Simulator', icon: Sliders },
   ];
 
@@ -119,18 +122,43 @@ export default function Sidebar({
           <span className="nav-item-badge">Core</span>
         </button>
 
-        {/* Dashboards Section: Dynamically revealed once an event is analyzed */}
+        {/* Dashboards Section: Always visible from the start */}
+        <div className="nav-section-divider"></div>
+        <div className="nav-section-label">
+          <span>Dashboards</span>
+        </div>
+
+        {initialDashboards.map((item) => {
+          const Icon = item.icon;
+          const isActive = activeTab === item.id;
+
+          return (
+            <button
+              key={item.id}
+              className={`nav-item ${isActive ? 'active' : ''}`}
+              onClick={() => handleDashboardClick(item.id)}
+              title={item.label}
+            >
+              <div className="nav-item-icon-wrap">
+                <Icon size={17} className="nav-item-icon" />
+              </div>
+              <span className="nav-item-label">{item.label}</span>
+            </button>
+          );
+        })}
+
+        {/* Deep Event Diagnostics: Dynamically revealed once news is analyzed */}
         {hasAnalyzed && (
           <div className="sidebar-dashboards-section" style={{ animation: 'fadeIn 0.25s ease' }}>
             <div className="nav-section-divider"></div>
 
             <div className="nav-section-label unlocked-label">
-              <Sparkles size={12} color="#818cf8" />
-              <span>Unlocked Dashboards</span>
+              <Sparkles size={12} color="#6366f1" />
+              <span>Event Diagnostics</span>
+              <span className="dashboards-live-pill">Live</span>
             </div>
 
-            {/* Dashboard Items */}
-            {dashboardItems.map((item) => {
+            {analysisDashboards.map((item) => {
               const Icon = item.icon;
               const isActive = activeTab === item.id;
 
