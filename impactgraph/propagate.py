@@ -110,3 +110,34 @@ def aggregate(paths, exclude=()):
             "pos_mass": round(pos, 3), "neg_mass": round(neg, 3),
         }
     return out
+
+
+def upstream_paths(kg, target, direction, max_depth=3, min_score=0.1, max_paths=300):
+    """Paths that could have PRODUCED a move of `direction` at `target` (walk the graph backwards).
+
+    Each path runs driver -> ... -> target. `required` is the direction the driver would have had to move for
+    the chain to explain the target's move. This is abductive ("what could explain this?"), weaker evidence than
+    forward propagation, and callers must present it as a hypothesis."""
+    g = kg.g
+    out = []
+
+    def walk(node, nodes, edges, score, sign, lag):
+        if len(out) >= max_paths * 4:
+            return
+        for prv in g.predecessors(node):
+            if prv in nodes:
+                continue
+            e = g[prv][node]
+            s = score * kg.eff_strength(prv, node) * (DECAY if edges else 1.0)
+            if s < min_score:
+                continue
+            n2, e2 = nodes + [prv], edges + [(prv, node)]
+            sg, lg = sign * e["sign"], lag + e["lag"]
+            out.append({"nodes": list(reversed(n2)), "edges": list(reversed(e2)), "score": s, "sign": sg,
+                        "required": direction * sg, "lag": lg})
+            if len(e2) < max_depth:
+                walk(prv, n2, e2, s, sg, lg)
+
+    walk(target, [target], [], 1.0, 1, 0)
+    out.sort(key=lambda p: -p["score"])
+    return out[:max_paths]

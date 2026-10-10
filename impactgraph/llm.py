@@ -167,7 +167,8 @@ def summarise(facts):
     """Short plain-English summary grounded only in the supplied facts."""
     sys_p = ("You are a cautious financial analyst. Using ONLY the facts provided, write 3-4 sentences summarising "
              "the likely transmission of the event. Separate what the article reports (observed) from what the model infers. "
-             "Use hedged language (may, plausibly, suggests). No price targets, no advice, no numbers not in the facts.")
+             "Use hedged language (may, plausibly, suggests). No price targets, no advice, no numbers not in the facts. "
+             "Only if the facts contain a key named 'note', open with that caveat; never mention keys that are absent.")
     return _chat(sys_p, json.dumps(facts)[:6000], max_tokens=1500)
 
 
@@ -273,3 +274,38 @@ def extract_graph(text):
         _LAST_ERROR[0] = "the model did not return valid JSON"
         return None
     return _valid_events(data.get("events"), text), _valid_links(data.get("links"), text)
+
+
+def suggest_themes(text):
+    """For a text in which no known entity or event was found: ask the model which market themes it could
+    plausibly touch. These are HYPOTHESES, never observations: callers must label them and never learn from them.
+    Returns {"background": str|None, "themes": [{"node","direction","why","quote"}]} or None on failure."""
+    sys_p = ("You help interpret a news item in which no known market entity was recognised. Reply with JSON only: "
+             '{"background":"<at most two sentences of widely known, durable background about the entities named, '
+             'with NO claims about what happened today, or null>","themes":[{"node":"<node id>","direction":1|-1,'
+             '"why":"<one short sentence>","quote":"<exact phrase from the text that prompted it>"}]}. '
+             "Give at most three themes, and ONLY where a phrase in the text itself bears directly on that market variable "
+             "(copy that phrase as the quote). Prefer an empty list to a stretch; do not reason from the company's general importance. "
+             "direction is how the variable would move IF the story is market-relevant. "
+             "Use ONLY these node ids: " + _nodes_for_prompt() + ". Do not invent facts or numbers.")
+    out = _chat(sys_p, text[:4000], json_mode=True, max_tokens=900)
+    if not out:
+        return None
+    try:
+        data = json.loads(re.search(r"\{.*\}", out, re.S).group(0))
+    except Exception:
+        _LAST_ERROR[0] = "the model did not return valid JSON"
+        return None
+    themes, seen = [], set()
+    for t in data.get("themes") or []:
+        n, d, q = t.get("node"), t.get("direction"), (t.get("quote") or "").strip()
+        if n not in kb.NODES or d not in (1, -1) or n in seen:
+            continue
+        if len(q) < 8 or q[:40] not in text:
+            continue          # no supporting phrase, or one that is not in the text: a guess, not a theme
+        seen.add(n)
+        themes.append({"node": n, "direction": d, "why": (t.get("why") or "")[:200], "quote": q or None})
+        if len(themes) == 3:
+            break
+    bg = data.get("background")
+    return {"background": bg.strip()[:400] if isinstance(bg, str) and bg.strip() else None, "themes": themes}

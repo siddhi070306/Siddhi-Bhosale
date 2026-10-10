@@ -236,7 +236,7 @@ export default function MarketIntelligence({
               <div
                 key={ev.id}
                 className="event-item-row"
-                onClick={() => onSelectEvent && onSelectEvent(ev.text, ev.category, ev.link)}
+                onClick={() => onSelectEvent && onSelectEvent(ev.text, ev.category, ev.link, ev.title)}
                 title="Click to analyze event"
               >
                 <div className="event-item-left">
