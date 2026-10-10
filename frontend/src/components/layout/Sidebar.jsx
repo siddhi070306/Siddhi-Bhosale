@@ -7,6 +7,7 @@ import {
   GitBranch,
   TrendingUp,
   Sliders,
+  History,
   Settings as SettingsIcon,
   X,
   Sparkles,
@@ -33,6 +34,7 @@ export default function Sidebar({
   const initialDashboards = [
     { id: 'home', label: 'Market Intelligence', icon: Home },
     { id: 'asset-impact', label: 'Asset Impact', icon: TrendingUp },
+    { id: 'econometrics', label: 'Analogs & Forecast', icon: History },
   ];
 
   const analysisDashboards = [

@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { Search, ArrowUpRight, ArrowDownRight, Plus, X, Sparkles, TrendingUp, History, LineChart } from 'lucide-react';
+import { Search, ArrowUpRight, ArrowDownRight, Plus, X, Sparkles, TrendingUp, History, LineChart, ExternalLink } from 'lucide-react';
 import TrendChart from '../components/charts/TrendChart';
 import AnalogChart from '../components/charts/AnalogChart';
 import ForecastChart from '../components/charts/ForecastChart';
@@ -428,37 +428,51 @@ export default function AssetImpact({ analysis, onNavigateToChat, onReanalyze, o
         {/* Right Analytics: Chart panel + Heatmap */}
         <div>
           {/* Tab toggle */}
-          <div style={{ display: 'flex', gap: 6, marginBottom: 10, flexWrap: 'wrap' }}>
-            <button
-              className={`btn btn-sm ${chartTab === 'trend' ? 'btn-black' : 'btn-outline'}`}
-              onClick={() => setChartTab('trend')}
-              style={{ display: 'inline-flex', alignItems: 'center', gap: 5, fontSize: 11.5 }}
-            >
-              <TrendingUp size={13} />
-              Price Trend
-            </button>
-            <button
-              className={`btn btn-sm ${chartTab === 'analogs' ? 'btn-black' : 'btn-outline'}`}
-              onClick={() => {
-                setChartTab('analogs');
-                if (!analogData && !analogLoading) fetchAnalogs(selectedAsset);
-              }}
-              style={{ display: 'inline-flex', alignItems: 'center', gap: 5, fontSize: 11.5 }}
-            >
-              <History size={13} />
-              Historical Analogs
-            </button>
-            <button
-              className={`btn btn-sm ${chartTab === 'forecast' ? 'btn-black' : 'btn-outline'}`}
-              onClick={() => {
-                setChartTab('forecast');
-                if (!forecastData && !forecastLoading) fetchForecast(selectedAsset, forecastHorizon);
-              }}
-              style={{ display: 'inline-flex', alignItems: 'center', gap: 5, fontSize: 11.5 }}
-            >
-              <LineChart size={13} />
-              Monte Carlo Forecast
-            </button>
+          <div style={{ display: 'flex', gap: 6, marginBottom: 10, flexWrap: 'wrap', alignItems: 'center', justifyContent: 'space-between' }}>
+            <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+              <button
+                className={`btn btn-sm ${chartTab === 'trend' ? 'btn-black' : 'btn-outline'}`}
+                onClick={() => setChartTab('trend')}
+                style={{ display: 'inline-flex', alignItems: 'center', gap: 5, fontSize: 11.5 }}
+              >
+                <TrendingUp size={13} />
+                Price Trend
+              </button>
+              <button
+                className={`btn btn-sm ${chartTab === 'analogs' ? 'btn-black' : 'btn-outline'}`}
+                onClick={() => {
+                  setChartTab('analogs');
+                  if (!analogData && !analogLoading) fetchAnalogs(selectedAsset);
+                }}
+                style={{ display: 'inline-flex', alignItems: 'center', gap: 5, fontSize: 11.5 }}
+              >
+                <History size={13} />
+                Historical Analogs
+              </button>
+              <button
+                className={`btn btn-sm ${chartTab === 'forecast' ? 'btn-black' : 'btn-outline'}`}
+                onClick={() => {
+                  setChartTab('forecast');
+                  if (!forecastData && !forecastLoading) fetchForecast(selectedAsset, forecastHorizon);
+                }}
+                style={{ display: 'inline-flex', alignItems: 'center', gap: 5, fontSize: 11.5 }}
+              >
+                <LineChart size={13} />
+                Monte Carlo Forecast
+              </button>
+            </div>
+
+            {onNavigateToTab && (
+              <button
+                className="btn btn-sm btn-outline"
+                onClick={() => onNavigateToTab('econometrics', selectedAsset?.id)}
+                title="Open full page dedicated to Historical Analogs and Monte Carlo Forecaster"
+                style={{ display: 'inline-flex', alignItems: 'center', gap: 5, fontSize: 11.5, background: '#fafafa' }}
+              >
+                <span>Full Page View</span>
+                <ExternalLink size={12} />
+              </button>
+            )}
           </div>
 
           {chartTab === 'trend' ? (

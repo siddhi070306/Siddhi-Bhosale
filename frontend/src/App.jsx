@@ -6,6 +6,7 @@ import EventAnalysis from './pages/EventAnalysis';
 import ImpactGraph from './pages/ImpactGraph';
 import AssetImpact from './pages/AssetImpact';
 import ScenarioSimulator from './pages/ScenarioSimulator';
+import EconometricAnalogs from './pages/EconometricAnalogs';
 import Settings from './pages/Settings';
 import { api } from './services/api';
 import ProductTour from './components/ui/ProductTour';
@@ -14,15 +15,16 @@ import './styles/layout.css';
 import './styles/pages.css';
 import './styles/chat.css';
 
-const VALID_TABS = ['chat', 'home', 'asset-impact', 'event-analysis', 'impact-graph', 'scenario-simulator', 'settings'];
+const VALID_TABS = ['chat', 'home', 'asset-impact', 'econometrics', 'event-analysis', 'impact-graph', 'scenario-simulator', 'settings'];
 
 function getTabFromHash() {
-  const hash = window.location.hash.replace(/^#\/?/, '').trim();
+  const hash = window.location.hash.replace(/^#\/?/, '').split('?')[0].trim();
   return VALID_TABS.includes(hash) ? hash : 'chat';
 }
 
 export default function App() {
   const [activeTab, setActiveTabState] = useState(getTabFromHash);
+  const [econometricAssetId, setEconometricAssetId] = useState(null);
   const [hasAnalyzed, setHasAnalyzed] = useState(false);
   const [currentEventText, setCurrentEventText] = useState('');
   const [analysis, setAnalysis] = useState(null); // real backend result (+ adapted views); null until an analysis succeeds
@@ -30,7 +32,8 @@ export default function App() {
   const [messages, setMessages] = useState([]);
   const [tourIsActive, setTourIsActive] = useState(false);
 
-  const setActiveTab = (tab) => {
+  const setActiveTab = (tab, assetId = null) => {
+    if (assetId) setEconometricAssetId(assetId);
     setActiveTabState(tab);
     if (window.location.hash !== `#/${tab}`) {
       window.location.hash = `#/${tab}`;
@@ -159,6 +162,15 @@ export default function App() {
             analysis={analysis}
             onNavigateToTab={(tabId) => setActiveTab(tabId)}
             onNavigateToChat={() => setActiveTab('chat')}
+          />
+        );
+      case 'econometrics':
+        return (
+          <EconometricAnalogs
+            key={econometricAssetId || 'default'}
+            analysis={analysis}
+            initialAssetId={econometricAssetId}
+            onNavigateToTab={(tabId, assetId) => setActiveTab(tabId, assetId)}
           />
         );
       case 'settings':
