@@ -36,7 +36,7 @@ function LiveCell({ ticker, q }) {
   );
 }
 
-export default function AssetImpact({ analysis, onNavigateToChat, onReanalyze }) {
+export default function AssetImpact({ analysis, onNavigateToChat, onReanalyze, onNavigateToTab }) {
   const [baselineView, setBaselineView] = useState(null);
   const [loadingBaseline, setLoadingBaseline] = useState(!analysis);
 
@@ -227,16 +227,37 @@ export default function AssetImpact({ analysis, onNavigateToChat, onReanalyze })
   return (
     <div>
       {/* Page Header */}
-      <div className="page-header">
-        <h1 className="page-title">Potentially Affected Assets</h1>
-        <p className="page-subtitle">
-          Model-estimated impact from the knowledge graph, next to live market prices.
-        </p>
-        <div style={{ display: 'flex', gap: 14, alignItems: 'center', flexWrap: 'wrap', marginTop: 6, fontSize: 11.5, color: '#52525b' }}>
-          <span><SourceTag kind="live" /> Yahoo Finance price and day change</span>
-          <span><SourceTag kind="model" /> estimated by the knowledge graph from the article (not a forecast)</span>
-          <StreamChip state={live.state} transport={live.transport} />
+      <div className="page-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: 12 }}>
+        <div>
+          <h1 className="page-title">Potentially Affected Assets</h1>
+          <p className="page-subtitle">
+            Model-estimated impact from the knowledge graph, next to live market prices.
+          </p>
+          <div style={{ display: 'flex', gap: 14, alignItems: 'center', flexWrap: 'wrap', marginTop: 6, fontSize: 11.5, color: '#52525b' }}>
+            <span><SourceTag kind="live" /> Yahoo Finance price and day change</span>
+            <span><SourceTag kind="model" /> estimated by the knowledge graph from the article (not a forecast)</span>
+            <StreamChip state={live.state} transport={live.transport} />
+          </div>
         </div>
+
+        {onNavigateToTab && (
+          <div style={{ display: 'flex', gap: 8, alignItems: 'center', marginTop: 4 }}>
+            <button
+              className="btn btn-outline"
+              style={{ fontSize: 12, padding: '5px 12px' }}
+              onClick={() => onNavigateToTab('impact-graph')}
+            >
+              Explore Impact Graph →
+            </button>
+            <button
+              className="btn btn-outline"
+              style={{ fontSize: 12, padding: '5px 12px' }}
+              onClick={() => onNavigateToTab('scenario-simulator')}
+            >
+              Open Simulator →
+            </button>
+          </div>
+        )}
       </div>
 
       {/* Baseline Knowledge Graph Banner */}

@@ -90,7 +90,7 @@ function EmptyState({ onNavigateToChat, onSelectEvent }) {
   );
 }
 
-export default function ImpactGraph({ analysis, onNavigateToChat, onSelectEvent }) {
+export default function ImpactGraph({ analysis, onNavigateToChat, onSelectEvent, onNavigateToTab }) {
   const graphData = (analysis && analysis.graphView) || null;
   const [activeTab, setActiveTab] = useState('pathways');
   const [selectedNode, setSelectedNode] = useState(graphData ? graphData.centerNode : null);
@@ -142,6 +142,24 @@ export default function ImpactGraph({ analysis, onNavigateToChat, onSelectEvent 
           <p className="page-subtitle">
             Explore how events propagate across sectors, companies and assets.
           </p>
+          {onNavigateToTab && (
+            <div style={{ display: 'flex', gap: 8, marginTop: 8 }}>
+              <button
+                className="btn btn-outline"
+                style={{ fontSize: 12, padding: '4px 10px' }}
+                onClick={() => onNavigateToTab('asset-impact')}
+              >
+                Go to Asset Impact & Forecasts →
+              </button>
+              <button
+                className="btn btn-outline"
+                style={{ fontSize: 12, padding: '4px 10px' }}
+                onClick={() => onNavigateToTab('scenario-simulator')}
+              >
+                Go to Scenario Simulator →
+              </button>
+            </div>
+          )}
         </div>
 
         {/* Node search filter */}

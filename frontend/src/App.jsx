@@ -14,14 +14,40 @@ import './styles/layout.css';
 import './styles/pages.css';
 import './styles/chat.css';
 
+const VALID_TABS = ['chat', 'home', 'asset-impact', 'event-analysis', 'impact-graph', 'scenario-simulator', 'settings'];
+
+function getTabFromHash() {
+  const hash = window.location.hash.replace(/^#\/?/, '').trim();
+  return VALID_TABS.includes(hash) ? hash : 'chat';
+}
+
 export default function App() {
-  const [activeTab, setActiveTab] = useState('chat');
+  const [activeTab, setActiveTabState] = useState(getTabFromHash);
   const [hasAnalyzed, setHasAnalyzed] = useState(false);
   const [currentEventText, setCurrentEventText] = useState('');
   const [analysis, setAnalysis] = useState(null); // real backend result (+ adapted views); null until an analysis succeeds
   const [notice, setNotice] = useState(null);
   const [messages, setMessages] = useState([]);
   const [tourIsActive, setTourIsActive] = useState(false);
+
+  const setActiveTab = (tab) => {
+    setActiveTabState(tab);
+    if (window.location.hash !== `#/${tab}`) {
+      window.location.hash = `#/${tab}`;
+    }
+  };
+
+  useEffect(() => {
+    const handleHashChange = () => {
+      const tab = getTabFromHash();
+      setActiveTabState(tab);
+    };
+    window.addEventListener('hashchange', handleHashChange);
+    if (!window.location.hash) {
+      window.location.hash = '#/' + activeTab;
+    }
+    return () => window.removeEventListener('hashchange', handleHashChange);
+  }, []);
 
   const handleAnalysisComplete = (text, result) => {
     setCurrentEventText(text);
@@ -102,6 +128,7 @@ export default function App() {
             eventText={currentEventText}
             onNavigateToChat={() => setActiveTab('chat')}
             onNavigateToGraph={() => setActiveTab('impact-graph')}
+            onNavigateToTab={(tabId) => setActiveTab(tabId)}
           />
         );
       case 'impact-graph':
@@ -111,6 +138,7 @@ export default function App() {
             analysis={analysis}
             onNavigateToChat={() => setActiveTab('chat')}
             onSelectEvent={handleSelectEvent}
+            onNavigateToTab={(tabId) => setActiveTab(tabId)}
           />
         );
       case 'asset-impact':
@@ -121,10 +149,18 @@ export default function App() {
             onNavigateToChat={() => setActiveTab('chat')}
             onSelectEvent={handleSelectEvent}
             onReanalyze={handleReanalyze}
+            onNavigateToTab={(tabId) => setActiveTab(tabId)}
           />
         );
       case 'scenario-simulator':
-        return <ScenarioSimulator key={analysis ? analysis.at : 'none'} analysis={analysis} />;
+        return (
+          <ScenarioSimulator
+            key={analysis ? analysis.at : 'none'}
+            analysis={analysis}
+            onNavigateToTab={(tabId) => setActiveTab(tabId)}
+            onNavigateToChat={() => setActiveTab('chat')}
+          />
+        );
       case 'settings':
         return <Settings />;
       default:

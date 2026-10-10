@@ -30,6 +30,7 @@ export default function EventAnalysis({
   eventText,
   onNavigateToChat,
   onNavigateToGraph,
+  onNavigateToTab,
 }) {
   const { search } = useUi();
   if (!analysisData) return <EmptyState onNavigateToChat={onNavigateToChat} what="Event analysis" />;
@@ -285,8 +286,8 @@ export default function EventAnalysis({
         </table>
       </div>
 
-      {/* Bottom CTA to View Graph */}
-      <div style={{ marginTop: 24, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+      {/* Bottom Cross-Dashboard Navigation */}
+      <div style={{ marginTop: 28, paddingTop: 18, borderTop: '1px solid #e4e4e7', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 12 }}>
         <button
           className="btn btn-outline"
           onClick={() => onNavigateToChat && onNavigateToChat()}
@@ -295,13 +296,31 @@ export default function EventAnalysis({
           <span>Back to AI Chat</span>
         </button>
 
-        <button
-          className="btn btn-black"
-          onClick={() => onNavigateToGraph && onNavigateToGraph()}
-        >
-          <span>Explore Financial Impact Graph</span>
-          <ArrowRight size={14} />
-        </button>
+        <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
+          <button
+            className="btn btn-outline"
+            onClick={() => onNavigateToTab ? onNavigateToTab('asset-impact') : null}
+          >
+            <span>Asset Impact & Forecasts</span>
+            <ArrowRight size={14} />
+          </button>
+
+          <button
+            className="btn btn-outline"
+            onClick={() => onNavigateToTab ? onNavigateToTab('scenario-simulator') : null}
+          >
+            <span>Scenario Simulator</span>
+            <ArrowRight size={14} />
+          </button>
+
+          <button
+            className="btn btn-black"
+            onClick={() => onNavigateToGraph ? onNavigateToGraph() : onNavigateToTab && onNavigateToTab('impact-graph')}
+          >
+            <span>Financial Impact Graph</span>
+            <ArrowRight size={14} />
+          </button>
+        </div>
       </div>
     </div>
   );

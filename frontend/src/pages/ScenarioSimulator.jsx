@@ -17,7 +17,7 @@ function baseShock(analysis, trigger) {
   return src && src.direction < 0 ? -15 : 15;
 }
 
-export default function ScenarioSimulator({ analysis = null }) {
+export default function ScenarioSimulator({ analysis = null, onNavigateToTab, onNavigateToChat }) {
   // The simulator starts from what was analysed: its first source node and the move the article stated.
   const analysedSources = (analysis && analysis.sources) || [];
   const [trigger, setTrigger] = useState((analysedSources[0] && analysedSources[0].trigger) || 'crude_oil');
@@ -98,9 +98,30 @@ export default function ScenarioSimulator({ analysis = null }) {
 
   return (
     <div>
-      <div className="page-header">
-        <h1 className="page-title">Scenario Simulator & Evidence</h1>
-        <p className="page-subtitle">Test different scenarios and see how the inferred impact changes across the market.</p>
+      <div className="page-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: 12 }}>
+        <div>
+          <h1 className="page-title">Scenario Simulator & Evidence</h1>
+          <p className="page-subtitle">Test different scenarios and see how the inferred impact changes across the market.</p>
+        </div>
+
+        {onNavigateToTab && (
+          <div style={{ display: 'flex', gap: 8, alignItems: 'center', marginTop: 4 }}>
+            <button
+              className="btn btn-outline"
+              style={{ fontSize: 12, padding: '5px 12px' }}
+              onClick={() => onNavigateToTab('asset-impact')}
+            >
+              Asset Impact & Forecasts →
+            </button>
+            <button
+              className="btn btn-outline"
+              style={{ fontSize: 12, padding: '5px 12px' }}
+              onClick={() => onNavigateToTab('impact-graph')}
+            >
+              Impact Graph →
+            </button>
+          </div>
+        )}
       </div>
 
       <div className="simulator-layout">
