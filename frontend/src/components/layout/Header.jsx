@@ -2,8 +2,6 @@ import React, { useState, useEffect } from 'react';
 import {
   Search,
   RotateCw,
-  Bell,
-  HelpCircle,
   Menu,
   PanelLeft,
   SquarePen,
@@ -12,14 +10,17 @@ import {
 
 export default function Header({
   activeTab = 'chat',
-  searchPlaceholder = 'Search market events, companies, sectors...',
+  searchPlaceholder = 'Search...',
+  showSearch = true,
+  search = '',
   onSearch,
+  status = null,
+  refreshing = false,
+  onRefresh,
   onToggleMobileMenu,
   onToggleCollapse,
   onNewChat,
 }) {
-  const [searchValue, setSearchValue] = useState('');
-  const [isRefreshing, setIsRefreshing] = useState(false);
   const [now, setNow] = useState(new Date());
 
   useEffect(() => {
@@ -27,17 +28,13 @@ export default function Header({
     return () => clearInterval(t);
   }, []);
 
-  const handleRefresh = () => {
-    setIsRefreshing(true);
-    setTimeout(() => setIsRefreshing(false), 800);
-  };
-
-  const handleSearchChange = (e) => {
-    setSearchValue(e.target.value);
-    if (onSearch) onSearch(e.target.value);
-  };
-
   const isChat = activeTab === 'chat';
+
+  // Engine pill reflects the real backend: unreachable / LLM key missing / LLM provider active
+  let pill = { text: 'Connecting…', color: '#a1a1aa', title: 'Checking the backend' };
+  if (status && status.error) pill = { text: 'Backend offline', color: '#dc2626', title: status.error };
+  else if (status && status.llm_required && !status.llm) pill = { text: 'LLM key missing', color: '#d97706', title: 'The LLM is required for graph building but no key is configured in .env' };
+  else if (status) pill = { text: status.llm ? `Engine live · ${status.llm}` : 'Engine live · rules only', color: '#16a34a', title: `LLM: ${status.llm ? `${status.llm} (${status.llm_model || 'default model'})` : 'none'} · FRED key: ${status.fred_key ? 'set' : 'not set'} · NewsAPI key: ${status.news_key ? 'set' : 'not set'}` };
 
   return (
     <header className={`top-header ${isChat ? 'chatgpt-header' : ''}`}>
@@ -65,27 +62,26 @@ export default function Header({
 
         {isChat ? (
           /* ChatGPT Style Model Selector */
-          <div className="chatgpt-model-selector" title="Apex Zenith 3.0 Causal Graph Engine">
+          <div className="chatgpt-model-selector" title={status && status.llm ? `Causal graph engine · ${status.llm} ${status.llm_model || ''}` : 'Causal graph engine'}>
             <div className="model-logo-badge">
               <img src="/image.png" alt="AZ" className="model-logo-img" />
             </div>
-            <span className="model-name">Apex Zenith 3.0</span>
+            <span className="model-name">Apex Zenith</span>
             <ChevronDown size={14} className="model-chevron" />
           </div>
-        ) : (
-          /* Search Bar on Dashboards */
+        ) : showSearch ? (
+          /* Search Bar on Dashboards that filter their content */
           <div className="header-search">
             <Search className="header-search-icon" size={15} />
             <input
               type="text"
               className="header-search-input"
               placeholder={searchPlaceholder}
-              value={searchValue}
-              onChange={handleSearchChange}
+              value={search}
+              onChange={(e) => onSearch && onSearch(e.target.value)}
             />
-            <span className="search-shortcut-pill">⌘K</span>
           </div>
-        )}
+        ) : null}
       </div>
 
       {/* Right Actions & Meta */}
@@ -95,7 +91,7 @@ export default function Header({
           <button
             className="chatgpt-new-chat-top-btn"
             onClick={onNewChat}
-            title="Start new chat (⌘N)"
+            title="Start a new chat"
           >
             <SquarePen size={16} />
             <span>New chat</span>
@@ -103,9 +99,9 @@ export default function Header({
         )}
 
         {/* Live Engine Status Pill */}
-        <div className="engine-status-pill" title="Deterministic Causal Knowledge Engine Active">
-          <span className="engine-pulse-dot"></span>
-          <span className="engine-status-text">Causal Engine Live</span>
+        <div className="engine-status-pill" title={pill.title}>
+          <span className="engine-pulse-dot" style={{ background: pill.color, boxShadow: `0 0 0 3px ${pill.color}33` }}></span>
+          <span className="engine-status-text">{pill.text}</span>
         </div>
 
         {/* Live Date / Time Badge (when on dashboards) */}
@@ -115,14 +111,15 @@ export default function Header({
               {now.toLocaleString([], { dateStyle: 'medium', timeStyle: 'short' })}
             </span>
             <button
-              className={`refresh-spin-btn ${isRefreshing ? 'spinning' : ''}`}
-              onClick={handleRefresh}
-              title="Refresh market data feed"
+              className={`refresh-spin-btn ${refreshing ? 'spinning' : ''}`}
+              onClick={onRefresh}
+              disabled={refreshing}
+              title="Re-fetch market levels, headlines and backend status (bypasses the cache)"
             >
               <RotateCw
                 size={13}
                 style={{
-                  transform: isRefreshing ? 'rotate(360deg)' : 'none',
+                  transform: refreshing ? 'rotate(360deg)' : 'none',
                   transition: 'transform 0.6s ease',
                 }}
               />
@@ -132,15 +129,6 @@ export default function Header({
 
         {/* Action Icons */}
         <div className="header-actions">
-          {!isChat && (
-            <button className="icon-btn" title="Market Alerts & Signals">
-              <Bell size={16} />
-              <span className="notification-dot"></span>
-            </button>
-          )}
-          <button className="icon-btn" title="Graph Theory & Documentation">
-            <HelpCircle size={16} />
-          </button>
           <div className="user-avatar" title="Analyst Workspace">
             <img src="/image.png" alt="Analyst AZ" className="user-avatar-img" />
           </div>

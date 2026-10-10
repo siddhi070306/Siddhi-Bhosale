@@ -37,11 +37,11 @@ export default function App() {
     setMessages([]);
   };
 
-  const handleSelectEvent = async (eventText, source) => {
+  const handleSelectEvent = async (eventText, source, link) => {
     setCurrentEventText(eventText);
     setNotice('Analysing selected event…');
     try {
-      const res = await api.analyze(eventText, undefined, source);
+      const res = await api.analyze(eventText, undefined, source, link);
       handleAnalysisComplete(eventText, res);
       // Add to messages if on chat
       const aiMsg = {
@@ -103,7 +103,7 @@ export default function App() {
           />
         );
       case 'scenario-simulator':
-        return <ScenarioSimulator />;
+        return <ScenarioSimulator key={analysis ? analysis.at : 'none'} analysis={analysis} />;
       case 'settings':
         return <Settings />;
       default:

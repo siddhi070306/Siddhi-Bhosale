@@ -36,7 +36,7 @@ def samples():
 def status():
     p = llm.provider()
     has = lambda k: bool(os.environ.get(k, "").strip())
-    return {"llm": p[0] if p else None, "llm_required": llm_required(), "fred_key": has("FRED_API_KEY"),
+    return {"llm": p[0] if p else None, "llm_model": p[3] if p else None, "llm_required": llm_required(), "fred_key": has("FRED_API_KEY"),
             "news_key": has("NEWSAPI_KEY"), "graph": analyzer.kg.stats()}
 
 
@@ -67,8 +67,8 @@ def whatif(body: WhatIfBody):
 
 
 @app.get("/api/market")
-def market_snapshot():
-    return market.snapshot()
+def market_snapshot(refresh: bool = False):
+    return market.snapshot(force=refresh)
 
 
 @app.get("/api/events")

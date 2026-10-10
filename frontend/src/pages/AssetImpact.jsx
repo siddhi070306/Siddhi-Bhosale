@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { Search, ArrowUpRight, ArrowDownRight } from 'lucide-react';
 import TrendChart from '../components/charts/TrendChart';
 import ExposureHeatmap from '../components/charts/ExposureHeatmap';
+import { useUi } from '../context/UiContext';
 
 
 function EmptyState({ onNavigateToChat, what }) {
@@ -17,7 +18,7 @@ function EmptyState({ onNavigateToChat, what }) {
 export default function AssetImpact({ analysis, onNavigateToChat }) {
   const { assets, topSectors, sectorRows } = (analysis && analysis.assetView) || { assets: [], topSectors: [], sectorRows: [] };
   const [filter, setFilter] = useState('All');
-  const [search, setSearch] = useState('');
+  const { search, setSearch } = useUi(); // shared with the header search box
   const [selectedAsset, setSelectedAsset] = useState(assets[0]);
 
   const categories = ['All', 'Stocks', 'Indices', 'Commodities', 'Sectors'];

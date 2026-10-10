@@ -61,7 +61,7 @@ const GROUP_OF = {
   institution: 'indicators',
 };
 
-export function toEventView(res, text, source) {
+export function toEventView(res, text, source, link) {
   const groups = { companies: [], commodities: [], sectors: [], indicators: [], instruments: [] };
   (res.mentions || []).forEach((m) => {
     const g = GROUP_OF[m.type];
@@ -86,6 +86,7 @@ export function toEventView(res, text, source) {
       magnitude: (primary && primary.magnitude) || 'not stated',
       timeframe: maxLag ? `Inferred lag up to ~${maxLag} days` : 'not estimated',
       source: source || 'Text as provided',
+      link: link || null,
       status: primary ? primary.status : null,
       sentiment,
     },
@@ -161,6 +162,23 @@ export function toGraphView(res) {
     const c = COL_OF[n.type] !== undefined ? COL_OF[n.type] : 4; // companies / indices / instruments on the right
     byCol[c].push(n);
   });
+  // where does each node's evidence come from? Derived from the incoming links' provenance / data-check verdict.
+  const into = {};
+  links.forEach((l) => {
+    (into[l.target] = into[l.target] || []).push(l);
+  });
+  const provenanceOf = (n) => {
+    if (n.observed) return { label: 'Observed in article', tone: 'observed' };
+    if (n.inferred) return { label: 'Inferred by the system (unverified)', tone: 'inferred' };
+    const inc = into[n.id] || [];
+    const has = (p) => inc.some((l) => (l.provenance || []).includes(p));
+    if (inc.some((l) => l.verdict === 'contradicted')) return { label: 'Prior link, contradicted by data', tone: 'contradicted' };
+    if (has('observed') && has('validated')) return { label: 'Article-linked and data-supported', tone: 'validated' };
+    if (has('validated') || inc.some((l) => l.verdict === 'supported')) return { label: 'Prior link, data-supported', tone: 'validated' };
+    if (has('observed')) return { label: 'Linked by article evidence', tone: 'observed' };
+    if (has('llm_proposed') || has('llm_extracted')) return { label: 'Proposed by the LLM, quote-verified', tone: 'llm' };
+    return { label: 'Analyst prior (not data-checked)', tone: 'prior' };
+  };
   const out = [];
   byCol.forEach((arr, c) => {
     arr.sort((a, b) => (b.confidence || 0) - (a.confidence || 0));
@@ -185,6 +203,7 @@ export function toGraphView(res) {
         isDashed: !!n.inferred,
         hasMixedSignals: !!n.mixed,
         observed: n.observed,
+        provenance: provenanceOf(n),
       });
     });
   });
@@ -227,6 +246,7 @@ export function toGraphView(res) {
       change: src0 ? `${ARROW(src0.direction)} ${ev0 && ev0.magnitude ? ev0.magnitude : 'shock'}` : '',
       confidence: ev0 ? ev0.confidence : null,
       evidence: ev0 ? `${ev0.status}: "${ev0.quote}"` : null,
+      provenance: ev0 ? { label: ev0.status === 'observed' ? 'Observed in article' : 'Stated as expected in article', tone: 'observed' } : null,
       isAnchor: true,
     },
     nodes: out,
@@ -254,13 +274,13 @@ export function toMarketSectors(res) {
 export const api = {
   getStatus: () => request('/api/status'),
   getSamples: () => request('/api/samples'),
-  getMarket: () => request('/api/market'),
+  getMarket: (refresh = false) => request(`/api/market${refresh ? '?refresh=true' : ''}`),
   getEvents: (limit = 8) => request(`/api/events?limit=${limit}`),
   getGraph: () => request('/api/graph'),
   resetGraph: () => request('/api/reset', { method: 'POST' }),
 
   // Returns the raw backend result plus adapted views for the pages. Throws on any failure.
-  async analyze(text, live = prefs.getLive(), source = null) {
+  async analyze(text, live = prefs.getLive(), source = null, link = null) {
     const res = await request('/api/analyze', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -270,9 +290,11 @@ export const api = {
       raw: res,
       text,
       source,
+      link,
+      sources: res.sources || [],
       summary: res.summary,
       llmNote: res.llm_note,
-      view: toEventView(res, text, source),
+      view: toEventView(res, text, source, link),
       assetView: toAssetView(res),
       graphView: toGraphView(res),
       marketSectors: toMarketSectors(res),

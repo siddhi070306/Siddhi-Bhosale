@@ -64,7 +64,7 @@ export default function Sidebar({
           </div>
           <div className="brand-text-col">
             <span className="brand-name">Apex Zenith</span>
-            <span className="brand-sub">QUANT CAUSAL v3.0</span>
+            <span className="brand-sub">NEWS → IMPACT GRAPH</span>
           </div>
         </div>
 
@@ -95,13 +95,12 @@ export default function Sidebar({
         <button
           className="sidebar-new-chat-btn"
           onClick={handleNewChatClick}
-          title="Start new analysis session (⌘N)"
+          title="Start a new analysis session"
         >
           <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
             <SquarePen size={16} />
             <span className="new-chat-btn-label">New chat</span>
           </div>
-          <span className="new-chat-shortcut">⌘N</span>
         </button>
       </div>
 
@@ -181,10 +180,10 @@ export default function Sidebar({
           <span className="status-dot pulsing"></span>
           <div className="status-meta">
             <span className="status-title">
-              {kg ? `${kg.graph.edges} Causal Links` : 'Causal Engine Active'}
+              {kg ? `${kg.graph.nodes} entities · ${kg.graph.edges} links` : 'Backend not reachable'}
             </span>
             <span className="status-sub">
-              {hasAnalyzed ? 'Event Active in Memory' : 'Ready for News Input'}
+              {kg ? `${kg.graph.articles_ingested} article${kg.graph.articles_ingested === 1 ? '' : 's'} learned` : 'Start the backend'}
             </span>
           </div>
         </div>

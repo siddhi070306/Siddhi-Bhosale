@@ -2,6 +2,12 @@ import React, { useState, useEffect } from 'react';
 import { ArrowUpRight, ArrowDownRight, ChevronRight, Zap } from 'lucide-react';
 import Sparkline from '../components/common/Sparkline';
 import { api } from '../services/api';
+import { useUi } from '../context/UiContext';
+
+const fmtTime = (t) => {
+  const d = t ? new Date(t) : null;
+  return d && !isNaN(d) ? d.toLocaleString([], { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' }) : '';
+};
 
 export default function MarketIntelligence({
   activeEventText,
@@ -11,12 +17,20 @@ export default function MarketIntelligence({
 }) {
   const [market, setMarket] = useState({ loading: true, tickers: [], error: null });
   const [events, setEvents] = useState({ loading: true, items: [], error: null });
+  const { search, refreshTick } = useUi();
+  const [limit, setLimit] = useState(8);
+  // refreshTick > 0 means the header refresh button was pressed: bypass the server-side cache
   useEffect(() => {
-    api.getMarket().then((m) => setMarket({ loading: false, tickers: m.tickers || [], error: m.available ? null : m.note || 'Market data unavailable' }))
+    api.getMarket(refreshTick > 0).then((m) => setMarket({ loading: false, tickers: m.tickers || [], error: m.available ? null : m.note || 'Market data unavailable' }))
       .catch((e) => setMarket({ loading: false, tickers: [], error: e.message }));
-    api.getEvents(8).then((items) => setEvents({ loading: false, items, error: items.length ? null : 'No headlines reachable.' }))
+  }, [refreshTick]);
+  useEffect(() => {
+    setEvents((prev) => ({ ...prev, loading: true }));
+    api.getEvents(limit).then((items) => setEvents({ loading: false, items, error: items.length ? null : 'No headlines reachable.' }))
       .catch((e) => setEvents({ loading: false, items: [], error: e.message }));
-  }, []);
+  }, [refreshTick, limit]);
+  const q = (search || '').trim().toLowerCase();
+  const visibleEvents = events.items.filter((ev) => !q || ev.title.toLowerCase().includes(q) || (ev.category || '').toLowerCase().includes(q));
   const tickers = market.tickers;
   const sectors = (analysis && analysis.marketSectors) || [];
   const analysisData = analysis && analysis.view;
@@ -115,6 +129,7 @@ export default function MarketIntelligence({
               </span>
             </div>
             <div className="ticker-price">{t.price}</div>
+            <div style={{ fontSize: 10.5, color: '#a1a1aa', marginBottom: 2 }} title={t.source}>as of {t.asof}</div>
             <Sparkline data={t.sparkline} isPositive={t.isPositive} width={160} height={38} />
           </div>
         ))}
@@ -126,21 +141,22 @@ export default function MarketIntelligence({
         <div className="card">
           <div className="card-title">
             <span>Latest Financial Events</span>
-            <button className="btn btn-sm btn-outline">View All</button>
+            <button className="btn btn-sm btn-outline" disabled={limit >= 30} onClick={() => setLimit(30)}>{limit >= 30 ? 'Showing 30' : 'View 30'}</button>
           </div>
 
           <div className="events-list">
             {events.loading && <p style={{ fontSize: 12.5, color: '#71717a' }}>Loading headlines…</p>}
             {events.error && <p style={{ fontSize: 12.5, color: '#991b1b' }}>{events.error}</p>}
-            {events.items.map((ev) => (
+            {events.items.length > 0 && visibleEvents.length === 0 && <p style={{ fontSize: 12.5, color: '#71717a' }}>No headline matches “{search}”.</p>}
+            {visibleEvents.map((ev) => (
               <div
                 key={ev.id}
                 className="event-item-row"
-                onClick={() => onSelectEvent && onSelectEvent(ev.text, ev.category)}
+                onClick={() => onSelectEvent && onSelectEvent(ev.text, ev.category, ev.link)}
                 title="Click to analyze event"
               >
                 <div className="event-item-left">
-                  <span className="event-time">{(ev.time || '').slice(5, 22)}</span>
+                  <span className="event-time">{fmtTime(ev.time)}</span>
                   <span className="event-title">{ev.title}</span>
                 </div>
                 <div className="event-item-right">

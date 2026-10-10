@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Database, Key, Server, RefreshCw, Check } from 'lucide-react';
+import { Database, Key, Server, RefreshCw } from 'lucide-react';
 import { api, prefs } from '../services/api';
 
 export default function Settings() {
@@ -12,7 +12,6 @@ export default function Settings() {
     prefs.setLive(v);
   };
   const [isResetting, setIsResetting] = useState(false);
-  const [savedSuccess, setSavedSuccess] = useState(false);
 
   useEffect(() => {
     api.getStatus().then((data) => setStatus(data)).catch((e) => setStatusError(e.message));
@@ -28,11 +27,6 @@ export default function Settings() {
       setResetMsg(`Reset failed: ${e.message}`);
     }
     setIsResetting(false);
-  };
-
-  const handleSave = () => {
-    setSavedSuccess(true);
-    setTimeout(() => setSavedSuccess(false), 2000);
   };
 
   return (
@@ -103,7 +97,7 @@ export default function Settings() {
                   Live Market Series Correlation
                 </div>
                 <div style={{ fontSize: 12, color: '#71717a' }}>
-                  Calculate rolling 2-year cross-correlation with Yahoo Finance and FRED series.
+                  Check each link against real FRED/Yahoo series (correlation at the link's lag). Saved automatically in this browser; takes effect on the next analysis.
                 </div>
               </div>
               <input
@@ -148,16 +142,6 @@ export default function Settings() {
               <span>{isResetting ? 'Resetting Graph...' : 'Reset Knowledge Graph'}</span>
             </button>
 
-            <button className="btn btn-black" onClick={handleSave}>
-              {savedSuccess ? (
-                <>
-                  <Check size={14} />
-                  <span>Saved!</span>
-                </>
-              ) : (
-                <span>Save Preferences</span>
-              )}
-            </button>
           </div>
         </div>
       </div>
