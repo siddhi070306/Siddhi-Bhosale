@@ -20,8 +20,14 @@ RSS_FEEDS = [
     ("CNBC Markets", "https://www.cnbc.com/id/10000664/device/rss/rss.html"),
     ("MarketWatch", "https://feeds.content.dowjones.io/public/rss/mw_topstories"),
     ("ET Markets", "https://economictimes.indiatimes.com/markets/rssfeeds/1977021501.cms"),
+    ("ET Economy", "https://economictimes.indiatimes.com/news/economy/rssfeeds/1373380680.cms"),
+    ("ET Industry", "https://economictimes.indiatimes.com/industry/rssfeeds/13352306.cms"),
     ("Livemint", "https://www.livemint.com/rss/markets"),
+    ("The Hindu BusinessLine", "https://www.thehindubusinessline.com/markets/feeder/default.rss"),
+    ("Times of India Business", "https://timesofindia.indiatimes.com/rssfeeds/1898055.cms"),
 ]
+# All of these answer 200 to an honestly identified client and their robots.txt allows it (checked 2026-10-11).
+# Not usable without pretending to be a browser, so deliberately left out: Moneycontrol, Business Standard, NDTV Profit (HTTP 403).
 _UA = {"User-Agent": "Mozilla/5.0 (compatible; ApexZenith/1.0)"}
 _CACHE = {}
 
@@ -222,8 +228,9 @@ def newsapi_headlines(limit=25):
 def rss_items():
     """Items from every RSS feed (cached 5 minutes)."""
     def load():
-        out = []
+        per_feed = []
         for name, url in RSS_FEEDS:
+            out = []
             try:
                 r = requests.get(url, headers=_UA, timeout=8)
                 r.raise_for_status()
@@ -235,8 +242,13 @@ def rss_items():
                     out.append({"source": name, "title": title, "summary": _clean(it.findtext("description")),
                                 "link": (it.findtext("link") or "").strip(), "published": (it.findtext("pubDate") or "").strip()})
             except Exception:
-                continue
-        return out
+                pass
+            per_feed.append(out)
+        # round-robin across feeds so the first N items span every publisher (and both markets), not just the first feed
+        mixed = []
+        for i in range(max((len(f) for f in per_feed), default=0)):
+            mixed.extend(f[i] for f in per_feed if i < len(f))
+        return mixed
     return _cached("rss", 300, load)
 
 
