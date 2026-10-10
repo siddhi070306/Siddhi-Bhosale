@@ -328,3 +328,30 @@ a {
     font-size: 12.5px;
   }
 }
+
+/* Print styles for Executive Memo */
+@media print {
+  body * {
+    visibility: hidden;
+  }
+  #printable-memo, #printable-memo * {
+    visibility: visible;
+  }
+  #printable-memo {
+    position: absolute;
+    left: 0;
+    top: 0;
+    width: 100%;
+    margin: 0;
+    padding: 20px;
+  }
+  .modal-backdrop {
+    background: none !important;
+    position: static !important;
+  }
+  .modal-container {
+    box-shadow: none !important;
+    border: none !important;
+    max-height: none !important;
+  }
+}

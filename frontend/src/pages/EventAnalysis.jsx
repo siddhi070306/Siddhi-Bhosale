@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 import {
   ExternalLink,
   ArrowRight,
@@ -11,8 +11,12 @@ import {
   ShieldCheck,
   CheckCircle2,
   Sparkles,
+  AlertTriangle,
+  FileText,
 } from 'lucide-react';
 import { useUi } from '../context/UiContext';
+import CausalChainWalkthrough from '../components/common/CausalChainWalkthrough';
+import ExecutiveMemoModal from '../components/common/ExecutiveMemoModal';
 
 
 function EmptyState({ onNavigateToChat, what }) {
@@ -28,11 +32,14 @@ function EmptyState({ onNavigateToChat, what }) {
 export default function EventAnalysis({
   analysisData = null,
   eventText,
+  analysis = null,
   onNavigateToChat,
   onNavigateToGraph,
   onNavigateToTab,
 }) {
   const { search } = useUi();
+  const [showMemoModal, setShowMemoModal] = useState(false);
+
   if (!analysisData) return <EmptyState onNavigateToChat={onNavigateToChat} what="Event analysis" />;
   const text = eventText || analysisData.eventText;
   const entities = analysisData.extractedEntities;
@@ -42,6 +49,7 @@ export default function EventAnalysis({
   // Model vs article: the backend compares each stated move with what the graph predicts
   const comparisonChecks = analysisData.comparison || [];
   const consistentCount = comparisonChecks.filter((c) => c.status === 'consistent').length;
+  const conflicts = comparisonChecks.filter((c) => c.status === 'contradicts' || c.status === 'inconsistent' || (c.graph && c.graph.toLowerCase().includes('disagree')));
   const q = (search || '').trim().toLowerCase();
   const shown = (list) => (list || []).filter((c) => !q || c.toLowerCase().includes(q));
 
@@ -50,20 +58,31 @@ export default function EventAnalysis({
       {/* Page Header */}
       <div className="page-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: 16 }}>
         <div>
-          <h1 className="page-title">Event Analysis</h1>
+          <h1 className="page-title">Event Analysis & Diagnostics</h1>
           <p className="page-subtitle">
             Diagnostic inspection of the event analyzed in the AI Chat Assistant.
           </p>
         </div>
 
-        <button
-          className="btn btn-outline"
-          onClick={() => onNavigateToChat && onNavigateToChat()}
-          style={{ display: 'flex', alignItems: 'center', gap: 6 }}
-        >
-          <MessageSquare size={14} />
-          <span>Enter New Event in AI Chat</span>
-        </button>
+        <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+          <button
+            className="btn btn-black"
+            onClick={() => setShowMemoModal(true)}
+            style={{ display: 'flex', alignItems: 'center', gap: 6 }}
+          >
+            <FileText size={14} />
+            <span>Export Investment Memo</span>
+          </button>
+
+          <button
+            className="btn btn-outline"
+            onClick={() => onNavigateToChat && onNavigateToChat()}
+            style={{ display: 'flex', alignItems: 'center', gap: 6 }}
+          >
+            <MessageSquare size={14} />
+            <span>AI Chat</span>
+          </button>
+        </div>
       </div>
 
       {/* Active Event Banner (No separate input / No separate analyze button) */}
@@ -88,6 +107,35 @@ export default function EventAnalysis({
           "{text}"
         </p>
       </div>
+
+      {/* Feature 2: High-Visibility Consensus Divergence Alert */}
+      {conflicts.length > 0 && (
+        <div
+          className="card"
+          style={{
+            background: '#fffbeb',
+            border: '1px solid #fde68a',
+            borderLeft: '5px solid #d97706',
+            padding: '16px 20px',
+            marginBottom: 20,
+          }}
+        >
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10, color: '#92400e', fontWeight: 700, fontSize: 14 }}>
+            <AlertTriangle size={18} />
+            <span>Consensus Divergence Detected ({conflicts.length} Conflict{conflicts.length > 1 ? 's' : ''})</span>
+          </div>
+          <p style={{ fontSize: 13, color: '#78350f', marginTop: 6, marginBottom: 8, lineHeight: 1.5 }}>
+            The source article narrative claims sentiment for <strong>{conflicts[0].statement}</strong>, but the structural economic knowledge graph calculates opposing margin transmission (<strong>{conflicts[0].graph}</strong>).
+          </p>
+          <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', fontSize: 12 }}>
+            {conflicts.map((c, i) => (
+              <span key={i} style={{ background: '#fef3c7', padding: '3px 8px', borderRadius: 4, color: '#b45309', border: '1px solid #fcd34d' }}>
+                Article: <em>{c.article}</em> vs Graph: <strong>{c.graph}</strong>
+              </span>
+            ))}
+          </div>
+        </div>
+      )}
 
       {/* Three-Column Analysis Cards */}
       <div className="event-analysis-grid">
@@ -285,6 +333,22 @@ export default function EventAnalysis({
           </tbody>
         </table>
       </div>
+
+      {/* Feature 1: Deterministic Step-by-Step Causal Transmission Walkthrough */}
+      {analysis && analysis.paths && analysis.paths.length > 0 && (
+        <CausalChainWalkthrough
+          paths={analysis.paths}
+          eventMagnitude={details ? details.magnitude : '10%'}
+          title="Step-by-Step Causal Transmission Walkthrough"
+        />
+      )}
+
+      {/* Feature 3: Executive Memo Modal */}
+      <ExecutiveMemoModal
+        isOpen={showMemoModal}
+        onClose={() => setShowMemoModal(false)}
+        analysis={analysis || { text, summary: details?.direction, view: analysisData }}
+      />
 
       {/* Bottom Cross-Dashboard Navigation */}
       <div style={{ marginTop: 28, paddingTop: 18, borderTop: '1px solid #e4e4e7', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 12 }}>

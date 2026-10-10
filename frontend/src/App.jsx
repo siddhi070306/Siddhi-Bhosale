@@ -129,6 +129,7 @@ export default function App() {
           <EventAnalysis
             analysisData={analysis && analysis.view}
             eventText={currentEventText}
+            analysis={analysis}
             onNavigateToChat={() => setActiveTab('chat')}
             onNavigateToGraph={() => setActiveTab('impact-graph')}
             onNavigateToTab={(tabId) => setActiveTab(tabId)}

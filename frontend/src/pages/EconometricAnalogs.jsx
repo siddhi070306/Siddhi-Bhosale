@@ -11,10 +11,12 @@ import {
   ExternalLink,
   ChevronRight,
   Info,
+  FileText,
 } from 'lucide-react';
 import { api } from '../services/api';
 import AnalogChart from '../components/charts/AnalogChart';
 import ForecastChart from '../components/charts/ForecastChart';
+import ExecutiveMemoModal from '../components/common/ExecutiveMemoModal';
 
 export default function EconometricAnalogs({
   analysis,
@@ -24,6 +26,7 @@ export default function EconometricAnalogs({
   const [nodes, setNodes] = useState([]);
   const [selectedNodeId, setSelectedNodeId] = useState(initialAssetId || 'crude_oil');
   const [viewMode, setViewMode] = useState('analogs'); // 'analogs' | 'forecast' | 'both'
+  const [showMemoModal, setShowMemoModal] = useState(false);
 
   // Analogs state
   const [analogData, setAnalogData] = useState(null);
@@ -150,6 +153,15 @@ export default function EconometricAnalogs({
             <span>Side-by-Side</span>
           </button>
         </div>
+
+        <button
+          className="btn btn-black btn-sm"
+          style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, padding: '7px 14px' }}
+          onClick={() => setShowMemoModal(true)}
+        >
+          <FileText size={14} />
+          <span>Export Investment Memo</span>
+        </button>
       </div>
 
       {/* Asset Selection Bar */}
@@ -359,6 +371,15 @@ export default function EconometricAnalogs({
           </div>
         )}
       </div>
+
+      {/* Feature 3: Executive Memo Modal */}
+      <ExecutiveMemoModal
+        isOpen={showMemoModal}
+        onClose={() => setShowMemoModal(false)}
+        analysis={analysis}
+        forecastData={forecastData}
+        analogData={analogData}
+      />
     </div>
   );
 }

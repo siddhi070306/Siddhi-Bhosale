@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { Search, ShieldCheck, Fuel, Landmark, Building2, Sparkles, ArrowRight } from 'lucide-react';
 import InteractiveGraph from '../components/graph/InteractiveGraph';
+import CausalChainWalkthrough from '../components/common/CausalChainWalkthrough';
 import { useUi } from '../context/UiContext';
 import { useSamples } from '../context/useSamples';
 
@@ -372,6 +373,17 @@ export default function ImpactGraph({ analysis, onNavigateToChat, onSelectEvent,
           </div>
         </aside>
       </div>
+
+      {/* Feature 1: Causal Transmission Walkthrough */}
+      {analysis && analysis.paths && analysis.paths.length > 0 && (
+        <div style={{ marginTop: 20 }}>
+          <CausalChainWalkthrough
+            paths={analysis.paths}
+            eventMagnitude={analysis.details ? analysis.details.magnitude : '10%'}
+            title="Step-by-Step Causal Transmission Walkthrough"
+          />
+        </div>
+      )}
     </div>
   );
 }

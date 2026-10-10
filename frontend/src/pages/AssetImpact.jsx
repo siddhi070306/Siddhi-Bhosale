@@ -1,9 +1,10 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { Search, ArrowUpRight, ArrowDownRight, Plus, X, Sparkles, TrendingUp, History, LineChart, ExternalLink } from 'lucide-react';
+import { Search, ArrowUpRight, ArrowDownRight, Plus, X, Sparkles, TrendingUp, History, LineChart, ExternalLink, FileText } from 'lucide-react';
 import TrendChart from '../components/charts/TrendChart';
 import AnalogChart from '../components/charts/AnalogChart';
 import ForecastChart from '../components/charts/ForecastChart';
 import ExposureHeatmap from '../components/charts/ExposureHeatmap';
+import ExecutiveMemoModal from '../components/common/ExecutiveMemoModal';
 import SourceTag, { StreamChip } from '../components/common/SourceTag';
 import { useUi } from '../context/UiContext';
 import { useLiveQuotes, fmtPrice, fmtPct } from '../context/useLiveQuotes';
@@ -131,6 +132,7 @@ export default function AssetImpact({ analysis, onNavigateToChat, onReanalyze, o
   }, [selectedAsset?.id]);
 
   // Monte Carlo Forecast state
+  const [showMemoModal, setShowMemoModal] = useState(false);
   const [forecastData, setForecastData] = useState(null);
   const [forecastLoading, setForecastLoading] = useState(false);
   const [forecastError, setForecastError] = useState(null);
@@ -240,24 +242,35 @@ export default function AssetImpact({ analysis, onNavigateToChat, onReanalyze, o
           </div>
         </div>
 
-        {onNavigateToTab && (
-          <div style={{ display: 'flex', gap: 8, alignItems: 'center', marginTop: 4 }}>
-            <button
-              className="btn btn-outline"
-              style={{ fontSize: 12, padding: '5px 12px' }}
-              onClick={() => onNavigateToTab('impact-graph')}
-            >
-              Explore Impact Graph →
-            </button>
-            <button
-              className="btn btn-outline"
-              style={{ fontSize: 12, padding: '5px 12px' }}
-              onClick={() => onNavigateToTab('scenario-simulator')}
-            >
-              Open Simulator →
-            </button>
-          </div>
-        )}
+        <div style={{ display: 'flex', gap: 8, alignItems: 'center', marginTop: 4, flexWrap: 'wrap' }}>
+          <button
+            className="btn btn-black"
+            style={{ fontSize: 12, padding: '5px 12px', display: 'flex', alignItems: 'center', gap: 5 }}
+            onClick={() => setShowMemoModal(true)}
+          >
+            <FileText size={13} />
+            <span>Export Memo</span>
+          </button>
+
+          {onNavigateToTab && (
+            <>
+              <button
+                className="btn btn-outline"
+                style={{ fontSize: 12, padding: '5px 12px' }}
+                onClick={() => onNavigateToTab('impact-graph')}
+              >
+                Explore Impact Graph →
+              </button>
+              <button
+                className="btn btn-outline"
+                style={{ fontSize: 12, padding: '5px 12px' }}
+                onClick={() => onNavigateToTab('scenario-simulator')}
+              >
+                Open Simulator →
+              </button>
+            </>
+          )}
+        </div>
       </div>
 
       {/* Baseline Knowledge Graph Banner */}
@@ -521,6 +534,15 @@ export default function AssetImpact({ analysis, onNavigateToChat, onReanalyze, o
           ))}
         </div>
       </div>
+
+      {/* Feature 3: Executive Memo Modal */}
+      <ExecutiveMemoModal
+        isOpen={showMemoModal}
+        onClose={() => setShowMemoModal(false)}
+        analysis={analysis}
+        forecastData={forecastData}
+        analogData={analogData}
+      />
     </div>
   );
 }
