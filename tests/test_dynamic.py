@@ -113,8 +113,9 @@ class GuardTests(unittest.TestCase):
                 self.assertAlmostEqual(b.kg.g["crude_oil"]["airlines"]["strength"], 0.83)
                 with open(kbstate.STATE_FILE) as f:                               # corrupt a curated sign on disk
                     data = json.load(f)
-                for l in data["graph"]["links"]:
-                    if l["source"] == "crude_oil" and l["target"] == "airlines":
+                links = data["graph"].get("links") if "links" in data["graph"] else data["graph"].get("edges", [])
+                for l in links:
+                    if l.get("source") == "crude_oil" and l.get("target") == "airlines":
                         l["sign"] = 1
                 with open(kbstate.STATE_FILE, "w") as f:
                     json.dump(data, f)
@@ -242,7 +243,12 @@ class QuoteTests(unittest.TestCase):
 
     def test_unknown_symbol_is_not_a_transport_failure(self):
         import yfinance
-        old, old_err = yfinance.download, dict(yfinance.shared._ERRORS)
+        class SharedMock:
+            _ERRORS = {}
+        had_shared = hasattr(yfinance, "shared")
+        if not had_shared:
+            yfinance.shared = SharedMock()
+        old, old_err = yfinance.download, dict(getattr(yfinance.shared, "_ERRORS", {}))
         try:
             yfinance.download = lambda *a, **k: pd.DataFrame()
             yfinance.shared._ERRORS.clear()
@@ -255,8 +261,11 @@ class QuoteTests(unittest.TestCase):
                 quotes.download(["ZZZ"])
         finally:
             yfinance.download = old
-            yfinance.shared._ERRORS.clear()
-            yfinance.shared._ERRORS.update(old_err)
+            if hasattr(yfinance, "shared"):
+                yfinance.shared._ERRORS.clear()
+                yfinance.shared._ERRORS.update(old_err)
+                if not had_shared:
+                    delattr(yfinance, "shared")
             quotes.ts._YF_FAILS[:] = [0, 0.0]
 
     def test_download_parses_both_yfinance_layouts(self):

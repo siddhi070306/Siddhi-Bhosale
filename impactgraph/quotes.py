@@ -64,7 +64,9 @@ def download(symbols):
             df = None
             err = str(e)[:120]
     if df is None or df.empty:
-        why = " ".join(str(v) for v in getattr(yf.shared, "_ERRORS", {}).values()).lower() if df is not None else ""
+        shared_obj = getattr(yf, "shared", None)
+        err_dict = getattr(shared_obj, "_ERRORS", {}) if shared_obj else {}
+        why = " ".join(str(v) for v in err_dict.values()).lower() if df is not None else ""
         if df is not None and why and not any(k in why for k in ("rate", "too many", "timed out", "connection")):
             # Yahoo answered, but has nothing for these symbols (typo / delisted): not a transport failure
             now = time.time()
