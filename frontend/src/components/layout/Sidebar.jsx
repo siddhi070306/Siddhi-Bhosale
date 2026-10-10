@@ -62,10 +62,6 @@ export default function Sidebar({
           <div className="brand-logo-emblem">
             <img src="/image.png" alt="Apex Zenith" className="brand-logo-img" />
           </div>
-          <div className="brand-text-col">
-            <span className="brand-name">Apex Zenith</span>
-            <span className="brand-sub">QUANT CAUSAL v3.0</span>
-          </div>
         </div>
 
         <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>

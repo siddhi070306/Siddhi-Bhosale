@@ -12,14 +12,14 @@
   --bg-surface-subtle: #f4f4f5;
   --bg-canvas: #fafafa;
 
-  /* Dark Sidebar */
-  --sidebar-bg: #111113;
-  --sidebar-hover: #1c1c1f;
-  --sidebar-active: #27272a;
-  --sidebar-border: #222225;
-  --sidebar-text: #a1a1aa;
-  --sidebar-text-hover: #e4e4e7;
-  --sidebar-text-active: #ffffff;
+  /* Sidebar (White Theme) */
+  --sidebar-bg: #ffffff;
+  --sidebar-hover: #f4f4f5;
+  --sidebar-active: #ebebef;
+  --sidebar-border: #e4e4e7;
+  --sidebar-text: #52525b;
+  --sidebar-text-hover: #09090b;
+  --sidebar-text-active: #09090b;
 
   /* Text Colors */
   --text-main: #09090b;
