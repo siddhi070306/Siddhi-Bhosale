@@ -80,7 +80,7 @@ Current seed graph: **56 entities** (15 companies, 13 sectors, 8 indicators, 5 c
 
 ```mermaid
 flowchart TB
-    subgraph UI["Browser: static/index.html, D3"]
+    subgraph UI["Browser: public/index.html, D3"]
         U1[Input + samples] --- U2[Layered graph] --- U3[Assets / Sectors / Paths / Explain / Checks]
     end
     subgraph API["server.py, FastAPI"]
@@ -129,7 +129,7 @@ flowchart TB
 | `impactgraph/feeds.py` | Optional RSS headlines and SEC 8-K metadata. |
 | `impactgraph/service.py` | Orchestrates one analysis end to end and shapes the response; holds the five sample articles. |
 | `server.py` | HTTP API and static file serving. |
-| `static/index.html` | The whole UI. |
+| `public/index.html` | The whole UI. |
 | `tests/test_pipeline.py` | 22 offline tests: extraction, propagation, graph updates, end to end. |
 
 ### 4.3 API

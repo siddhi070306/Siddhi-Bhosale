@@ -1,0 +1,9 @@
+{
+  "name": "apex-zenith",
+  "private": true,
+  "scripts": {
+    "dev": "npm --prefix frontend run dev",
+    "build": "npm --prefix frontend run build",
+    "start": "npm --prefix frontend run dev"
+  }
+}
