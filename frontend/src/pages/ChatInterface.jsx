@@ -18,8 +18,17 @@ import {
 } from 'lucide-react';
 import { api } from '../services/api';
 
-export default function ChatInterface({ onOpenDashboard, onSelectEventText, onAnalysisComplete }) {
-  const [messages, setMessages] = useState([]);
+export default function ChatInterface({
+  messages: externalMessages,
+  setMessages: externalSetMessages,
+  onOpenDashboard,
+  onSelectEventText,
+  onAnalysisComplete,
+}) {
+  const [internalMessages, setInternalMessages] = useState([]);
+  const messages = externalMessages !== undefined ? externalMessages : internalMessages;
+  const setMessages = externalSetMessages || setInternalMessages;
+
   const [inputText, setInputText] = useState('');
   const [loading, setLoading] = useState(false);
   const messagesEndRef = useRef(null);
@@ -90,11 +99,7 @@ export default function ChatInterface({ onOpenDashboard, onSelectEventText, onAn
         noEvent: result.noEvent,
       };
       setMessages((prev) => [...prev, aiMsg]);
-      if (!result.noEvent) {
-        setTimeout(() => {
-          onOpenDashboard('home');
-        }, 400);
-      }
+      // Note: We stay on the chat page like ChatGPT, revealing the dashboards in the sidebar and action buttons
     } catch (e) {
       const errId = `err-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`;
       setMessages((prev) => [...prev, { id: errId, sender: 'ai', error: e.message }]);
@@ -323,12 +328,15 @@ export default function ChatInterface({ onOpenDashboard, onSelectEventText, onAn
               className="chat-send-btn"
               onClick={() => handleSend()}
               disabled={!inputText.trim() || loading}
-              title="Send to Apex Zenith"
+              title="Send message (Enter)"
             >
               <ArrowUp size={16} />
             </button>
           </div>
         </div>
+        <p className="chat-disclaimer">
+          Apex Zenith evaluates causal propagation using deterministic knowledge graphs & verified quotes.
+        </p>
       </div>
     </div>
   );

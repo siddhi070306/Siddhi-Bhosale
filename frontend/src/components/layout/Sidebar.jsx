@@ -10,6 +10,8 @@ import {
   Settings as SettingsIcon,
   X,
   Sparkles,
+  SquarePen,
+  PanelLeftClose,
 } from 'lucide-react';
 
 export default function Sidebar({
@@ -18,6 +20,9 @@ export default function Sidebar({
   hasAnalyzed,
   isMobileMenuOpen = false,
   onCloseMobileMenu,
+  isCollapsed = false,
+  onToggleCollapse,
+  onNewChat,
 }) {
   const [kg, setKg] = useState(null);
 
@@ -43,8 +48,14 @@ export default function Sidebar({
     if (onCloseMobileMenu) onCloseMobileMenu();
   };
 
+  const handleNewChatClick = () => {
+    if (onNewChat) onNewChat();
+    else setActiveTab('chat');
+    if (onCloseMobileMenu) onCloseMobileMenu();
+  };
+
   return (
-    <aside className={`sidebar ${isMobileMenuOpen ? 'mobile-open' : ''}`}>
+    <aside className={`sidebar ${isMobileMenuOpen ? 'mobile-open' : ''} ${isCollapsed ? 'collapsed' : ''}`}>
       {/* Brand Header */}
       <div className="sidebar-header">
         <div className="brand-identity-row">
@@ -56,13 +67,41 @@ export default function Sidebar({
             <span className="brand-sub">QUANT CAUSAL v3.0</span>
           </div>
         </div>
-        {/* Mobile Close Button */}
+
+        <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+          {/* Desktop collapse button inside sidebar */}
+          <button
+            className="sidebar-collapse-btn"
+            onClick={onToggleCollapse}
+            aria-label="Collapse sidebar"
+            title="Collapse sidebar"
+          >
+            <PanelLeftClose size={18} />
+          </button>
+
+          {/* Mobile Close Button */}
+          <button
+            className="sidebar-close-mobile-btn"
+            onClick={onCloseMobileMenu}
+            aria-label="Close sidebar navigation"
+          >
+            <X size={18} />
+          </button>
+        </div>
+      </div>
+
+      {/* Prominent ChatGPT New Chat Button */}
+      <div className="sidebar-new-chat-wrapper">
         <button
-          className="sidebar-close-mobile-btn"
-          onClick={onCloseMobileMenu}
-          aria-label="Close sidebar navigation"
+          className="sidebar-new-chat-btn"
+          onClick={handleNewChatClick}
+          title="Start new analysis session (⌘N)"
         >
-          <X size={18} />
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+            <SquarePen size={16} />
+            <span className="new-chat-btn-label">New chat</span>
+          </div>
+          <span className="new-chat-shortcut">⌘N</span>
         </button>
       </div>
 

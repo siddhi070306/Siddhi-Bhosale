@@ -477,6 +477,169 @@
 }
 
 /* ==========================================================================
+   CHATGPT UI ENHANCEMENTS
+   ========================================================================== */
+
+/* ChatGPT Header */
+.chatgpt-header {
+  height: 54px;
+  padding: 0 20px;
+  background-color: #ffffff;
+  border-bottom: 1px solid #f1f1f4;
+}
+
+.chatgpt-model-selector {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 12px;
+  border-radius: 10px;
+  background-color: transparent;
+  cursor: pointer;
+  transition: background-color 0.15s ease;
+  user-select: none;
+}
+
+.chatgpt-model-selector:hover {
+  background-color: #f4f4f5;
+}
+
+.chatgpt-model-selector .model-name {
+  font-size: 15px;
+  font-weight: 700;
+  color: #09090b;
+  letter-spacing: -0.01em;
+}
+
+.chatgpt-model-selector .model-chevron {
+  color: #71717a;
+  transition: transform 0.15s ease;
+}
+
+.sidebar-collapse-toggle-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 34px;
+  height: 34px;
+  border-radius: var(--radius-md);
+  background: transparent;
+  border: 1px solid transparent;
+  color: #71717a;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  flex-shrink: 0;
+}
+
+.sidebar-collapse-toggle-btn:hover {
+  background-color: #f4f4f5;
+  color: #09090b;
+}
+
+.sidebar-collapse-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 30px;
+  height: 30px;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  border: none;
+  color: #a1a1aa;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.sidebar-collapse-btn:hover {
+  color: #ffffff;
+  background: rgba(255, 255, 255, 0.08);
+}
+
+.chatgpt-new-chat-top-btn {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 12px;
+  border-radius: var(--radius-md);
+  border: 1px solid var(--border-subtle);
+  background: #ffffff;
+  font-size: 12.5px;
+  font-weight: 600;
+  color: #09090b;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.chatgpt-new-chat-top-btn:hover {
+  background: #f4f4f5;
+  border-color: #d4d4d8;
+}
+
+/* Sidebar New Chat Button */
+.sidebar-new-chat-wrapper {
+  padding: 12px 12px 4px;
+}
+
+.sidebar-new-chat-btn {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 12px;
+  border-radius: var(--radius-md);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  background: rgba(255, 255, 255, 0.04);
+  color: #ffffff;
+  font-size: 13.5px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.16s ease;
+}
+
+.sidebar-new-chat-btn:hover {
+  background: rgba(255, 255, 255, 0.1);
+  border-color: rgba(255, 255, 255, 0.22);
+}
+
+.new-chat-btn-label {
+  letter-spacing: -0.01em;
+}
+
+.new-chat-shortcut {
+  font-size: 10px;
+  font-family: var(--font-mono);
+  color: #71717a;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  padding: 1px 5px;
+  border-radius: 4px;
+}
+
+.dashboards-live-pill {
+  font-size: 9px;
+  font-weight: 700;
+  color: #10b981;
+  background: rgba(16, 185, 129, 0.15);
+  border: 1px solid rgba(16, 185, 129, 0.3);
+  padding: 1px 6px;
+  border-radius: 9999px;
+  text-transform: uppercase;
+  margin-left: auto;
+}
+
+/* Collapsible Desktop Sidebar */
+.app-container.sidebar-is-collapsed .sidebar {
+  width: 0;
+  min-width: 0;
+  overflow: hidden;
+  border-right: none;
+  transform: translateX(-100%);
+}
+
+.app-container.sidebar-is-collapsed .main-wrapper {
+  width: 100vw;
+}
+
+/* ==========================================================================
    RESPONSIVE LAYOUT BREAKPOINTS
    ========================================================================== */
 

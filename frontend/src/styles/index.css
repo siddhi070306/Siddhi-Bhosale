@@ -142,6 +142,15 @@ a {
   width: 100%;
 }
 
+.page-content.chat-mode-content {
+  padding: 0;
+  max-width: 100%;
+  height: calc(100vh - 54px);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
 /* Page Header Titles */
 .page-header {
   margin-bottom: 24px;

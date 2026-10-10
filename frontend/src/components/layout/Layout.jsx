@@ -1,14 +1,21 @@
-import React from 'react';
+import React, { useState } from 'react';
 import Sidebar from './Sidebar';
 import Header from './Header';
 
-export default function Layout({ activeTab, setActiveTab, hasAnalyzed, children }) {
-  const [isMobileMenuOpen, setIsMobileMenuOpen] = React.useState(false);
+export default function Layout({
+  activeTab,
+  setActiveTab,
+  hasAnalyzed,
+  onNewChat,
+  children,
+}) {
+  const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
+  const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
 
   const getSearchPlaceholder = () => {
     switch (activeTab) {
       case 'chat':
-        return 'Search conversations, market shocks, or filings...';
+        return 'Search market events, companies, sectors...';
       case 'home':
         return 'Search events, companies, sectors...';
       case 'event-analysis':
@@ -25,7 +32,7 @@ export default function Layout({ activeTab, setActiveTab, hasAnalyzed, children 
   };
 
   return (
-    <div className="app-container">
+    <div className={`app-container ${isSidebarCollapsed ? 'sidebar-is-collapsed' : ''}`}>
       {/* Mobile Drawer Backdrop */}
       <div
         className={`sidebar-backdrop ${isMobileMenuOpen ? 'active' : ''}`}
@@ -38,13 +45,22 @@ export default function Layout({ activeTab, setActiveTab, hasAnalyzed, children 
         hasAnalyzed={hasAnalyzed}
         isMobileMenuOpen={isMobileMenuOpen}
         onCloseMobileMenu={() => setIsMobileMenuOpen(false)}
+        isCollapsed={isSidebarCollapsed}
+        onToggleCollapse={() => setIsSidebarCollapsed(!isSidebarCollapsed)}
+        onNewChat={onNewChat}
       />
       <div className="main-wrapper">
         <Header
+          activeTab={activeTab}
           searchPlaceholder={getSearchPlaceholder()}
           onToggleMobileMenu={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
+          isSidebarCollapsed={isSidebarCollapsed}
+          onToggleCollapse={() => setIsSidebarCollapsed(!isSidebarCollapsed)}
+          onNewChat={onNewChat}
         />
-        <main className="page-content">{children}</main>
+        <main className={`page-content ${activeTab === 'chat' ? 'chat-mode-content' : ''}`}>
+          {children}
+        </main>
       </div>
     </div>
   );
