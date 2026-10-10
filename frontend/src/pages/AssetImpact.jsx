@@ -1,8 +1,6 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { Search, ArrowUpRight, ArrowDownRight, Plus, X, Sparkles, TrendingUp, History, LineChart, ExternalLink, FileText } from 'lucide-react';
 import TrendChart from '../components/charts/TrendChart';
-import AnalogChart from '../components/charts/AnalogChart';
-import ForecastChart from '../components/charts/ForecastChart';
 import ExposureHeatmap from '../components/charts/ExposureHeatmap';
 import ExecutiveMemoModal from '../components/common/ExecutiveMemoModal';
 import SourceTag, { StreamChip } from '../components/common/SourceTag';
@@ -96,68 +94,8 @@ export default function AssetImpact({ analysis, onNavigateToChat, onReanalyze, o
 
   const live = useLiveQuotes(assets.map((a) => a.ticker));
 
-  // Chart tab: 'trend' | 'analogs'
-  const [chartTab, setChartTab] = useState('trend');
-  const [analogData, setAnalogData] = useState(null);
-  const [analogLoading, setAnalogLoading] = useState(false);
-  const [analogError, setAnalogError] = useState(null);
-
-  const fetchAnalogs = useCallback(async (asset) => {
-    if (!asset?.id) return;
-    setAnalogLoading(true);
-    setAnalogError(null);
-    setAnalogData(null);
-    const shockMag = asset.exposure && parseFloat(asset.exposure) ? Math.abs(parseFloat(asset.exposure)) * 10 : 5.0;
-    try {
-      const d = await api.getAnalogs(asset.id, Math.max(1.0, Math.min(50, shockMag)));
-      setAnalogData(d);
-    } catch (e) {
-      setAnalogError(e.message);
-    }
-    setAnalogLoading(false);
-  }, []);
-
-  useEffect(() => {
-    if (chartTab === 'analogs' && selectedAsset && !analogData && !analogLoading) {
-      fetchAnalogs(selectedAsset);
-    }
-  }, [chartTab, selectedAsset, analogData, analogLoading, fetchAnalogs]);
-
-  // Reset analog and forecast cache when selected asset changes
-  useEffect(() => {
-    setAnalogData(null);
-    setAnalogError(null);
-    setForecastData(null);
-    setForecastError(null);
-  }, [selectedAsset?.id]);
-
-  // Monte Carlo Forecast state
+  // Executive Memo modal
   const [showMemoModal, setShowMemoModal] = useState(false);
-  const [forecastData, setForecastData] = useState(null);
-  const [forecastLoading, setForecastLoading] = useState(false);
-  const [forecastError, setForecastError] = useState(null);
-  const [forecastHorizon, setForecastHorizon] = useState(30);
-
-  const fetchForecast = useCallback(async (asset, horizon = 30) => {
-    if (!asset?.id) return;
-    setForecastLoading(true);
-    setForecastError(null);
-    const exp = asset.exposure ? parseFloat(asset.exposure) : 0;
-    const shockPct = asset.isPositive ? exp * 5 : -Math.abs(exp) * 5;
-    try {
-      const d = await api.getForecast(asset.id, shockPct, horizon);
-      setForecastData(d);
-    } catch (e) {
-      setForecastError(e.message);
-    }
-    setForecastLoading(false);
-  }, []);
-
-  useEffect(() => {
-    if (chartTab === 'forecast' && selectedAsset && !forecastData && !forecastLoading) {
-      fetchForecast(selectedAsset, forecastHorizon);
-    }
-  }, [chartTab, selectedAsset, forecastData, forecastLoading, forecastHorizon, fetchForecast]);
 
   // add-asset form
   const [sectors, setSectors] = useState([]);
@@ -440,76 +378,83 @@ export default function AssetImpact({ analysis, onNavigateToChat, onReanalyze, o
 
         {/* Right Analytics: Chart panel + Heatmap */}
         <div>
-          {/* Tab toggle */}
+          {/* Header & Direct Navigation to Econometrics Full Page */}
           <div style={{ display: 'flex', gap: 6, marginBottom: 10, flexWrap: 'wrap', alignItems: 'center', justifyContent: 'space-between' }}>
-            <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
-              <button
-                className={`btn btn-sm ${chartTab === 'trend' ? 'btn-black' : 'btn-outline'}`}
-                onClick={() => setChartTab('trend')}
-                style={{ display: 'inline-flex', alignItems: 'center', gap: 5, fontSize: 11.5 }}
+            <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', alignItems: 'center' }}>
+              <div
+                style={{
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: 5,
+                  fontSize: 11.5,
+                  fontWeight: 700,
+                  color: '#ffffff',
+                  padding: '5px 11px',
+                  background: '#09090b',
+                  borderRadius: 6,
+                }}
               >
                 <TrendingUp size={13} />
-                Price Trend
-              </button>
+                <span>Price Trend</span>
+              </div>
+
               <button
-                className={`btn btn-sm ${chartTab === 'analogs' ? 'btn-black' : 'btn-outline'}`}
+                type="button"
+                className="btn btn-sm btn-outline"
                 onClick={() => {
-                  setChartTab('analogs');
-                  if (!analogData && !analogLoading) fetchAnalogs(selectedAsset);
+                  if (onNavigateToTab) {
+                    onNavigateToTab('econometrics', selectedAsset?.id, 'analogs');
+                  }
                 }}
-                style={{ display: 'inline-flex', alignItems: 'center', gap: 5, fontSize: 11.5 }}
+                title={`Open full page Historical Shock Analogs for ${selectedAsset?.name || 'selected asset'}`}
+                style={{
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: 5,
+                  fontSize: 11.5,
+                  background: '#ffffff',
+                  borderColor: '#e4e4e7',
+                  color: '#18181b',
+                  fontWeight: 600,
+                  cursor: 'pointer',
+                  boxShadow: '0 1px 2px rgba(0,0,0,0.03)',
+                }}
               >
                 <History size={13} />
-                Historical Analogs
+                <span>Historical Analogs</span>
+                <ExternalLink size={11} style={{ opacity: 0.6 }} />
               </button>
+
               <button
-                className={`btn btn-sm ${chartTab === 'forecast' ? 'btn-black' : 'btn-outline'}`}
+                type="button"
+                className="btn btn-sm btn-outline"
                 onClick={() => {
-                  setChartTab('forecast');
-                  if (!forecastData && !forecastLoading) fetchForecast(selectedAsset, forecastHorizon);
+                  if (onNavigateToTab) {
+                    onNavigateToTab('econometrics', selectedAsset?.id, 'forecast');
+                  }
                 }}
-                style={{ display: 'inline-flex', alignItems: 'center', gap: 5, fontSize: 11.5 }}
+                title={`Open full page Monte Carlo Forecast for ${selectedAsset?.name || 'selected asset'}`}
+                style={{
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: 5,
+                  fontSize: 11.5,
+                  background: '#ffffff',
+                  borderColor: '#e4e4e7',
+                  color: '#18181b',
+                  fontWeight: 600,
+                  cursor: 'pointer',
+                  boxShadow: '0 1px 2px rgba(0,0,0,0.03)',
+                }}
               >
                 <LineChart size={13} />
-                Monte Carlo Forecast
+                <span>Monte Carlo Forecast</span>
+                <ExternalLink size={11} style={{ opacity: 0.6 }} />
               </button>
             </div>
-
-            {onNavigateToTab && (
-              <button
-                className="btn btn-sm btn-outline"
-                onClick={() => onNavigateToTab('econometrics', selectedAsset?.id)}
-                title="Open full page dedicated to Historical Analogs and Monte Carlo Forecaster"
-                style={{ display: 'inline-flex', alignItems: 'center', gap: 5, fontSize: 11.5, background: '#fafafa' }}
-              >
-                <span>Full Page View</span>
-                <ExternalLink size={12} />
-              </button>
-            )}
           </div>
 
-          {chartTab === 'trend' ? (
-            <TrendChart name={selectedAsset?.name} spark={selectedAsset?.spark} />
-          ) : chartTab === 'analogs' ? (
-            <AnalogChart
-              data={analogData}
-              loading={analogLoading}
-              error={analogError}
-              name={selectedAsset?.name}
-            />
-          ) : (
-            <ForecastChart
-              data={forecastData}
-              loading={forecastLoading}
-              error={forecastError}
-              name={selectedAsset?.name}
-              horizon={forecastHorizon}
-              onHorizonChange={(h) => {
-                setForecastHorizon(h);
-                fetchForecast(selectedAsset, h);
-              }}
-            />
-          )}
+          <TrendChart name={selectedAsset?.name} spark={selectedAsset?.spark} />
           <ExposureHeatmap sectors={sectorRows} />
         </div>
       </div>
@@ -540,8 +485,6 @@ export default function AssetImpact({ analysis, onNavigateToChat, onReanalyze, o
         isOpen={showMemoModal}
         onClose={() => setShowMemoModal(false)}
         analysis={analysis}
-        forecastData={forecastData}
-        analogData={analogData}
       />
     </div>
   );

@@ -25,6 +25,7 @@ function getTabFromHash() {
 export default function App() {
   const [activeTab, setActiveTabState] = useState(getTabFromHash);
   const [econometricAssetId, setEconometricAssetId] = useState(null);
+  const [econometricMode, setEconometricMode] = useState('analogs');
   const [hasAnalyzed, setHasAnalyzed] = useState(false);
   const [currentEventText, setCurrentEventText] = useState('');
   const [analysis, setAnalysis] = useState(null); // real backend result (+ adapted views); null until an analysis succeeds
@@ -32,8 +33,9 @@ export default function App() {
   const [messages, setMessages] = useState([]);
   const [tourIsActive, setTourIsActive] = useState(false);
 
-  const setActiveTab = (tab, assetId = null) => {
+  const setActiveTab = (tab, assetId = null, mode = 'analogs') => {
     if (assetId) setEconometricAssetId(assetId);
+    if (mode) setEconometricMode(mode);
     setActiveTabState(tab);
     if (window.location.hash !== `#/${tab}`) {
       window.location.hash = `#/${tab}`;
@@ -121,7 +123,7 @@ export default function App() {
             activeEventText={hasAnalyzed ? currentEventText : null}
             analysis={analysis}
             onSelectEvent={handleSelectEvent}
-            onNavigateToTab={(tabId) => setActiveTab(tabId)}
+            onNavigateToTab={(tabId, assetId, mode) => setActiveTab(tabId, assetId, mode)}
           />
         );
       case 'event-analysis':
@@ -132,7 +134,7 @@ export default function App() {
             analysis={analysis}
             onNavigateToChat={() => setActiveTab('chat')}
             onNavigateToGraph={() => setActiveTab('impact-graph')}
-            onNavigateToTab={(tabId) => setActiveTab(tabId)}
+            onNavigateToTab={(tabId, assetId, mode) => setActiveTab(tabId, assetId, mode)}
           />
         );
       case 'impact-graph':
@@ -142,7 +144,7 @@ export default function App() {
             analysis={analysis}
             onNavigateToChat={() => setActiveTab('chat')}
             onSelectEvent={handleSelectEvent}
-            onNavigateToTab={(tabId) => setActiveTab(tabId)}
+            onNavigateToTab={(tabId, assetId, mode) => setActiveTab(tabId, assetId, mode)}
           />
         );
       case 'asset-impact':
@@ -153,7 +155,7 @@ export default function App() {
             onNavigateToChat={() => setActiveTab('chat')}
             onSelectEvent={handleSelectEvent}
             onReanalyze={handleReanalyze}
-            onNavigateToTab={(tabId) => setActiveTab(tabId)}
+            onNavigateToTab={(tabId, assetId, mode) => setActiveTab(tabId, assetId, mode)}
           />
         );
       case 'scenario-simulator':
@@ -161,17 +163,18 @@ export default function App() {
           <ScenarioSimulator
             key={analysis ? analysis.at : 'none'}
             analysis={analysis}
-            onNavigateToTab={(tabId) => setActiveTab(tabId)}
+            onNavigateToTab={(tabId, assetId, mode) => setActiveTab(tabId, assetId, mode)}
             onNavigateToChat={() => setActiveTab('chat')}
           />
         );
       case 'econometrics':
         return (
           <EconometricAnalogs
-            key={econometricAssetId || 'default'}
+            key={`${econometricAssetId || 'default'}-${econometricMode}`}
             analysis={analysis}
             initialAssetId={econometricAssetId}
-            onNavigateToTab={(tabId, assetId) => setActiveTab(tabId, assetId)}
+            initialMode={econometricMode}
+            onNavigateToTab={(tabId, assetId, mode) => setActiveTab(tabId, assetId, mode)}
           />
         );
       case 'settings':

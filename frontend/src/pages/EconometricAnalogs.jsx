@@ -21,12 +21,25 @@ import ExecutiveMemoModal from '../components/common/ExecutiveMemoModal';
 export default function EconometricAnalogs({
   analysis,
   initialAssetId,
+  initialMode = 'analogs',
   onNavigateToTab,
 }) {
   const [nodes, setNodes] = useState([]);
   const [selectedNodeId, setSelectedNodeId] = useState(initialAssetId || 'crude_oil');
-  const [viewMode, setViewMode] = useState('analogs'); // 'analogs' | 'forecast' | 'both'
+  const [viewMode, setViewMode] = useState(initialMode || 'analogs'); // 'analogs' | 'forecast' | 'both'
   const [showMemoModal, setShowMemoModal] = useState(false);
+
+  useEffect(() => {
+    if (initialMode) {
+      setViewMode(initialMode);
+    }
+  }, [initialMode]);
+
+  useEffect(() => {
+    if (initialAssetId) {
+      setSelectedNodeId(initialAssetId);
+    }
+  }, [initialAssetId]);
 
   // Analogs state
   const [analogData, setAnalogData] = useState(null);
