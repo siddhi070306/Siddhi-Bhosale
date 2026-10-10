@@ -302,6 +302,10 @@ export const api = {
   getEvents: (limit = 8) => request(`/api/events?limit=${limit}`),
   getGraph: () => request('/api/graph'),
   resetGraph: () => request('/api/reset', { method: 'POST' }),
+  getAnalogs: (nodeId, shockPct = 5.0, live = false) =>
+    request(`/api/analogs?node_id=${encodeURIComponent(nodeId)}&shock_pct=${shockPct}&live=${live}`),
+  getForecast: (nodeId, shockPct = 0.0, horizon = 30, live = false) =>
+    request(`/api/forecast?node_id=${encodeURIComponent(nodeId)}&shock_pct=${shockPct}&horizon=${horizon}&live=${live}`),
 
   // live quotes (Yahoo Finance via yfinance on the backend)
   getQuotes: (symbols) => request(`/api/quotes?symbols=${encodeURIComponent(symbols.join(','))}`),
