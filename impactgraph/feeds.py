@@ -10,6 +10,7 @@ from html import unescape
 import requests
 
 RSS_FEEDS = [
+    ("Moneycontrol", "https://www.moneycontrol.com/rss/business.xml"),
     ("CNBC Markets", "https://www.cnbc.com/id/10000664/device/rss/rss.html"),
     ("MarketWatch", "https://feeds.content.dowjones.io/public/rss/mw_topstories"),
     ("Yahoo Finance", "https://finance.yahoo.com/news/rssindex"),
@@ -19,6 +20,29 @@ _UA = {"User-Agent": "Mozilla/5.0 (compatible; ApexZenith/1.0)"}
 
 def _clean(s):
     return re.sub(r"\s+", " ", unescape(re.sub(r"<[^>]+>", " ", s or ""))).strip()
+
+def scrape_article(url):
+    """Scrape the main text content from a given news URL."""
+    try:
+        from bs4 import BeautifulSoup
+        r = requests.get(url, headers=_UA, timeout=10)
+        r.raise_for_status()
+        soup = BeautifulSoup(r.content, "html.parser")
+        
+        # Remove script, style, nav, footer, header elements
+        for element in soup(["script", "style", "nav", "footer", "header", "aside"]):
+            element.extract()
+            
+        # Get all text paragraphs
+        paragraphs = soup.find_all("p")
+        text = " ".join([p.get_text(strip=True) for p in paragraphs if len(p.get_text(strip=True)) > 20])
+        
+        if text:
+            title = soup.title.string if soup.title else ""
+            return (title + ".\n\n" + text).strip()
+        return ""
+    except Exception:
+        return ""
 
 
 def newsapi_headlines(limit=25):

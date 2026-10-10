@@ -4,7 +4,7 @@ import os
 from concurrent.futures import ThreadPoolExecutor
 
 from . import extract as ex
-from . import kb, llm, propagate as pg, quotes, timeseries as ts
+from . import kb, llm, propagate as pg, quotes, timeseries as ts, feeds
 from .graph import KnowledgeGraph
 from .kbstate import KBGuard
 
@@ -171,6 +171,12 @@ class Analyzer:
         text = (text or "").strip()
         if not text:
             return {"error": "empty text"}
+        if text.startswith("http://") or text.startswith("https://"):
+            scraped = feeds.scrape_article(text)
+            if scraped:
+                text = scraped
+            else:
+                return {"error": "Failed to extract article content from the provided URL"}
         art_id = hashlib.sha1(text.encode("utf-8")).hexdigest()[:10]
         extraction = ex.extract(text)
         events = extraction["events"]
