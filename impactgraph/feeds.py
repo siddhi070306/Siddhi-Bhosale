@@ -14,13 +14,26 @@ from urllib.parse import urljoin, urlparse
 
 import requests
 
+# Checked live 2026-10-11: Moneycontrol answers HTTP 403 to non-browser clients and Yahoo's old RSS index is a 404,
+# so both were replaced by feeds that answer 200 (ET Markets and Livemint also cover India).
 RSS_FEEDS = [
-    ("Moneycontrol", "https://www.moneycontrol.com/rss/business.xml"),
     ("CNBC Markets", "https://www.cnbc.com/id/10000664/device/rss/rss.html"),
     ("MarketWatch", "https://feeds.content.dowjones.io/public/rss/mw_topstories"),
-    ("Yahoo Finance", "https://finance.yahoo.com/news/rssindex"),
+    ("ET Markets", "https://economictimes.indiatimes.com/markets/rssfeeds/1977021501.cms"),
+    ("Livemint", "https://www.livemint.com/rss/markets"),
 ]
 _UA = {"User-Agent": "Mozilla/5.0 (compatible; ApexZenith/1.0)"}
+_CACHE = {}
+
+
+def _cached(key, ttl, fn):
+    hit = _CACHE.get(key)
+    if hit and time.time() - hit[0] < ttl:
+        return hit[1]
+    val = fn()
+    if val:                       # never cache a failure
+        _CACHE[key] = (time.time(), val)
+    return val
 
 
 def _clean(s):
@@ -104,8 +117,8 @@ def _robots_allow(url):
 
 def fetch_article(url):
     """-> {"ok", "text", "title", "reason"}. Never raises. text is capped and is not stored anywhere."""
-    def fail(reason):
-        return {"ok": False, "text": "", "title": "", "reason": reason}
+    def fail(reason, meta=""):
+        return {"ok": False, "text": "", "title": "", "reason": reason, "meta": meta}
     bad = _url_problem(url)
     if bad:
         return fail(bad)
@@ -141,9 +154,14 @@ def fetch_article(url):
             paras.append(t)
     text = " ".join(paras)[:MAX_ARTICLE_CHARS]
     title = _clean(soup.title.string) if soup.title and soup.title.string else ""
+    meta = ""
+    for attrs in ({"property": "og:description"}, {"name": "description"}, {"name": "twitter:description"}):
+        tag = soup.find("meta", attrs=attrs)
+        if tag and len(_clean(tag.get("content"))) > len(meta):
+            meta = _clean(tag.get("content"))
     if len(text) < MIN_ARTICLE_CHARS:
-        return fail("page has too little readable text (paywall, login wall or script-rendered)")
-    return {"ok": True, "text": text, "title": title, "reason": ""}
+        return fail("page has too little readable text (paywall, login wall or script-rendered)", meta)
+    return {"ok": True, "text": text, "title": title, "reason": "", "meta": meta}
 
 
 def scrape_article(url):
@@ -201,25 +219,37 @@ def newsapi_headlines(limit=25):
     return out[:limit]
 
 
+def rss_items():
+    """Items from every RSS feed (cached 5 minutes)."""
+    def load():
+        out = []
+        for name, url in RSS_FEEDS:
+            try:
+                r = requests.get(url, headers=_UA, timeout=8)
+                r.raise_for_status()
+                root = ET.fromstring(r.content)
+                for it in root.iter("item"):
+                    title = _clean(it.findtext("title"))
+                    if not title:
+                        continue
+                    out.append({"source": name, "title": title, "summary": _clean(it.findtext("description")),
+                                "link": (it.findtext("link") or "").strip(), "published": (it.findtext("pubDate") or "").strip()})
+            except Exception:
+                continue
+        return out
+    return _cached("rss", 300, load)
+
+
 def headlines(limit=25):
-    api = newsapi_headlines(limit)
+    api = _cached("newsapi:%d" % limit, 120, lambda: newsapi_headlines(limit))
     if api:
         return api
-    out = []
-    for name, url in RSS_FEEDS:
-        try:
-            r = requests.get(url, headers=_UA, timeout=8)
-            r.raise_for_status()
-            root = ET.fromstring(r.content)
-            for it in root.iter("item"):
-                title = _clean(it.findtext("title"))
-                if not title:
-                    continue
-                out.append({"source": name, "title": title, "summary": _clean(it.findtext("description")),
-                            "link": (it.findtext("link") or "").strip(), "published": (it.findtext("pubDate") or "").strip()})
-        except Exception:
-            continue
-    return out[:limit]
+    return (rss_items() or [])[:limit]
+
+
+def pool():
+    """Every item we can see right now, from all feeds: used to find the same story with a better summary."""
+    return (_cached("newsapi:40", 120, lambda: newsapi_headlines(40)) or []) + (rss_items() or [])
 
 
 # ---- SEC EDGAR --------------------------------------------------------------------------------

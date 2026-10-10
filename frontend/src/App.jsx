@@ -41,7 +41,7 @@ export default function App() {
   const handleReanalyze = async (note) => {
     if (!analysis) return;
     try {
-      const res = await api.analyze(analysis.text, undefined, analysis.source, analysis.link);
+      const res = await api.analyze(analysis.text, undefined, analysis.source, analysis.link, analysis.title);
       handleAnalysisComplete(analysis.text, res);
       if (note) setNotice(note);
     } catch (e) {
@@ -49,11 +49,11 @@ export default function App() {
     }
   };
 
-  const handleSelectEvent = async (eventText, source, link) => {
+  const handleSelectEvent = async (eventText, source, link, title) => {
     setCurrentEventText(eventText);
     setNotice('Analysing selected event…');
     try {
-      const res = await api.analyze(eventText, undefined, source, link);
+      const res = await api.analyze(eventText, undefined, source, link, title);
       handleAnalysisComplete(eventText, res);
       // Add to messages if on chat
       const aiMsg = {
@@ -67,6 +67,10 @@ export default function App() {
         noEvent: res.noEvent,
         kbGuard: res.kbGuard,
         input: res.input,
+        context: res.context,
+        hypothesis: res.hypothesis,
+        emptyReason: res.emptyReason,
+        emptyHint: res.emptyHint,
       };
       setMessages([
         { id: `usr-${Date.now()}`, sender: 'user', text: eventText },

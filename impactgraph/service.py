@@ -5,6 +5,8 @@ from concurrent.futures import ThreadPoolExecutor
 
 from . import extract as ex
 from . import kb, llm, propagate as pg, quotes, timeseries as ts, feeds
+from . import context as ctxmod
+from . import enrich
 from .graph import KnowledgeGraph
 from .kbstate import KBGuard
 
@@ -168,24 +170,24 @@ class Analyzer:
                 "headline": " → ".join(head), "steps": steps, "hops": len(p["edges"])}
 
     # ------------------------------------------------------------------------------------------
-    def analyze(self, text, live=False, use_llm=False, link=None, full_text=False):
+    def analyze(self, text, live=False, use_llm=False, link=None, full_text=False, title=None):
         text = (text or "").strip()
         if not text:
             return {"error": "empty text"}
-        input_info = {"snippet_chars": len(text), "full_article": False, "article_chars": 0, "note": None}
+        input_info = {"snippet_chars": len(text), "full_article": False, "article_chars": 0, "note": None,
+                      "quality": "pasted", "sources": []}
         if text.startswith("http://") or text.startswith("https://"):
             fa = feeds.fetch_article(text.split()[0])
             if not fa["ok"]:
                 return {"error": "Could not read that article: %s. Paste the text instead." % fa["reason"]}
             text = (fa["title"] + ".\n\n" + fa["text"]).strip()
-            input_info.update(snippet_chars=0, full_article=True, article_chars=len(fa["text"]))
-        elif full_text and link:      # a headline was opened: add the article body when the site allows it
-            fa = feeds.fetch_article(link)
-            if fa["ok"]:
-                text = text + "\n\n" + fa["text"]
-                input_info.update(full_article=True, article_chars=len(fa["text"]))
-            else:
-                input_info["note"] = "Full article not used (%s); analysed the headline and description only." % fa["reason"]
+            input_info.update(snippet_chars=0, full_article=True, article_chars=len(fa["text"]), quality="article",
+                              sources=["article body (%d characters)" % len(fa["text"])])
+        elif title or link:           # a headline from a feed: fall back through every source of real text
+            enr = enrich.build(title, text, link, full_text)
+            text = enr["text"]
+            input_info.update(full_article=enr["quality"] == "article", article_chars=enr["article_chars"], note=enr["note"],
+                              quality=enr["quality"], sources=enr["sources"])
         art_id = hashlib.sha1(text.encode("utf-8")).hexdigest()[:10]
         extraction = ex.extract(text)
         events = extraction["events"]
@@ -230,9 +232,32 @@ class Analyzer:
             "llm_note": llm_note, "text": text}
         result["kb_guard"] = dict(guard_report, mode=self.guard.mode)
         result["input"] = dict(input_info, chars=len(text))
+        hypothesis = None
+        if not sources and (use_llm or llm_required()) and llm.available():
+            # nothing we know was stated: ask the model for market themes the story could touch. Hypotheses only:
+            # they are labelled, drawn dashed, and never ingested into the knowledge graph (ingest already ran).
+            hyp = llm.suggest_themes(text)
+            if hyp:
+                hypothesis = {"background": hyp["background"], "themes": hyp["themes"]}
+                for i, th in enumerate(hyp["themes"]):
+                    e = {"id": "hy%d" % (i + 1), "type": "hypothesis", "trigger": th["node"], "direction": th["direction"],
+                         "magnitude": None, "intensity": 0.3, "status": "hypothesis", "confidence": 0.3,
+                         "quote": th["quote"] or "", "source": "llm_hypothesis",
+                         "label": "%s %s (model hypothesis)" % (kb.NODES[th["node"]]["label"], "up" if th["direction"] > 0 else "down")}
+                    events.append(e)
+                    sources.append({"id": e["id"], "trigger": th["node"], "direction": th["direction"], "intensity": 0.3,
+                                    "anchor": False, "label": e["label"], "event": e, "market": None})
+        result["hypothesis"] = hypothesis if hypothesis and hypothesis["themes"] else (
+            {"background": hypothesis["background"], "themes": []} if hypothesis and hypothesis["background"] else None)
         if not sources:
+            named = bool(extraction["mentions"])
             result.update({"paths": [], "assets": [], "sectors": [], "variables": [], "graph": {"nodes": [], "links": []},
                            "comparison": [], "summary": "No actionable financial event was detected in this text.",
+                           "empty_reason": ("Entities were recognised but no price move, decision or event was stated about them."
+                                            if named else
+                                            "No known market entity, asset or driver is named in this text, so there is nothing to trace."),
+                           "empty_hint": "Try a story that names a commodity, central bank, sector, company or index and says what "
+                                         "happened to it, or paste more of the article.",
                            "caveats": self._caveats(live, None)})
             return result
 
@@ -309,7 +334,13 @@ class Analyzer:
             comparison.append({"node": e["trigger"], "label": label(e["trigger"]), "stated": e["direction"],
                                "status": e["status"], "predicted": pred, "verdict": verdict, "quote": e["quote"]})
 
-        graph = self._viz(top[:VIZ_PATHS], explained[:VIZ_PATHS], sources, agg, anchors, events)
+        viz_n = 20 if any(s["event"]["status"] == "hypothesis" for s in sources) else VIZ_PATHS   # keep guesses modest
+        graph = self._viz(top[:viz_n], explained[:viz_n], sources, agg, anchors, events)
+        ctx = ctxmod.expand(self.kg, sources, graph)        # thin graph: possible drivers + sector peers (hypotheses)
+        if ctx:
+            graph["nodes"] += ctx["nodes"]
+            graph["links"] += ctx["links"]
+            result["context"] = {k: ctx[k] for k in ("drivers", "peers", "reason")}
         sparks = {}
         for s in sources:
             sp = ts.sparkline(s["trigger"], live)
@@ -410,6 +441,8 @@ class Analyzer:
                                 "lag": e["lag"], "provenance": e["provenance"], "inferred": e.get("inferred", False),
                                 "verdict": val.get("verdict"), "paths": []}
                 links[k]["paths"].append(ex_["id"])
+        for s in sources:                 # a stated move with no forward paths must still be on the canvas
+            nodes.setdefault(s["trigger"], None)
         out_nodes = []
         trig = {s["trigger"]: s for s in sources}
         for n in nodes:
@@ -453,9 +486,18 @@ class Analyzer:
         scen = [s["label"] for s in sources if s["event"]["status"] != "observed"]
         pick = lambda rows, n: ["%s %s (%s confidence%s)" % (r["label"], ARROW[r["direction"]], r["confidence_label"],
                                                               ", mixed signals" if r["mixed"] else "") for r in rows[:n]]
-        facts = {"observed_events": obs, "expected_scenarios": scen,
+        hyp = any(s["event"]["status"] == "hypothesis" for s in sources)
+        facts = {"observed_events": obs, "expected_scenarios": scen if not hyp else [],
+                 "model_hypotheses": scen if hyp else [],
                  "top_assets": pick(assets, 5), "top_sectors": pick(sectors, 4),
                  "model_vs_article": [{"item": c["label"], "verdict": c["verdict"]} for c in comparison]}
+        ctx = res.get("context")
+        if ctx and ctx["drivers"]:
+            facts["possible_drivers_hypotheses"] = ["%s %s (could explain the move in %s)" % (
+                d["label"], ARROW[d["required_direction"]], d["target_label"]) for d in ctx["drivers"][:4]]
+        if hyp:
+            facts["note"] = ("These themes are model hypotheses suggested from a text that stated no recognised event; "
+                             "nothing here was reported.")
         if use_llm and llm.available():
             txt = llm.summarise(facts)
             if txt:
@@ -465,6 +507,8 @@ class Analyzer:
             parts.append("Reported (observed): " + "; ".join(obs) + ".")
         if scen:
             parts.append("Hedged / scenario: " + "; ".join(scen) + ".")
+        if facts.get("possible_drivers_hypotheses"):
+            parts.append("Possible drivers (hypotheses traced backwards, not stated): " + "; ".join(facts["possible_drivers_hypotheses"]) + ".")
         if facts["top_sectors"]:
             parts.append("Inferred sector effects that may follow: " + "; ".join(facts["top_sectors"]) + ".")
         if facts["top_assets"]:

@@ -65,6 +65,7 @@ const TYPE_LABEL = {
   supply_decision: 'Supply decision',
   geopolitical: 'Geopolitical event',
   regulation: 'Regulation',
+  hypothesis: 'Model hypothesis (not stated)',
 };
 
 const GROUP_OF = {
@@ -186,6 +187,9 @@ export function toGraphView(res) {
     (into[l.target] = into[l.target] || []).push(l);
   });
   const provenanceOf = (n) => {
+    if (n.role === 'driver') return { label: 'Possible driver (traced backwards from the stated move; not in the article)', tone: 'hypothesis' };
+    if (n.role === 'via') return { label: 'Link in a possible chain of causes (hypothesis)', tone: 'hypothesis' };
+    if (n.role === 'peer') return { label: 'Sector context (peers of the company in the article)', tone: 'hypothesis' };
     if (n.observed) return { label: 'Observed in article', tone: 'observed' };
     if (n.inferred) return { label: 'Inferred by the system (unverified)', tone: 'inferred' };
     const inc = into[n.id] || [];
@@ -214,11 +218,13 @@ export function toGraphView(res) {
         col: c,
         x: COL_X[c],
         y: Math.round(start + i * step),
-        change: n.direction ? `${ARROW(n.direction)} ${n.confidence != null ? fmt(n.confidence) : 'reported'}` : '',
+        change: n.role === 'driver' && n.direction ? `${ARROW(n.direction)} would explain it` : n.role ? 'context' : n.direction ? `${ARROW(n.direction)} ${n.confidence != null ? fmt(n.confidence) : 'reported'}` : '',
         direction: n.direction,
         confidence: n.confidence,
         isAnchor: !!(n.observed || srcIds.has(n.id)),
         isDashed: !!n.inferred,
+        isHypothesis: !!n.role,
+        role: n.role || null,
         hasMixedSignals: !!n.mixed,
         observed: n.observed,
         provenance: provenanceOf(n),
@@ -251,7 +257,7 @@ export function toGraphView(res) {
       provenance: l.provenance,
       verdict: l.verdict,
       type: l.inferred ? 'indirect' : 'direct',
-      style: l.inferred || l.verdict === 'inconclusive' ? 'dashed' : 'solid',
+      style: l.inferred || l.kind === 'context' || l.verdict === 'inconclusive' ? 'dashed' : 'solid',
     }));
 
   return {
@@ -312,17 +318,18 @@ export const api = {
   removeAsset: (id) => request(`/api/kb/asset/${encodeURIComponent(id)}`, { method: 'DELETE' }),
 
   // Returns the raw backend result plus adapted views for the pages. Throws on any failure.
-  async analyze(text, live = prefs.getLive(), source = null, link = null) {
+  async analyze(text, live = prefs.getLive(), source = null, link = null, title = null) {
     const res = await request('/api/analyze', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ text, live, use_llm: true, link: link || null, full_text: !!link && prefs.getFullText() }),
+      body: JSON.stringify({ text, live, use_llm: true, link: link || null, title: title || null, full_text: !!link && prefs.getFullText() }),
     });
     return {
       raw: res,
       text,
       source,
       link,
+      title,
       sources: res.sources || [],
       summary: res.summary,
       llmNote: res.llm_note,
@@ -331,6 +338,10 @@ export const api = {
       graphView: toGraphView(res),
       marketSectors: toMarketSectors(res),
       kbGuard: res.kb_guard || null,
+      context: res.context || null,
+      hypothesis: res.hypothesis || null,
+      emptyReason: res.empty_reason || null,
+      emptyHint: res.empty_hint || null,
       input: res.input || null,
       noEvent: !(res.paths && res.paths.length),
     };

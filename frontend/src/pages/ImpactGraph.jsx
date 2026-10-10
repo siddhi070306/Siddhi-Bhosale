@@ -97,6 +97,29 @@ export default function ImpactGraph({ analysis, onNavigateToChat, onSelectEvent 
   const { search: searchQuery, setSearch: setSearchQuery } = useUi(); // shared with the header search box
   const [showEvidenceModal, setShowEvidenceModal] = useState(false);
 
+  if (!graphData && analysis) {
+    // an analysis ran but found nothing to draw: say why, instead of pretending nothing was analysed
+    const hyp = analysis.hypothesis;
+    return (
+      <div className="card" style={{ padding: 28, maxWidth: 760, margin: '24px auto' }}>
+        <div style={{ fontSize: 16, fontWeight: 700, color: '#09090b', marginBottom: 8 }}>Nothing to draw for this text</div>
+        <p style={{ fontSize: 13.5, color: '#27272a', lineHeight: 1.6, marginBottom: 8 }}>{analysis.emptyReason || 'No event the graph knows about was found.'}</p>
+        {analysis.emptyHint && <p style={{ fontSize: 13, color: '#52525b', lineHeight: 1.6, marginBottom: 10 }}>{analysis.emptyHint}</p>}
+        {analysis.input && (
+          <p style={{ fontSize: 12, color: '#71717a', marginBottom: 10 }}>
+            Analysed {analysis.input.chars.toLocaleString()} characters ({{ article: 'full article', description: 'headline + description', headline_only: 'headline only', pasted: 'pasted text' }[analysis.input.quality] || 'text'}).
+            {analysis.input.note ? ` ${analysis.input.note}` : ''}
+          </p>
+        )}
+        {hyp && hyp.background && (
+          <p style={{ fontSize: 12, color: '#71717a', borderLeft: '3px solid #e4e4e7', paddingLeft: 8, marginBottom: 12 }}>
+            <strong>Background (model knowledge, not from the article):</strong> {hyp.background}
+          </p>
+        )}
+        {onNavigateToChat && <button className="btn btn-black" onClick={onNavigateToChat}>Back to AI Chat</button>}
+      </div>
+    );
+  }
   if (!graphData) return <EmptyState onNavigateToChat={onNavigateToChat} onSelectEvent={onSelectEvent} />;
 
   const filteredNodes = searchQuery
@@ -136,6 +159,35 @@ export default function ImpactGraph({ analysis, onNavigateToChat, onSelectEvent 
           />
         </div>
       </div>
+
+      {/* Hypothesis / thin-graph notices */}
+      {analysis.hypothesis && analysis.hypothesis.themes.length > 0 && (
+        <div className="card" style={{ marginBottom: 12, padding: '10px 16px', fontSize: 12.5, color: '#92400e', background: '#fffbeb' }}>
+          <strong>Hypothesis, not from the article:</strong> no stated event matched the graph, so the model suggested{' '}
+          {analysis.hypothesis.themes.map((t) => `${t.node.replace(/_/g, ' ')} ${t.direction > 0 ? '↑' : '↓'}`).join(', ')} as themes this story could touch.
+          Everything below is built from those guesses (dashed) and the graph did not learn from them.
+        </div>
+      )}
+      {analysis.context && (
+        <div className="card" style={{ marginBottom: 12, padding: '10px 16px', fontSize: 12.5, color: '#27272a' }}>
+          <div style={{ fontWeight: 700, marginBottom: 4 }}>The text stated little downstream, so context was added (dashed)</div>
+          <div style={{ color: '#52525b', marginBottom: 4 }}>{analysis.context.reason}</div>
+          {analysis.context.drivers.length > 0 && (
+            <ul style={{ margin: '4px 0 0 16px', color: '#27272a' }}>
+              {analysis.context.drivers.slice(0, 5).map((d) => (
+                <li key={d.node}>
+                  {d.label} {d.required_direction > 0 ? '↑' : '↓'} could explain the move in {d.target_label} ({d.hops} hop{d.hops === 1 ? '' : 's'}, score {d.score.toFixed(2)})
+                </li>
+              ))}
+            </ul>
+          )}
+          {analysis.context.peers.length > 0 && (
+            <div style={{ marginTop: 4, color: '#52525b' }}>
+              Sector context: {analysis.context.peers.map((p) => (p.kind === 'composition' ? `${p.sector_label} (part of the index)` : `${p.sector_label}: peers ${p.members.join(', ') || 'none'}`)).join(' · ')}
+            </div>
+          )}
+        </div>
+      )}
 
       {/* Main Graph Explorer Split Layout */}
       <div className="graph-explorer-container">

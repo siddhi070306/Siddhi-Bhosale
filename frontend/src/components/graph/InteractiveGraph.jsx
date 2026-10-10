@@ -352,6 +352,8 @@ export default function InteractiveGraph({ data, selectedNode, onSelectNode }) {
                     fill={isSelected ? '#0284c7' : colors.fill}
                     stroke={isSelected ? '#0369a1' : colors.stroke}
                     strokeWidth={isSelected ? 2 : 1.8}
+                    strokeDasharray={node.isHypothesis && !isSelected ? '3,2' : undefined}
+                    opacity={node.isHypothesis && !isSelected ? 0.8 : 1}
                     filter="drop-shadow(0 1px 3px rgba(0,0,0,0.06))"
                   />
 
@@ -523,6 +525,11 @@ export default function InteractiveGraph({ data, selectedNode, onSelectNode }) {
             ±
           </div>
           <span>Mixed Signals Flagged (≥30%)</span>
+        </div>
+
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginTop: 8, fontSize: 12, color: '#334155' }}>
+          <div style={{ width: 14, height: 14, borderRadius: '50%', border: '2px dashed #64748b', flexShrink: 0 }} />
+          <span>Hypothesis: possible driver / context (not in the article)</span>
         </div>
       </div>
 

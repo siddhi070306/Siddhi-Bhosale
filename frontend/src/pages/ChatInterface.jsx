@@ -80,6 +80,10 @@ export default function ChatInterface({
         noEvent: result.noEvent,
         kbGuard: result.kbGuard,
         input: result.input,
+        context: result.context,
+        hypothesis: result.hypothesis,
+        emptyReason: result.emptyReason,
+        emptyHint: result.emptyHint,
       };
       setMessages((prev) => [...prev, aiMsg]);
       // Note: We stay on the chat page like ChatGPT, revealing the dashboards in the sidebar and action buttons
@@ -159,10 +163,33 @@ export default function ChatInterface({
                     </p>
                     {msg.llmNote && <p style={{ fontSize: 11.5, color: '#71717a' }}>{msg.llmNote}</p>}
                     {msg.input && (
-                      <p style={{ fontSize: 11.5, color: msg.input.note ? '#92400e' : '#71717a' }}>
-                        {msg.input.full_article
-                          ? `Analysed the headline/description plus ${msg.input.article_chars.toLocaleString()} characters of the article body (${msg.input.chars.toLocaleString()} characters in total).`
-                          : msg.input.note || `Analysed ${msg.input.chars.toLocaleString()} characters of text.`}
+                      <p style={{ fontSize: 11.5, color: msg.input.quality === 'headline_only' ? '#92400e' : '#71717a' }}>
+                        <strong>
+                          {{ article: 'Full article', description: 'Headline + description', headline_only: 'Headline only: low confidence', pasted: 'Pasted text' }[msg.input.quality] || 'Text'}
+                        </strong>
+                        {` · ${msg.input.chars.toLocaleString()} characters analysed`}
+                        {msg.input.sources && msg.input.sources.length > 0 && ` · from: ${msg.input.sources.join('; ')}`}
+                        {msg.input.note && ` · ${msg.input.note}`}
+                      </p>
+                    )}
+                    {msg.noEvent && msg.emptyReason && (
+                      <p style={{ fontSize: 12.5, color: '#92400e', lineHeight: 1.5 }}>
+                        {msg.emptyReason} {msg.emptyHint}
+                      </p>
+                    )}
+                    {msg.hypothesis && msg.hypothesis.background && (
+                      <p style={{ fontSize: 11.5, color: '#71717a', borderLeft: '3px solid #e4e4e7', paddingLeft: 8 }}>
+                        <strong>Background (model knowledge, not from the article):</strong> {msg.hypothesis.background}
+                      </p>
+                    )}
+                    {msg.hypothesis && msg.hypothesis.themes.length > 0 && (
+                      <p style={{ fontSize: 11.5, color: '#92400e' }}>
+                        Hypothesis: nothing was stated that the graph knows, so the model suggested themes this story could touch ({msg.hypothesis.themes.map((t) => `${t.node.replace(/_/g, ' ')} ${t.direction > 0 ? '↑' : '↓'}`).join(', ')}). They are guesses, drawn dashed, and the graph did not learn from them.
+                      </p>
+                    )}
+                    {msg.context && (
+                      <p style={{ fontSize: 11.5, color: '#92400e' }}>
+                        Thin graph: {msg.context.reason}
                       </p>
                     )}
                     {msg.kbGuard && msg.kbGuard.rolled_back && (
