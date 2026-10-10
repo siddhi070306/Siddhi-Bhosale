@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Search, Info, ExternalLink, ArrowRight, ShieldCheck } from 'lucide-react';
+import { Search, ShieldCheck } from 'lucide-react';
 import InteractiveGraph from '../components/graph/InteractiveGraph';
 import { MOCK_DATA } from '../services/api';
 
@@ -90,8 +90,17 @@ export default function ImpactGraph() {
                   <div
                     key={p.id}
                     className="pathway-card"
+                    style={{ cursor: 'pointer' }}
                     onClick={() => {
-                      // auto highlight
+                      let targetId = 'oil_gas_producers';
+                      if (p.id === 2) targetId = 'airlines';
+                      else if (p.id === 3) targetId = 'real_estate';
+                      else if (p.id === 4) targetId = 'it_services';
+                      const target = graphData.nodes.find((n) => n.id === targetId);
+                      if (target) {
+                        setSelectedNode(target);
+                        setActiveTab('details');
+                      }
                     }}
                   >
                     <div style={{ display: 'flex', alignItems: 'flex-start' }}>
@@ -134,11 +143,11 @@ export default function ImpactGraph() {
                       fontSize: 14,
                     }}
                   >
-                    {selectedNode.label?.slice(0, 2).toUpperCase() || 'NO'}
+                    {(selectedNode.label || selectedNode.fullName || 'NO').slice(0, 2).toUpperCase()}
                   </div>
                   <div>
                     <div style={{ fontSize: 15, fontWeight: 700, color: '#09090b' }}>
-                      {selectedNode.label?.replace('\n+12%', '') || 'Selected Entity'}
+                      {selectedNode.fullName || selectedNode.label || 'Selected Entity'}
                     </div>
                     <div style={{ fontSize: 12, color: '#71717a' }}>
                       {selectedNode.category || selectedNode.type || 'Macro Entity'}

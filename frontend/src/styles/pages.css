@@ -557,53 +557,25 @@
   background-color: var(--bg-surface-subtle);
 }
 
-.graph-legend {
+.evidence-tiers-legend {
   position: absolute;
-  bottom: 20px;
-  left: 20px;
-  background: rgba(255, 255, 255, 0.95);
-  backdrop-filter: blur(8px);
+  bottom: 24px;
+  left: 24px;
+  background: rgba(255, 255, 255, 0.96);
+  backdrop-filter: blur(10px);
   border: 1px solid var(--border-subtle);
   border-radius: var(--radius-md);
-  padding: 10px 14px;
-  display: flex;
-  align-items: center;
-  gap: 16px;
-  font-size: 12px;
-  color: var(--text-muted);
+  padding: 14px 18px;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.06);
+  font-family: inherit;
+  z-index: 10;
+  min-width: 260px;
 }
 
-.legend-item {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-}
-
-.legend-line-solid {
-  width: 18px;
-  height: 2px;
-  background: #18181b;
-}
-
-.legend-line-dashed {
-  width: 18px;
-  height: 2px;
-  border-top: 2px dashed #71717a;
-}
-
-.legend-dot-observed {
-  width: 10px;
-  height: 10px;
-  border-radius: 50%;
-  background: #18181b;
-}
-
-.legend-dot-inferred {
-  width: 10px;
-  height: 10px;
-  border-radius: 50%;
-  border: 2px solid #18181b;
-  background: #ffffff;
+@media (max-width: 768px) {
+  .evidence-tiers-legend {
+    display: none;
+  }
 }
 
 /* Right Panel: Pathways & Details */
