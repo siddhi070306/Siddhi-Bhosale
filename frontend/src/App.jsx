@@ -68,9 +68,23 @@ export default function App() {
           />
         );
       case 'impact-graph':
-        return <ImpactGraph key={analysis ? analysis.at : 'none'} analysis={analysis} onNavigateToChat={() => setActiveTab('chat')} />;
+        return (
+          <ImpactGraph
+            key={analysis ? analysis.at : 'none'}
+            analysis={analysis}
+            onNavigateToChat={() => setActiveTab('chat')}
+            onSelectEvent={handleSelectEvent}
+          />
+        );
       case 'asset-impact':
-        return <AssetImpact key={analysis ? analysis.at : 'none'} analysis={analysis} onNavigateToChat={() => setActiveTab('chat')} />;
+        return (
+          <AssetImpact
+            key={analysis ? analysis.at : 'none'}
+            analysis={analysis}
+            onNavigateToChat={() => setActiveTab('chat')}
+            onSelectEvent={handleSelectEvent}
+          />
+        );
       case 'scenario-simulator':
         return <ScenarioSimulator />;
       case 'settings':

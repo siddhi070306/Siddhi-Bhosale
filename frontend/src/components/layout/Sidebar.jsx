@@ -9,9 +9,6 @@ import {
   Sliders,
   Settings as SettingsIcon,
   Triangle,
-  Lock,
-  Unlock,
-  CheckCircle,
   X,
 } from 'lucide-react';
 
@@ -40,10 +37,6 @@ export default function Sidebar({
   };
 
   const handleDashboardClick = (id) => {
-    if (!hasAnalyzed) {
-      alert('Please enter or select a financial event in the AI Chat Assistant first to unlock and generate these dashboards!');
-      return;
-    }
     setActiveTab(id);
     if (onCloseMobileMenu) onCloseMobileMenu();
   };
@@ -84,9 +77,6 @@ export default function Sidebar({
         {/* Dashboards Section Header */}
         <div
           style={{
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'space-between',
             padding: '4px 10px 8px',
             fontSize: '11px',
             fontWeight: 700,
@@ -96,42 +86,24 @@ export default function Sidebar({
           }}
         >
           <span>Dashboards</span>
-          {hasAnalyzed ? (
-            <span style={{ display: 'flex', alignItems: 'center', gap: 4, color: '#22c55e', fontSize: '10.5px' }}>
-              <Unlock size={11} />
-              <span>Unlocked</span>
-            </span>
-          ) : (
-            <span style={{ display: 'flex', alignItems: 'center', gap: 4, color: '#a1a1aa', fontSize: '10.5px' }}>
-              <Lock size={11} />
-              <span>Locked</span>
-            </span>
-          )}
         </div>
 
         {/* Dashboard Items */}
         {dashboardItems.map((item) => {
           const Icon = item.icon;
           const isActive = activeTab === item.id;
-          const isLocked = !hasAnalyzed;
 
           return (
             <button
               key={item.id}
               className={`nav-item ${isActive ? 'active' : ''}`}
               onClick={() => handleDashboardClick(item.id)}
-              style={{
-                opacity: isLocked ? 0.45 : 1,
-                cursor: isLocked ? 'not-allowed' : 'pointer',
-                justifyContent: 'space-between',
-              }}
-              title={isLocked ? 'Enter a news event in AI Chat first to unlock' : item.label}
+              title={item.label}
             >
               <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
                 <Icon className="nav-item-icon" />
                 <span>{item.label}</span>
               </div>
-              {isLocked && <Lock size={13} color="#71717a" />}
             </button>
           );
         })}
