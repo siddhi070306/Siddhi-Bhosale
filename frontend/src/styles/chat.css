@@ -26,16 +26,24 @@
 }
 
 .chat-welcome-avatar {
-  width: 50px;
-  height: 50px;
+  width: 54px;
+  height: 54px;
   border-radius: 14px;
-  background: linear-gradient(135deg, #4f46e5 0%, #6366f1 50%, #818cf8 100%);
-  color: #ffffff;
+  background: #ffffff;
   display: flex;
   align-items: center;
   justify-content: center;
   margin-bottom: 16px;
-  box-shadow: 0 4px 14px rgba(99, 102, 241, 0.35);
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.08);
+  border: 1px solid #e4e4e7;
+  padding: 6px;
+  overflow: hidden;
+}
+
+.welcome-logo-img {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
 }
 
 .chat-welcome-title {
@@ -177,9 +185,17 @@
 }
 
 .chat-msg-avatar.ai {
-  background: linear-gradient(135deg, #4f46e5 0%, #6366f1 100%);
-  color: #ffffff;
-  box-shadow: 0 2px 6px rgba(99, 102, 241, 0.3);
+  background: #ffffff;
+  border: 1px solid #e4e4e7;
+  padding: 3px;
+  overflow: hidden;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.06);
+}
+
+.chat-ai-avatar-img {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
 }
 
 .chat-msg-avatar.user-avatar {

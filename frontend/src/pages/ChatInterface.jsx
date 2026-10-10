@@ -121,7 +121,7 @@ export default function ChatInterface({
         /* Welcome / Empty State Screen */
         <div className="chat-welcome-wrapper">
           <div className="chat-welcome-avatar">
-            <Sparkles size={26} color="#ffffff" />
+            <img src="/image.png" alt="Apex Zenith" className="welcome-logo-img" />
           </div>
           <h1 className="chat-welcome-title">
             What financial event are you analyzing today?
@@ -168,7 +168,7 @@ export default function ChatInterface({
             ) : msg.error ? (
               <div key={msg.id} className="chat-message-row">
                 <div className="chat-msg-avatar ai">
-                  <Sparkles size={15} color="#ffffff" />
+                  <img src="/image.png" alt="Apex Zenith" className="chat-ai-avatar-img" />
                 </div>
                 <div className="chat-msg-body">
                   <div className="chat-bubble-ai">
@@ -179,7 +179,7 @@ export default function ChatInterface({
             ) : (
               <div key={msg.id} className="chat-message-row">
                 <div className="chat-msg-avatar ai">
-                  <Sparkles size={15} color="#ffffff" />
+                  <img src="/image.png" alt="Apex Zenith" className="chat-ai-avatar-img" />
                 </div>
                 <div className="chat-msg-body">
                   <div className="chat-bubble-ai">
@@ -287,7 +287,7 @@ export default function ChatInterface({
           {loading && (
             <div className="chat-message-row">
               <div className="chat-msg-avatar ai">
-                <Sparkles size={15} color="#ffffff" />
+                <img src="/image.png" alt="Apex Zenith" className="chat-ai-avatar-img" />
               </div>
               <div className="chat-msg-body">
                 <div className="chat-bubble-ai" style={{ display: 'flex', alignItems: 'center', gap: 10, padding: 14 }}>

@@ -60,7 +60,7 @@ export default function Sidebar({
       <div className="sidebar-header">
         <div className="brand-identity-row">
           <div className="brand-logo-emblem">
-            <GitBranch size={18} strokeWidth={2.4} color="#ffffff" />
+            <img src="/image.png" alt="Apex Zenith" className="brand-logo-img" />
           </div>
           <div className="brand-text-col">
             <span className="brand-name">Apex Zenith</span>

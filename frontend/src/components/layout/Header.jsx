@@ -66,6 +66,9 @@ export default function Header({
         {isChat ? (
           /* ChatGPT Style Model Selector */
           <div className="chatgpt-model-selector" title="Apex Zenith 3.0 Causal Graph Engine">
+            <div className="model-logo-badge">
+              <img src="/image.png" alt="AZ" className="model-logo-img" />
+            </div>
             <span className="model-name">Apex Zenith 3.0</span>
             <ChevronDown size={14} className="model-chevron" />
           </div>
@@ -139,7 +142,7 @@ export default function Header({
             <HelpCircle size={16} />
           </button>
           <div className="user-avatar" title="Analyst Workspace">
-            AZ
+            <img src="/image.png" alt="Analyst AZ" className="user-avatar-img" />
           </div>
         </div>
       </div>

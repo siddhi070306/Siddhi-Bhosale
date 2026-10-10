@@ -31,15 +31,23 @@
 }
 
 .brand-logo-emblem {
-  width: 34px;
-  height: 34px;
-  border-radius: 9px;
-  background: linear-gradient(135deg, #4f46e5 0%, #6366f1 50%, #818cf8 100%);
+  width: 32px;
+  height: 32px;
+  border-radius: 8px;
+  background: #ffffff;
   display: flex;
   align-items: center;
   justify-content: center;
-  box-shadow: 0 2px 8px rgba(99, 102, 241, 0.35);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.25);
   flex-shrink: 0;
+  padding: 3px;
+  overflow: hidden;
+}
+
+.brand-logo-img {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
 }
 
 .brand-text-col {
@@ -491,13 +499,34 @@
 .chatgpt-model-selector {
   display: flex;
   align-items: center;
-  gap: 6px;
-  padding: 6px 12px;
+  gap: 8px;
+  padding: 5px 12px;
   border-radius: 10px;
   background-color: transparent;
   cursor: pointer;
   transition: background-color 0.15s ease;
   user-select: none;
+}
+
+.model-logo-badge {
+  width: 20px;
+  height: 20px;
+  border-radius: 5px;
+  background: #ffffff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+  padding: 2px;
+  border: 1px solid #e4e4e7;
+  flex-shrink: 0;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
+}
+
+.model-logo-img {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
 }
 
 .chatgpt-model-selector:hover {
@@ -514,6 +543,15 @@
 .chatgpt-model-selector .model-chevron {
   color: #71717a;
   transition: transform 0.15s ease;
+}
+
+.user-avatar-img {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  padding: 3px;
+  background: #ffffff;
+  border-radius: 50%;
 }
 
 .sidebar-collapse-toggle-btn {
