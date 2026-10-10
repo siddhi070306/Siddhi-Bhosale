@@ -8,6 +8,7 @@ It never creates numbers or edges; scores come from the graph.
 import json
 import os
 import re
+import time
 
 import requests
 
@@ -36,23 +37,88 @@ def available():
     return provider() is not None
 
 
-def _chat(system, user, json_mode=False, max_tokens=2500):
-    prov = provider()
-    if not prov:
-        return None
+_LAST_ERROR = [None]
+MAX_RATE_WAIT = 30      # seconds we are willing to wait out a rate limit before giving up
+
+
+def last_error():
+    """Human-readable reason the most recent LLM call failed (None if it succeeded)."""
+    return _LAST_ERROR[0]
+
+
+def _providers():
+    """All providers with a key, preferred one first."""
+    pref = os.environ.get("ZENITH_LLM_PROVIDER", "").lower()
+    order = ([pref] if pref in PROVIDERS else []) + [p for p in ("groq", "openrouter") if p != pref]
+    return [(p,) + (PROVIDERS[p][0], os.environ[PROVIDERS[p][1]].strip(), PROVIDERS[p][2])
+            for p in order if os.environ.get(PROVIDERS[p][1], "").strip()]
+
+
+def _retry_wait(r):
+    """Seconds the provider asks us to wait (Retry-After, or Groq's x-ratelimit-reset-tokens like '1m2.5s')."""
+    h = r.headers
+    try:
+        return float(h["retry-after"])
+    except (KeyError, ValueError):
+        pass
+    m = re.fullmatch(r"(?:(\d+)m)?(?:([\d.]+)s)?", h.get("x-ratelimit-reset-tokens", "").strip())
+    if m and (m.group(1) or m.group(2)):
+        return int(m.group(1) or 0) * 60 + float(m.group(2) or 0)
+    return 10.0
+
+
+def _post(prov, body):
     name, url, key, model = prov
-    body = {"model": model, "temperature": 0.1, "max_tokens": max_tokens,
+    return requests.post(url, json=dict(body, model=model), timeout=45,
+                         headers={"Authorization": "Bearer " + key, "Content-Type": "application/json"})
+
+
+def _chat(system, user, json_mode=False, max_tokens=2000):
+    """One chat completion. A rate-limited provider is skipped in favour of the next one; if every provider is
+    rate-limited we wait out the shortest limit (up to MAX_RATE_WAIT seconds) and retry once. None on failure."""
+    provs = _providers()
+    if not provs:
+        _LAST_ERROR[0] = "no LLM key configured"
+        return None
+    body = {"temperature": 0.1, "max_tokens": max_tokens,
             "messages": [{"role": "system", "content": system}, {"role": "user", "content": user}]}
     if json_mode:
         body["response_format"] = {"type": "json_object"}
-    try:
-        r = requests.post(url, json=body, timeout=40,
-                          headers={"Authorization": "Bearer " + key, "Content-Type": "application/json"})
-        if r.status_code != 200:
-            return None
-        return r.json()["choices"][0]["message"]["content"]
-    except Exception:
-        return None
+    limited, why = [], []
+    for prov in provs:
+        try:
+            r = _post(prov, body)
+        except Exception as e:
+            why.append("%s unreachable (%s)" % (prov[0], type(e).__name__))
+            continue
+        if r.status_code == 200:
+            try:
+                _LAST_ERROR[0] = None
+                return r.json()["choices"][0]["message"]["content"]
+            except Exception:
+                why.append("%s returned an unreadable response" % prov[0])
+                continue
+        if r.status_code in (429, 503):
+            limited.append((_retry_wait(r), prov))
+            why.append("%s rate-limited (HTTP %d)" % (prov[0], r.status_code))
+        else:
+            why.append("%s HTTP %d" % (prov[0], r.status_code))
+    if limited:
+        wait, prov = min(limited, key=lambda x: x[0])
+        if wait <= MAX_RATE_WAIT:
+            time.sleep(wait + 0.5)
+            try:
+                r = _post(prov, body)
+                if r.status_code == 200:
+                    _LAST_ERROR[0] = None
+                    return r.json()["choices"][0]["message"]["content"]
+                why.append("retry on %s after %.0fs: HTTP %d" % (prov[0], wait, r.status_code))
+            except Exception as e:
+                why.append("retry on %s failed (%s)" % (prov[0], type(e).__name__))
+        else:
+            why.append("would have to wait %.0fs" % wait)
+    _LAST_ERROR[0] = "; ".join(why) or "unknown error"
+    return None
 
 
 _NODE_LIST = None
@@ -152,3 +218,58 @@ def extract_links(text):
         links.append({"src": s_, "dst": d_, "sign": e["sign"], "quote": q,
                       "mechanism": (e.get("mechanism") or "Stated in the article")[:200]})
     return links
+
+
+def _valid_events(items, text):
+    evs = []
+    for e in items or []:
+        t = e.get("trigger")
+        if t not in kb.NODES or e.get("direction") not in (1, -1):
+            continue
+        if e.get("quote") and e["quote"].strip()[:40] not in text:
+            continue  # reject quotes that are not actually in the article
+        evs.append({"type": e.get("type", "price_move"), "trigger": t, "direction": e["direction"],
+                    "magnitude": e.get("magnitude"), "intensity": 0.5,
+                    "status": "expected" if e.get("status") == "expected" else "observed",
+                    "confidence": 0.55, "quote": e.get("quote") or "", "source": "llm",
+                    "label": "%s %s (LLM)" % (kb.NODES[t]["label"], "up" if e["direction"] > 0 else "down")})
+    return evs
+
+
+def _valid_links(items, text):
+    links, seen = [], set()
+    for e in items or []:
+        s_, d_, q = e.get("src"), e.get("dst"), (e.get("quote") or "").strip()
+        if s_ not in kb.NODES or d_ not in kb.NODES or s_ == d_ or e.get("sign") not in (1, -1):
+            continue
+        if len(q) < 15 or q[:40] not in text or (s_, d_) in seen:
+            continue
+        seen.add((s_, d_))
+        links.append({"src": s_, "dst": d_, "sign": e["sign"], "quote": q,
+                      "mechanism": (e.get("mechanism") or "Stated in the article")[:200]})
+    return links
+
+
+def extract_graph(text):
+    """Events AND cause->effect links from one model call (half the tokens of two calls: the node list and the
+    article are sent once). Every proposal is verified exactly as in extract_events / extract_links.
+    Returns (events, links) or None on failure."""
+    sys_p = ("You read a financial news article and extract (1) events and (2) cause->effect links, as JSON only: "
+             '{"events":[{"trigger":"<node id>","direction":1|-1,"status":"observed"|"expected","magnitude":"<e.g. 12%> or null",'
+             '"type":"price_move|central_bank_decision|supply_decision|geopolitical|regulation","quote":"<exact sentence from the text>"}],'
+             '"links":[{"src":"<node id>","dst":"<node id>","sign":1|-1,"mechanism":"<one short sentence>",'
+             '"quote":"<exact sentence from the text that supports it>"}]}. '
+             "Use ONLY these node ids: " + _nodes_for_prompt() + ". "
+             "Events: 'observed' = reported as having happened; hedged or forecast statements are 'expected'; for geopolitical "
+             "escalation use geopolitical_tension direction 1. Links: sign=1 means dst moves the same way as src, -1 the opposite; "
+             "include every relationship the text states or clearly implies, including multi-step chains as separate links. "
+             "Never invent anything the text does not support; quotes must be copied exactly.")
+    out = _chat(sys_p, text[:6000], json_mode=True)
+    if not out:
+        return None
+    try:
+        data = json.loads(re.search(r"\{.*\}", out, re.S).group(0))
+    except Exception:
+        _LAST_ERROR[0] = "the model did not return valid JSON"
+        return None
+    return _valid_events(data.get("events"), text), _valid_links(data.get("links"), text)

@@ -9,6 +9,7 @@ export default function Settings() {
   const [statusError, setStatusError] = useState(null);
   const [resetMsg, setResetMsg] = useState(null);
   const [liveData, setLiveDataState] = useState(prefs.getLive());
+  const [fullText, setFullTextState] = useState(prefs.getFullText());
   const setLiveData = (v) => {
     setLiveDataState(v);
     prefs.setLive(v);
@@ -126,6 +127,27 @@ export default function Settings() {
                 type="checkbox"
                 checked={liveData}
                 onChange={(e) => setLiveData(e.target.checked)}
+                style={{ width: 18, height: 18, accentColor: '#18181b' }}
+              />
+            </label>
+
+            <div className="stitched-divider"></div>
+
+            <label style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', cursor: 'pointer' }}>
+              <div>
+                <div style={{ fontSize: 13.5, fontWeight: 600, color: '#09090b' }}>Read the full article when a headline is opened</div>
+                <div style={{ fontSize: 12, color: '#71717a' }}>
+                  Headlines come with only a short description, so the graph stays small. When on, the backend also reads the article body if the site's robots.txt allows it
+                  (public pages only, nothing is stored; paywalled pages fall back to the description). Uses more LLM tokens per analysis.
+                </div>
+              </div>
+              <input
+                type="checkbox"
+                checked={fullText}
+                onChange={(e) => {
+                  setFullTextState(e.target.checked);
+                  prefs.setFullText(e.target.checked);
+                }}
                 style={{ width: 18, height: 18, accentColor: '#18181b' }}
               />
             </label>

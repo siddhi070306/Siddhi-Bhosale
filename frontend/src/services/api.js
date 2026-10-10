@@ -34,6 +34,21 @@ export const prefs = {
       return false;
     }
   },
+  // read the full article body when a headline is opened (the backend honours robots.txt; default on)
+  getFullText() {
+    try {
+      return localStorage.getItem('zenith.fulltext') !== '0';
+    } catch (_) {
+      return true;
+    }
+  },
+  setFullText(v) {
+    try {
+      localStorage.setItem('zenith.fulltext', v ? '1' : '0');
+    } catch (_) {
+      /* storage unavailable */
+    }
+  },
   setLive(v) {
     try {
       localStorage.setItem('zenith.live', v ? '1' : '0');
@@ -301,7 +316,7 @@ export const api = {
     const res = await request('/api/analyze', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ text, live, use_llm: true }),
+      body: JSON.stringify({ text, live, use_llm: true, link: link || null, full_text: !!link && prefs.getFullText() }),
     });
     return {
       raw: res,
@@ -316,6 +331,7 @@ export const api = {
       graphView: toGraphView(res),
       marketSectors: toMarketSectors(res),
       kbGuard: res.kb_guard || null,
+      input: res.input || null,
       noEvent: !(res.paths && res.paths.length),
     };
   },

@@ -79,6 +79,7 @@ export default function ChatInterface({
         details: result.view.details,
         noEvent: result.noEvent,
         kbGuard: result.kbGuard,
+        input: result.input,
       };
       setMessages((prev) => [...prev, aiMsg]);
       // Note: We stay on the chat page like ChatGPT, revealing the dashboards in the sidebar and action buttons
@@ -157,6 +158,13 @@ export default function ChatInterface({
                       {msg.summary}
                     </p>
                     {msg.llmNote && <p style={{ fontSize: 11.5, color: '#71717a' }}>{msg.llmNote}</p>}
+                    {msg.input && (
+                      <p style={{ fontSize: 11.5, color: msg.input.note ? '#92400e' : '#71717a' }}>
+                        {msg.input.full_article
+                          ? `Analysed the headline/description plus ${msg.input.article_chars.toLocaleString()} characters of the article body (${msg.input.chars.toLocaleString()} characters in total).`
+                          : msg.input.note || `Analysed ${msg.input.chars.toLocaleString()} characters of text.`}
+                      </p>
+                    )}
                     {msg.kbGuard && msg.kbGuard.rolled_back && (
                       <p style={{ fontSize: 11.5, color: '#991b1b' }}>
                         Knowledge-base guard: what the graph would have learned from this text was rolled back ({msg.kbGuard.failed.map((c) => c.name).join('; ')}). The answer above uses the last good graph.

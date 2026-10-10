@@ -9,6 +9,7 @@ from .graph import KnowledgeGraph
 from .kbstate import KBGuard
 
 ASSET_TYPES = ("company", "instrument", "index")
+VIZ_PATHS = 40   # paths drawn in the graph (was 26: that capped every graph at ~25-29 nodes)
 ARROW = {1: "↑", -1: "↓"}
 
 SAMPLES = [
@@ -167,16 +168,24 @@ class Analyzer:
                 "headline": " → ".join(head), "steps": steps, "hops": len(p["edges"])}
 
     # ------------------------------------------------------------------------------------------
-    def analyze(self, text, live=False, use_llm=False):
+    def analyze(self, text, live=False, use_llm=False, link=None, full_text=False):
         text = (text or "").strip()
         if not text:
             return {"error": "empty text"}
+        input_info = {"snippet_chars": len(text), "full_article": False, "article_chars": 0, "note": None}
         if text.startswith("http://") or text.startswith("https://"):
-            scraped = feeds.scrape_article(text)
-            if scraped:
-                text = scraped
+            fa = feeds.fetch_article(text.split()[0])
+            if not fa["ok"]:
+                return {"error": "Could not read that article: %s. Paste the text instead." % fa["reason"]}
+            text = (fa["title"] + ".\n\n" + fa["text"]).strip()
+            input_info.update(snippet_chars=0, full_article=True, article_chars=len(fa["text"]))
+        elif full_text and link:      # a headline was opened: add the article body when the site allows it
+            fa = feeds.fetch_article(link)
+            if fa["ok"]:
+                text = text + "\n\n" + fa["text"]
+                input_info.update(full_article=True, article_chars=len(fa["text"]))
             else:
-                return {"error": "Failed to extract article content from the provided URL"}
+                input_info["note"] = "Full article not used (%s); analysed the headline and description only." % fa["reason"]
         art_id = hashlib.sha1(text.encode("utf-8")).hexdigest()[:10]
         extraction = ex.extract(text)
         events = extraction["events"]
@@ -188,13 +197,13 @@ class Analyzer:
                                      "(in .env or the environment), or set ZENITH_REQUIRE_LLM=0 for rules-only mode."}
                 llm_note = "No GROQ_API_KEY / OPENROUTER_API_KEY set; rules only."
             else:
-                extra, llm_links = llm.extract_events(text), llm.extract_links(text)
-                if extra is None or llm_links is None:
+                got = llm.extract_graph(text)
+                if got is None:
                     if llm_required():
-                        return {"error": "The LLM call failed (check the API key, model name and network); "
-                                         "graph building requires it."}
-                    llm_note, llm_links = "LLM call failed; rules only.", []
+                        return {"error": "The LLM call failed (%s); graph building requires it." % (llm.last_error() or "unknown reason")}
+                    llm_note, llm_links = "LLM call failed (%s); rules only." % llm.last_error(), []
                 else:
+                    extra, llm_links = got
                     have = {(e["trigger"], e["direction"]) for e in events}
                     for e in extra:
                         if (e["trigger"], e["direction"]) not in have:
@@ -220,6 +229,7 @@ class Analyzer:
             "unlinked": extraction["unlinked"], "graph_changes": changes, "graph_stats": self.kg.stats(),
             "llm_note": llm_note, "text": text}
         result["kb_guard"] = dict(guard_report, mode=self.guard.mode)
+        result["input"] = dict(input_info, chars=len(text))
         if not sources:
             result.update({"paths": [], "assets": [], "sectors": [], "variables": [], "graph": {"nodes": [], "links": []},
                            "comparison": [], "summary": "No actionable financial event was detected in this text.",
@@ -299,7 +309,7 @@ class Analyzer:
             comparison.append({"node": e["trigger"], "label": label(e["trigger"]), "stated": e["direction"],
                                "status": e["status"], "predicted": pred, "verdict": verdict, "quote": e["quote"]})
 
-        graph = self._viz(top[:26], explained[:26], sources, agg, anchors, events)  # keep the picture readable
+        graph = self._viz(top[:VIZ_PATHS], explained[:VIZ_PATHS], sources, agg, anchors, events)
         sparks = {}
         for s in sources:
             sp = ts.sparkline(s["trigger"], live)

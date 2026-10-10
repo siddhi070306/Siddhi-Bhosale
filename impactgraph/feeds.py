@@ -5,7 +5,12 @@ Both are best-effort; every function returns [] on any failure so the offline de
 import os
 import re
 import xml.etree.ElementTree as ET
+import ipaddress
+import socket
+import time
 from html import unescape
+from urllib import robotparser
+from urllib.parse import urljoin, urlparse
 
 import requests
 
@@ -21,28 +26,141 @@ _UA = {"User-Agent": "Mozilla/5.0 (compatible; ApexZenith/1.0)"}
 def _clean(s):
     return re.sub(r"\s+", " ", unescape(re.sub(r"<[^>]+>", " ", s or ""))).strip()
 
-def scrape_article(url):
-    """Scrape the main text content from a given news URL."""
+# ---- fetching a full article, safely ----------------------------------------------------------------
+# Rules this respects: only public http(s) hosts (no SSRF to localhost / private networks / cloud metadata,
+# checked on every redirect), robots.txt (RFC 9309: 4xx = allowed, unreachable = refused), an honest
+# User-Agent, a size cap, and no storage: the text is used for one analysis and discarded. Paywalled or
+# blocked pages simply fall back to the headline + description. This is not legal advice: publishers' terms
+# of use can still restrict automated reading even where robots.txt allows it. Residual risk: a hostile DNS
+# server could answer differently between the check and the request (DNS rebinding).
+ARTICLE_UA = "ApexZenith/1.0 (research prototype; respects robots.txt)"
+MAX_BYTES = 1500000
+MAX_ARTICLE_CHARS = 5000
+MIN_ARTICLE_CHARS = 400
+_ROBOTS = {}
+
+
+def _public_host(host):
+    try:
+        infos = socket.getaddrinfo(host, None)
+    except OSError:
+        return False
+    return bool(infos) and all(ipaddress.ip_address(i[4][0]).is_global for i in infos)
+
+
+def _url_problem(url):
+    p = urlparse(url)
+    if p.scheme not in ("http", "https") or not p.hostname:
+        return "only http(s) URLs are allowed"
+    if p.username or p.password or p.port not in (None, 80, 443):
+        return "URL with credentials or a non-standard port refused"
+    if not _public_host(p.hostname):
+        return "host is not a public internet address"
+    return None
+
+
+def _safe_get(url, timeout=10, hops=4):
+    """GET with manual redirects so every hop is re-checked. -> (response, None) or (None, reason)."""
+    for _ in range(hops + 1):
+        bad = _url_problem(url)
+        if bad:
+            return None, bad
+        try:
+            r = requests.get(url, headers={"User-Agent": ARTICLE_UA, "Accept": "text/html,text/plain,*/*;q=0.5"},
+                             timeout=timeout, allow_redirects=False, stream=True)
+        except requests.RequestException as e:
+            return None, "request failed (%s)" % type(e).__name__
+        if r.status_code in (301, 302, 303, 307, 308) and r.headers.get("location"):
+            url = urljoin(url, r.headers["location"])
+            r.close()
+            continue
+        return r, None
+    return None, "too many redirects"
+
+
+def _robots_allow(url):
+    p = urlparse(url)
+    root = "%s://%s" % (p.scheme, p.netloc)
+    hit = _ROBOTS.get(root)
+    if not hit or time.time() - hit[0] > 3600:
+        r, why = _safe_get(root + "/robots.txt", timeout=6)
+        if r is None:
+            rp = None
+        elif r.status_code == 200:
+            rp = robotparser.RobotFileParser()
+            rp.parse(r.raw.read(200000, decode_content=True).decode("utf-8", "replace").splitlines())
+        elif 400 <= r.status_code < 500:
+            rp = True            # no robots.txt: everything allowed
+        else:
+            rp = None            # server error: assume disallowed (RFC 9309)
+        if r is not None:
+            r.close()
+        hit = _ROBOTS[root] = (time.time(), rp)
+    rp = hit[1]
+    if rp is None:
+        return False
+    return True if rp is True else rp.can_fetch(ARTICLE_UA, url)
+
+
+def fetch_article(url):
+    """-> {"ok", "text", "title", "reason"}. Never raises. text is capped and is not stored anywhere."""
+    def fail(reason):
+        return {"ok": False, "text": "", "title": "", "reason": reason}
+    bad = _url_problem(url)
+    if bad:
+        return fail(bad)
+    if not _robots_allow(url):
+        return fail("the site's robots.txt does not allow automated access")
+    r, why = _safe_get(url)
+    if r is None:
+        return fail(why)
+    try:
+        if r.status_code != 200:
+            return fail("the site answered HTTP %d" % r.status_code)
+        if "html" not in r.headers.get("content-type", "").lower():
+            return fail("not an HTML page")
+        raw = r.raw.read(MAX_BYTES, decode_content=True)
+        html = raw.decode(r.encoding or "utf-8", "replace")
+    except Exception as e:
+        return fail("could not read the page (%s)" % type(e).__name__)
+    finally:
+        r.close()
     try:
         from bs4 import BeautifulSoup
-        r = requests.get(url, headers=_UA, timeout=10)
-        r.raise_for_status()
-        soup = BeautifulSoup(r.content, "html.parser")
-        
-        # Remove script, style, nav, footer, header elements
-        for element in soup(["script", "style", "nav", "footer", "header", "aside"]):
-            element.extract()
-            
-        # Get all text paragraphs
-        paragraphs = soup.find_all("p")
-        text = " ".join([p.get_text(strip=True) for p in paragraphs if len(p.get_text(strip=True)) > 20])
-        
-        if text:
-            title = soup.title.string if soup.title else ""
-            return (title + ".\n\n" + text).strip()
-        return ""
-    except Exception:
-        return ""
+    except ImportError:
+        return fail("beautifulsoup4 is not installed")
+    soup = BeautifulSoup(html, "html.parser")
+    for el in soup(["script", "style", "nav", "footer", "header", "aside", "form", "noscript", "figure"]):
+        el.extract()
+    root = soup.find("article") or soup.body or soup
+    seen, paras = set(), []
+    for p in root.find_all("p"):
+        t = _clean(p.get_text(" "))
+        if len(t) > 40 and t not in seen:
+            seen.add(t)
+            paras.append(t)
+    text = " ".join(paras)[:MAX_ARTICLE_CHARS]
+    title = _clean(soup.title.string) if soup.title and soup.title.string else ""
+    if len(text) < MIN_ARTICLE_CHARS:
+        return fail("page has too little readable text (paywall, login wall or script-rendered)")
+    return {"ok": True, "text": text, "title": title, "reason": ""}
+
+
+def scrape_article(url):
+    """Back-compat wrapper: article text (with title) or "" when it cannot be read."""
+    a = fetch_article(url)
+    return (a["title"] + ".\n\n" + a["text"]).strip() if a["ok"] else ""
+
+
+def article_snippet(a):
+    """Everything NewsAPI gives for free: description plus the (200-char) content when it adds something."""
+    desc = _clean(a.get("description"))
+    content = re.sub(r"\s*\[\+\d+ chars\]\s*$", "", _clean(a.get("content"))).rstrip("\u2026. ")
+    if content and desc and content.lower().startswith(desc.lower()[:60]):
+        content = content[len(desc):].strip() if len(content) > len(desc) else ""    # keep only what the description lacks
+    elif content and desc and content[:60].lower() in desc.lower():
+        content = ""
+    return " ".join(x for x in (desc, content) if x)
 
 
 def newsapi_headlines(limit=25):
@@ -57,7 +175,7 @@ def newsapi_headlines(limit=25):
             title = _clean(a.get("title"))
             if title and title != "[Removed]":
                 out.append({"source": "NewsAPI/" + ((a.get("source") or {}).get("name") or tag),
-                            "title": title, "summary": _clean(a.get("description") or a.get("content")),
+                            "title": title, "summary": article_snippet(a),
                             "link": a.get("url") or "", "published": a.get("publishedAt") or ""})
 
     def get(path, **params):

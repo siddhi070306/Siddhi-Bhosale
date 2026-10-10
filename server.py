@@ -18,11 +18,13 @@ class AnalyzeBody(BaseModel):
     text: str
     live: bool = False
     use_llm: bool = False
+    link: Optional[str] = None       # the article's URL, when the text is a headline from the feed
+    full_text: bool = False          # also read the article body (robots.txt permitting) and analyse it too
 
 
 @app.post("/api/analyze")
 def analyze(body: AnalyzeBody):
-    res = analyzer.analyze(body.text, live=body.live, use_llm=body.use_llm)
+    res = analyzer.analyze(body.text, live=body.live, use_llm=body.use_llm, link=body.link, full_text=body.full_text)
     if res.get("error"):
         raise HTTPException(status_code=503 if "LLM" in res["error"] else 400, detail=res["error"])
     return res

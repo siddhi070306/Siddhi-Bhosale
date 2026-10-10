@@ -66,6 +66,7 @@ export default function App() {
         details: res.view.details,
         noEvent: res.noEvent,
         kbGuard: res.kbGuard,
+        input: res.input,
       };
       setMessages([
         { id: `usr-${Date.now()}`, sender: 'user', text: eventText },
