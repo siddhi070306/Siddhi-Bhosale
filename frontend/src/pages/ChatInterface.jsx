@@ -17,6 +17,8 @@ import {
   Home,
 } from 'lucide-react';
 import { api } from '../services/api';
+import { useUi } from '../context/UiContext';
+import { useSamples } from '../context/useSamples';
 
 export default function ChatInterface({
   messages: externalMessages,
@@ -33,32 +35,16 @@ export default function ChatInterface({
   const [loading, setLoading] = useState(false);
   const messagesEndRef = useRef(null);
 
-  const starters = [
-    {
-      title: 'Crude Oil Shock',
-      icon: Fuel,
-      colorClass: 'starter-icon-amber',
-      text: 'Brent crude jumped 12% after escalating tensions in the Middle East raised fears of supply disruptions.',
-    },
-    {
-      title: 'Federal Reserve Policy',
-      icon: Landmark,
-      colorClass: 'starter-icon-indigo',
-      text: 'The Federal Reserve raised interest rates by 50 basis points on Wednesday, more than markets had expected.',
-    },
-    {
-      title: 'Banking & Risk Regulation',
-      icon: Building2,
-      colorClass: 'starter-icon-emerald',
-      text: 'The RBI imposed tighter rules on banks, raising risk weights on unsecured consumer loans. Bank stocks fell 2.5%.',
-    },
-    {
-      title: 'Semiconductor Demand',
-      icon: Cpu,
-      colorClass: 'starter-icon-cyan',
-      text: 'TSMC reported record quarterly net profits, forecasting a 25% surge in AI chip demand across global suppliers.',
-    },
+  const { status } = useUi();
+  const { samples, error: samplesError } = useSamples();
+  const STARTER_STYLE = [
+    { icon: Fuel, colorClass: 'starter-icon-amber' },
+    { icon: Landmark, colorClass: 'starter-icon-indigo' },
+    { icon: Building2, colorClass: 'starter-icon-emerald' },
+    { icon: Cpu, colorClass: 'starter-icon-cyan' },
   ];
+  const starters = samples.slice(0, 4).map((smp, i) => ({ ...STARTER_STYLE[i % STARTER_STYLE.length], title: smp.title, text: smp.text }));
+  const engineLabel = status && status.llm ? `LLM (${status.llm}) + quote-verified graph` : status && status.error ? 'Backend offline' : 'Graph + quote grounding';
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -97,6 +83,7 @@ export default function ChatInterface({
         entities: result.view.extractedEntities,
         details: result.view.details,
         noEvent: result.noEvent,
+        kbGuard: result.kbGuard,
       };
       setMessages((prev) => [...prev, aiMsg]);
       // Note: We stay on the chat page like ChatGPT, revealing the dashboards in the sidebar and action buttons
@@ -131,6 +118,7 @@ export default function ChatInterface({
           </p>
 
           {/* 4 Clickable Starter Cards */}
+          {samplesError && <p style={{ fontSize: 12.5, color: '#991b1b', marginBottom: 10 }}>Could not load sample prompts: {samplesError}</p>}
           <div className="chat-starters-grid">
             {starters.map((s, idx) => {
               const Icon = s.icon;
@@ -197,6 +185,19 @@ export default function ChatInterface({
                       {msg.summary}
                     </p>
                     {msg.llmNote && <p style={{ fontSize: 11.5, color: '#71717a' }}>{msg.llmNote}</p>}
+                    {msg.kbGuard && msg.kbGuard.rolled_back && (
+                      <p style={{ fontSize: 11.5, color: '#991b1b' }}>
+                        Knowledge-base guard: what the graph would have learned from this text was rolled back ({msg.kbGuard.failed.map((c) => c.name).join('; ')}). The answer above uses the last good graph.
+                      </p>
+                    )}
+                    {msg.kbGuard && msg.kbGuard.pruned && msg.kbGuard.pruned.length > 0 && (
+                      <p style={{ fontSize: 11.5, color: '#92400e' }}>
+                        Knowledge-base guard: removed {msg.kbGuard.pruned.length} learned link(s) that market data contradicts: {msg.kbGuard.pruned.join(', ')}.
+                      </p>
+                    )}
+                    {msg.kbGuard && msg.kbGuard.mode === 'static' && (
+                      <p style={{ fontSize: 11.5, color: '#71717a' }}>Static mode: the graph is frozen at the curated baseline and learned nothing from this text.</p>
+                    )}
 
                     {/* Extracted metadata box */}
                     <div className="chat-extracted-meta-grid">
@@ -206,7 +207,7 @@ export default function ChatInterface({
                       </div>
                       <div>
                         <div className="chat-meta-item-label">Direction & Magnitude</div>
-                        <div className="chat-meta-item-val" style={{ color: '#166534' }}>
+                        <div className="chat-meta-item-val" style={{ color: String(msg.details.direction).startsWith('↓') ? '#991b1b' : String(msg.details.direction).startsWith('↑') ? '#166534' : '#52525b' }}>
                           {msg.details.direction} ({msg.details.magnitude})
                         </div>
                       </div>
@@ -320,7 +321,7 @@ export default function ChatInterface({
             <div className="chat-input-badges">
               <span className="chat-mode-pill">
                 <ShieldCheck size={13} color="#166534" />
-                <span>Deterministic Graph + Quote Grounding</span>
+                <span>{engineLabel}</span>
               </span>
             </div>
 
@@ -335,7 +336,7 @@ export default function ChatInterface({
           </div>
         </div>
         <p className="chat-disclaimer">
-          Apex Zenith evaluates causal propagation using deterministic knowledge graphs & verified quotes.
+          Events and links are proposed by the LLM and kept only when their quote appears in your text; propagation scores come from the knowledge graph, not the LLM.
         </p>
       </div>
     </div>

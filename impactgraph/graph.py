@@ -22,6 +22,8 @@ class KnowledgeGraph:
         self.g.clear()
         self.articles = []
         for nid, n in kb.NODES.items():
+            if nid not in kb.STATIC_IDS:       # reset means the curated baseline, not runtime additions
+                continue
             self.g.add_node(nid, label=n["label"], type=n["type"], inferred=False, series=n["series"], kind=n["kind"])
         for s, d, sign, st, lag, why in kb.EDGES:
             self.g.add_edge(s, d, sign=sign, strength=st, base_strength=st, lag=lag, mechanism=why,
@@ -101,6 +103,24 @@ class KnowledgeGraph:
                                 provenance=["llm_proposed"], evidence=[ev], validation=None, inferred=True)
                 changes.append({"kind": "new_edge", "src": u, "dst": v, "inferred": True, "by": "llm"})
         return changes
+
+    def add_asset(self, spec, sector=None):
+        """Add a user-supplied asset node, linked from a sector as a low-confidence, user-added inference."""
+        nid = spec["id"]
+        self.g.add_node(nid, label=spec["label"], type=spec["type"], inferred=True, user_added=True,
+                        series=spec["series"], kind=spec["kind"])
+        changes = [{"kind": "new_node", "node": nid, "label": spec["label"], "by": "user"}]
+        if sector:
+            self.g.add_edge(sector, nid, sign=1, strength=0.5, base_strength=0.5, lag=0,
+                            mechanism="User-added: %s assigned to %s (unverified until checked against data)" % (
+                                spec["label"], self.g.nodes[sector]["label"]),
+                            provenance=["user_added", "inferred"], evidence=[], validation=None, inferred=True)
+            changes.append({"kind": "new_edge", "src": sector, "dst": nid, "inferred": True, "by": "user"})
+        return changes
+
+    def remove_node(self, nid):
+        if nid in self.g:
+            self.g.remove_node(nid)
 
     def set_validation(self, u, v, val):
         e = self.g[u][v]

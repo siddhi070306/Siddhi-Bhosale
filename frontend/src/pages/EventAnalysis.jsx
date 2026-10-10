@@ -12,6 +12,7 @@ import {
   CheckCircle2,
   Sparkles,
 } from 'lucide-react';
+import { useUi } from '../context/UiContext';
 
 
 function EmptyState({ onNavigateToChat, what }) {
@@ -30,6 +31,7 @@ export default function EventAnalysis({
   onNavigateToChat,
   onNavigateToGraph,
 }) {
+  const { search } = useUi();
   if (!analysisData) return <EmptyState onNavigateToChat={onNavigateToChat} what="Event analysis" />;
   const text = eventText || analysisData.eventText;
   const entities = analysisData.extractedEntities;
@@ -38,6 +40,9 @@ export default function EventAnalysis({
 
   // Model vs article: the backend compares each stated move with what the graph predicts
   const comparisonChecks = analysisData.comparison || [];
+  const consistentCount = comparisonChecks.filter((c) => c.status === 'consistent').length;
+  const q = (search || '').trim().toLowerCase();
+  const shown = (list) => (list || []).filter((c) => !q || c.toLowerCase().includes(q));
 
   return (
     <div>
@@ -97,7 +102,7 @@ export default function EventAnalysis({
               <span>Companies</span>
             </div>
             <div className="entity-tags">
-              {(entities.companies || []).map((c) => (
+              {shown(entities.companies).map((c) => (
                 <span key={c} className="entity-tag">{c}</span>
               ))}
             </div>
@@ -109,7 +114,7 @@ export default function EventAnalysis({
               <span>Commodities</span>
             </div>
             <div className="entity-tags">
-              {(entities.commodities || []).map((c) => (
+              {shown(entities.commodities).map((c) => (
                 <span key={c} className="entity-tag">{c}</span>
               ))}
             </div>
@@ -121,7 +126,7 @@ export default function EventAnalysis({
               <span>Sectors</span>
             </div>
             <div className="entity-tags">
-              {(entities.sectors || []).map((c) => (
+              {shown(entities.sectors).map((c) => (
                 <span key={c} className="entity-tag">{c}</span>
               ))}
             </div>
@@ -133,7 +138,7 @@ export default function EventAnalysis({
               <span>Indicators</span>
             </div>
             <div className="entity-tags">
-              {(entities.indicators || []).map((c) => (
+              {shown(entities.indicators).map((c) => (
                 <span key={c} className="entity-tag">{c}</span>
               ))}
             </div>
@@ -145,7 +150,7 @@ export default function EventAnalysis({
               <span>Instruments</span>
             </div>
             <div className="entity-tags">
-              {(entities.instruments || []).map((c) => (
+              {shown(entities.instruments).map((c) => (
                 <span key={c} className="entity-tag">{c}</span>
               ))}
             </div>
@@ -208,19 +213,24 @@ export default function EventAnalysis({
 
           <div className="source-quote-box">
             "{evidence.quote || text}"
-            <span className="source-attribution">— {evidence.source || 'Financial Wire Services'}</span>
+            <span className="source-attribution">— {evidence.source}</span>
           </div>
 
-          <button className="btn btn-outline" style={{ width: '100%', marginBottom: 18 }}>
-            <span>View Full Article</span>
-            <ExternalLink size={13} />
-          </button>
+          {details.link ? (
+            <a className="btn btn-outline" style={{ width: '100%', marginBottom: 18, textDecoration: 'none', justifyContent: 'center' }} href={details.link} target="_blank" rel="noopener noreferrer">
+              <span>View Full Article ({details.source})</span>
+              <ExternalLink size={13} />
+            </a>
+          ) : (
+            <div style={{ fontSize: 11.5, color: '#71717a', marginBottom: 18 }}>Pasted text: no article link. Pick a headline in Market Intelligence to link the original.</div>
+          )}
 
           <div className="stitched-divider"></div>
 
           <div style={{ fontSize: 13, fontWeight: 600, color: '#18181b', marginTop: 12 }}>
-            Related News
+            Other events found in this text
           </div>
+          {(evidence.related || []).length === 0 && <p style={{ fontSize: 12, color: '#71717a', marginTop: 8 }}>No other events were extracted.</p>}
 
           <div className="related-news-list">
             {(evidence.related || []).map((news, idx) => (
@@ -240,10 +250,12 @@ export default function EventAnalysis({
             <ShieldCheck size={16} color="#18181b" />
             <span>Model vs Article Checks & Provenance</span>
           </div>
-          <span className="badge badge-positive" style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}>
-            <CheckCircle2 size={12} />
-            <span>Validated</span>
-          </span>
+          {comparisonChecks.length > 0 && (
+            <span className={`badge ${consistentCount === comparisonChecks.length ? 'badge-positive' : 'badge-subtle'}`} style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+              <CheckCircle2 size={12} />
+              <span>{consistentCount} of {comparisonChecks.length} agree with the graph</span>
+            </span>
+          )}
         </div>
 
         <table className="data-table">
@@ -255,6 +267,9 @@ export default function EventAnalysis({
             </tr>
           </thead>
           <tbody>
+            {comparisonChecks.length === 0 && (
+              <tr><td colSpan={3} style={{ color: '#71717a' }}>No stated moves in this text to compare with the graph.</td></tr>
+            )}
             {comparisonChecks.map((chk, idx) => (
               <tr key={idx}>
                 <td style={{ fontWeight: 600 }}>{chk.statement}</td>

@@ -3,26 +3,53 @@ import { FileText } from 'lucide-react';
 import ScenarioChart from '../components/charts/ScenarioChart';
 import { api, HORIZON_DAYS } from '../services/api';
 
-const PRESETS = [
-  { key: 'neg', label: 'Negative Shock', change: -10, horizon: '1 Month' },
-  { key: 'least', label: 'Least Impact', change: 5, horizon: '1 Month' },
-  { key: 'high', label: 'Higher Impact', change: 25, horizon: '3 Months' },
-];
 const ARROW = (d) => (d > 0 ? '↑' : '↓');
+const SOURCE_TYPES = ['commodity', 'indicator', 'institution', 'event_class', 'instrument', 'index'];
+const clamp = (v) => Math.max(-25, Math.min(50, Math.round(v)));
 
-export default function ScenarioSimulator() {
-  const [priceChange, setPriceChange] = useState(15);
+// Starting shock: the size stated in the analysed article for the chosen source (signed), else 15%.
+function baseShock(analysis, trigger) {
+  const raw = analysis && analysis.raw;
+  const src = raw && (raw.sources || []).find((x) => x.trigger === trigger);
+  const ev = src && (raw.events || []).find((e) => e.id === src.id);
+  const m = ev && ev.magnitude && /([\d.]+)\s*%/.exec(ev.magnitude);
+  if (m && src) return clamp(parseFloat(m[1]) * (src.direction >= 0 ? 1 : -1)) || 15;
+  return src && src.direction < 0 ? -15 : 15;
+}
+
+export default function ScenarioSimulator({ analysis = null }) {
+  // The simulator starts from what was analysed: its first source node and the move the article stated.
+  const analysedSources = (analysis && analysis.sources) || [];
+  const [trigger, setTrigger] = useState((analysedSources[0] && analysedSources[0].trigger) || 'crude_oil');
+  const [kbNodes, setKbNodes] = useState([]);
+  const [priceChange, setPriceChange] = useState(() => baseShock(analysis, (analysedSources[0] && analysedSources[0].trigger) || 'crude_oil'));
   const [timeHorizon, setTimeHorizon] = useState('1 Month');
   const [activeScenario, setActiveScenario] = useState('current');
   const [showEvidence, setShowEvidence] = useState(false);
   const [results, setResults] = useState({}); // scenario key -> /api/whatif result
-  const [target, setTarget] = useState('spx');
+  const topAsset = analysis && analysis.assetView && analysis.assetView.assets[0];
+  const [target, setTarget] = useState(topAsset ? topAsset.id : 'spx');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
 
+  useEffect(() => {
+    api.getGraph().then((g) => setKbNodes((g.nodes || []).filter((n) => SOURCE_TYPES.includes(n.type)))).catch(() => {});
+  }, []);
+  const sourceLabel = (kbNodes.find((n) => n.id === trigger) || analysedSources.find((x) => x.trigger === trigger) || {}).label || trigger;
+
+  // Alternative scenarios are relative to the starting shock instead of fixed numbers
+  const base = baseShock(analysis, trigger);
+  const PRESETS = useMemo(
+    () => [
+      { key: 'neg', label: 'Reversed shock', change: clamp(-base), horizon: '1 Month' },
+      { key: 'least', label: 'Half-size shock', change: clamp(base / 2) || (base < 0 ? -1 : 1), horizon: '1 Month' },
+      { key: 'high', label: 'Double shock', change: clamp(base * 2), horizon: '3 Months' },
+    ],
+    [base]
+  );
   const scenarios = useMemo(
     () => [{ key: 'current', label: `Selected (${priceChange >= 0 ? '+' : ''}${priceChange}%)`, change: priceChange }, ...PRESETS],
-    [priceChange]
+    [priceChange, PRESETS]
   );
 
   useEffect(() => {
@@ -31,7 +58,7 @@ export default function ScenarioSimulator() {
     const t = setTimeout(async () => {
       try {
         const horizon = HORIZON_DAYS[timeHorizon];
-        const calls = scenarios.map((s) => (s.change === 0 ? Promise.resolve(null) : api.whatIf('crude_oil', s.change, horizon)));
+        const calls = scenarios.map((s) => (s.change === 0 ? Promise.resolve(null) : api.whatIf(trigger, s.change, horizon)));
         const out = await Promise.all(calls);
         if (cancelled) return;
         const next = {};
@@ -50,7 +77,7 @@ export default function ScenarioSimulator() {
       cancelled = true;
       clearTimeout(t);
     };
-  }, [priceChange, timeHorizon, scenarios]);
+  }, [priceChange, timeHorizon, scenarios, trigger]);
 
   const active = results[activeScenario] || results.current;
   const assetOptions = (results.current && results.current.assets) || [];
@@ -84,11 +111,47 @@ export default function ScenarioSimulator() {
 
           <div className="slider-container">
             <div className="slider-header">
-              <span>Oil Price Change</span>
+              <span>{sourceLabel} change</span>
               <strong style={{ color: priceChange >= 0 ? '#166534' : '#991b1b' }}>{priceChange >= 0 ? `+${priceChange}%` : `${priceChange}%`}</strong>
             </div>
             <input type="range" min="-25" max="50" value={priceChange} onChange={(e) => setPriceChange(Number(e.target.value))} className="slider-input" />
+            {['institution', 'event_class', 'indicator'].includes((kbNodes.find((n) => n.id === trigger) || {}).type) && (
+              <div style={{ fontSize: 11.5, color: '#71717a', marginTop: 6 }}>
+                {sourceLabel} is not a price: the % is a generic shock size that scales sensitivity (e.g. a bigger surprise), not a literal percentage move.
+              </div>
+            )}
             {priceChange === 0 && <div style={{ fontSize: 11.5, color: '#71717a', marginTop: 6 }}>0% is no shock: nothing to propagate.</div>}
+          </div>
+
+          <div className="form-group">
+            <label className="form-label">Shock source</label>
+            <select
+              className="form-select"
+              value={trigger}
+              onChange={(e) => {
+                setTrigger(e.target.value);
+                setPriceChange(baseShock(analysis, e.target.value));
+                setActiveScenario('current');
+              }}
+            >
+              {analysedSources.length > 0 && (
+                <optgroup label="From your analysis">
+                  {analysedSources.map((x) => (
+                    <option key={x.trigger} value={x.trigger}>{(kbNodes.find((n) => n.id === x.trigger) || {}).label || x.trigger}</option>
+                  ))}
+                </optgroup>
+              )}
+              <optgroup label="Other macro drivers">
+                {(kbNodes.length ? kbNodes : [{ id: 'crude_oil', label: 'Crude Oil' }])
+                  .filter((n) => !analysedSources.some((x) => x.trigger === n.id))
+                  .map((n) => (
+                    <option key={n.id} value={n.id}>{n.label}</option>
+                  ))}
+              </optgroup>
+            </select>
+            <div style={{ fontSize: 11.5, color: '#71717a', marginTop: 4 }}>
+              {analysedSources.length ? 'Starts from the event you analysed; change it to test any other driver.' : 'No analysis yet: pick any driver to simulate.'}
+            </div>
           </div>
 
           <div className="form-group">
@@ -118,7 +181,7 @@ export default function ScenarioSimulator() {
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                 <div>
                   <div style={{ fontSize: 13, fontWeight: 600 }}>{p.label}</div>
-                  <div style={{ fontSize: 11.5, color: '#71717a' }}>Oil {p.change > 0 ? '+' : ''}{p.change}% · {p.horizon}</div>
+                  <div style={{ fontSize: 11.5, color: '#71717a' }}>{sourceLabel} {p.change > 0 ? '+' : ''}{p.change}% · {p.horizon}</div>
                 </div>
                 <span className="badge badge-subtle">Apply</span>
               </div>
@@ -141,7 +204,7 @@ export default function ScenarioSimulator() {
               <span>Simulation Mechanics</span>
             </div>
             <p style={{ fontSize: 12.5, color: '#52525b', lineHeight: 1.6 }}>
-              Each scenario re-runs the knowledge-graph propagation from Crude Oil with the chosen shock size; nothing is learned or stored. Link strengths are analyst priors
+              Each scenario re-runs the knowledge-graph propagation from {sourceLabel} with the chosen shock size; nothing is learned or stored. Link strengths are analyst priors
               (adjusted by data checks only when live data is on). Shock size changes sensitivity and ranking, not whether a path exists, and bars are not price forecasts.
             </p>
           </div>

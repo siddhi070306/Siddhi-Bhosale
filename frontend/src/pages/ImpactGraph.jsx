@@ -1,29 +1,18 @@
 import React, { useState } from 'react';
 import { Search, ShieldCheck, Fuel, Landmark, Building2, Sparkles, ArrowRight } from 'lucide-react';
 import InteractiveGraph from '../components/graph/InteractiveGraph';
+import { useUi } from '../context/UiContext';
+import { useSamples } from '../context/useSamples';
 
 function EmptyState({ onNavigateToChat, onSelectEvent }) {
   const [inputText, setInputText] = useState('');
-  const starters = [
-    {
-      title: 'Crude Oil Shock',
-      icon: Fuel,
-      colorClass: 'starter-icon-amber',
-      text: "Brent crude jumped 12% on Monday after an attack on tankers near the Strait of Hormuz raised fears of a supply disruption. OPEC+ signalled it would keep its output cuts in place. Airline stocks fell sharply, with Delta Air Lines among the biggest decliners, while ExxonMobil gained. The rupee weakened.",
-    },
-    {
-      title: 'Federal Reserve Policy',
-      icon: Landmark,
-      colorClass: 'starter-icon-indigo',
-      text: "The Federal Reserve raised interest rates by 50 basis points on Wednesday, more than markets had expected. The dollar index jumped 1.2% and 10-year yields rose as investors priced in a longer period of tight policy.",
-    },
-    {
-      title: 'Banking & Loan Regulation',
-      icon: Building2,
-      colorClass: 'starter-icon-emerald',
-      text: "The RBI imposed tighter rules on banks, raising risk weights on unsecured consumer loans. Bank stocks fell 2.5% as lenders flagged higher capital requirements. HDFC Bank slid in early trade.",
-    },
+  const { samples, error: samplesError } = useSamples();
+  const STYLE = [
+    { icon: Fuel, colorClass: 'starter-icon-amber' },
+    { icon: Landmark, colorClass: 'starter-icon-indigo' },
+    { icon: Building2, colorClass: 'starter-icon-emerald' },
   ];
+  const starters = samples.slice(0, 3).map((smp, i) => ({ ...STYLE[i % STYLE.length], title: smp.title, text: smp.text }));
 
   return (
     <div className="card" style={{ padding: '36px 28px', maxWidth: 860, margin: '24px auto', textAlign: 'center' }}>
@@ -66,6 +55,7 @@ function EmptyState({ onNavigateToChat, onSelectEvent }) {
       <div style={{ fontSize: 11, fontWeight: 700, color: '#a1a1aa', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 14 }}>
         Or start with a sample market prompt:
       </div>
+      {samplesError && <p style={{ fontSize: 12.5, color: '#991b1b', marginBottom: 10 }}>Could not load sample prompts: {samplesError}</p>}
 
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(250px, 1fr))', gap: 14, textAlign: 'left', marginBottom: 24 }}>
         {starters.map((s, idx) => {
@@ -104,7 +94,7 @@ export default function ImpactGraph({ analysis, onNavigateToChat, onSelectEvent 
   const graphData = (analysis && analysis.graphView) || null;
   const [activeTab, setActiveTab] = useState('pathways');
   const [selectedNode, setSelectedNode] = useState(graphData ? graphData.centerNode : null);
-  const [searchQuery, setSearchQuery] = useState('');
+  const { search: searchQuery, setSearch: setSearchQuery } = useUi(); // shared with the header search box
   const [showEvidenceModal, setShowEvidenceModal] = useState(false);
 
   if (!graphData) return <EmptyState onNavigateToChat={onNavigateToChat} onSelectEvent={onSelectEvent} />;
@@ -255,7 +245,7 @@ export default function ImpactGraph({ analysis, onNavigateToChat, onSelectEvent 
                   <span
                     className="detail-val"
                     style={{
-                      color: (selectedNode.change || '').startsWith('↑') ? '#166534' : '#991b1b',
+                      color: (selectedNode.change || '').startsWith('↑') ? '#166534' : (selectedNode.change || '').startsWith('↓') ? '#991b1b' : '#52525b',
                     }}
                   >
                     {selectedNode.change || '–'}
@@ -269,7 +259,9 @@ export default function ImpactGraph({ analysis, onNavigateToChat, onSelectEvent 
 
                 <div className="event-detail-row">
                   <span className="detail-key">Provenance</span>
-                  <span className="badge badge-black">Observed & Validated</span>
+                  <span className={`badge ${selectedNode.provenance && ['validated', 'observed'].includes(selectedNode.provenance.tone) ? 'badge-black' : 'badge-subtle'}`}>
+                    {selectedNode.provenance ? selectedNode.provenance.label : 'Analyst prior (not data-checked)'}
+                  </span>
                 </div>
 
                 <div style={{ marginTop: 20 }}>

@@ -74,3 +74,21 @@ impactgraph/  kb.py extract.py graph.py propagate.py timeseries.py llm.py feeds.
 public/       index.html (D3 UI, vendored d3 for offline use)
 server.py     FastAPI app      run.py   launcher      tests/   unit + end-to-end tests
 ```
+
+## Live quotes, watchlist and the dynamic knowledge base
+
+**Live numbers.** Asset prices and day changes come from Yahoo Finance through `yfinance` (>= 0.2.66). Yahoo offers no webhooks, so the
+backend uses two real feeds: yfinance's WebSocket (a push tick whenever a symbol trades) and a batched poll every 20 s (previous close,
+and coverage while a market is closed). Both feed one cache that is pushed to the browser over Server-Sent Events (`GET /api/stream`),
+with `GET /api/quotes` as the polling fallback (used on serverless hosts, where background threads do not persist). Quotes can be
+delayed by the exchange and are never simulated; if Yahoo fails, the last good quote stays visible with the error.
+In the UI every number is tagged **LIVE** (Yahoo), **FRED** (official daily series) or **MODEL** (estimated by the knowledge graph).
+
+**Watchlist and assets.** `POST /api/watchlist` adds any ticker (verified against Yahoo first). `POST /api/kb/asset` adds an asset to the
+graph as a low-confidence, user-added link from a sector (you pick it, or the LLM suggests one from the curated list).
+
+**Dynamic knowledge base with automatic revert** (`impactgraph/kbstate.py`). Every change (article learned, asset added) is snapshotted,
+then checked: curated entities/links intact, strengths in range, bounded growth per change, runtime links a minority, and a regression
+test (the built-in sample articles must still give the same signs as the static baseline). A failed check rolls the change back.
+Runtime links that market data contradicts are pruned. `GET /api/kb`, `POST /api/kb/mode` (`dynamic` | `static`), `POST /api/kb/revert`
+(`previous` | `static`). State is saved to `data/kb_state.json` (local runs) and re-checked on load; a state that fails is discarded.

@@ -21,9 +21,9 @@ _TTL = 900
 _cache = {"t": 0, "val": None}
 
 
-def _levels(sid):
+def _levels(sid, force=False):
     key = "lvl_fred_" + sid
-    hit = ts._cache_read(key)
+    hit = None if force else ts._cache_read(key)
     if hit:
         return hit["dates"], hit["vals"]
     dates, vals = ts.fetch_fred(sid, 12)
@@ -31,10 +31,10 @@ def _levels(sid):
     return dates, vals
 
 
-def _one(item):
+def _one(item, force=False):
     id_, name, sid, dp = item
     try:
-        dates, vals = _levels(sid)
+        dates, vals = _levels(sid, force)
         if len(vals) < 3:
             return None
         last, prev = vals[-1], vals[-2]
@@ -46,11 +46,12 @@ def _one(item):
         return None
 
 
-def snapshot():
-    if _cache["val"] is not None and time.time() - _cache["t"] < _TTL:
+def snapshot(force=False):
+    """force=True skips both the in-memory and the on-disk cache (the dashboard's refresh button)."""
+    if not force and _cache["val"] is not None and time.time() - _cache["t"] < _TTL:
         return _cache["val"]
     with ThreadPoolExecutor(max_workers=6) as pool:
-        got = [g for g in pool.map(_one, ITEMS) if g]
+        got = [g for g in pool.map(lambda it: _one(it, force), ITEMS) if g]
     out = {"available": bool(got), "tickers": got,
            "note": None if got else "FRED market series could not be reached."}
     if got:

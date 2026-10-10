@@ -37,11 +37,23 @@ export default function App() {
     setMessages([]);
   };
 
-  const handleSelectEvent = async (eventText, source) => {
+  // Re-run the current analysis (e.g. after an asset was added to the graph) without leaving the page
+  const handleReanalyze = async (note) => {
+    if (!analysis) return;
+    try {
+      const res = await api.analyze(analysis.text, undefined, analysis.source, analysis.link);
+      handleAnalysisComplete(analysis.text, res);
+      if (note) setNotice(note);
+    } catch (e) {
+      setNotice(`Analysis failed: ${e.message}`);
+    }
+  };
+
+  const handleSelectEvent = async (eventText, source, link) => {
     setCurrentEventText(eventText);
     setNotice('Analysing selected event…');
     try {
-      const res = await api.analyze(eventText, undefined, source);
+      const res = await api.analyze(eventText, undefined, source, link);
       handleAnalysisComplete(eventText, res);
       // Add to messages if on chat
       const aiMsg = {
@@ -53,6 +65,7 @@ export default function App() {
         entities: res.view.extractedEntities,
         details: res.view.details,
         noEvent: res.noEvent,
+        kbGuard: res.kbGuard,
       };
       setMessages([
         { id: `usr-${Date.now()}`, sender: 'user', text: eventText },
@@ -100,10 +113,11 @@ export default function App() {
             analysis={analysis}
             onNavigateToChat={() => setActiveTab('chat')}
             onSelectEvent={handleSelectEvent}
+            onReanalyze={handleReanalyze}
           />
         );
       case 'scenario-simulator':
-        return <ScenarioSimulator />;
+        return <ScenarioSimulator key={analysis ? analysis.at : 'none'} analysis={analysis} />;
       case 'settings':
         return <Settings />;
       default:

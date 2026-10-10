@@ -105,6 +105,21 @@ def summarise(facts):
     return _chat(sys_p, json.dumps(facts)[:6000], max_tokens=1500)
 
 
+def suggest_sector(name, ticker, sector_ids):
+    """Ask the model which curated sector a company/ETF belongs to. Returns a sector id from sector_ids, or None."""
+    sys_p = ("You classify a listed company or fund into exactly one sector from a fixed list. Reply with JSON only: "
+             '{"sector":"<id from the list>"|null}. Allowed ids: ' + ", ".join(sector_ids) + ". "
+             "Use null if none fits or you are unsure. Do not guess.")
+    out = _chat(sys_p, "Name: %s | Ticker: %s" % (name, ticker), json_mode=True, max_tokens=200)
+    if not out:
+        return None
+    try:
+        sec = json.loads(re.search(r"\{.*\}", out, re.S).group(0)).get("sector")
+    except Exception:
+        return None
+    return sec if sec in sector_ids else None
+
+
 def extract_links(text):
     """Ask the model for cause->effect links stated in the article between known graph nodes.
 

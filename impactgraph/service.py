@@ -4,8 +4,9 @@ import os
 from concurrent.futures import ThreadPoolExecutor
 
 from . import extract as ex
-from . import kb, llm, propagate as pg, timeseries as ts
+from . import kb, llm, propagate as pg, quotes, timeseries as ts
 from .graph import KnowledgeGraph
+from .kbstate import KBGuard
 
 ASSET_TYPES = ("company", "instrument", "index")
 ARROW = {1: "↑", -1: "↓"}
@@ -43,12 +44,73 @@ def _fmt(label, d):
 
 
 class Analyzer:
-    def __init__(self):
+    def __init__(self, persist=False):
         self.kg = KnowledgeGraph()
+        self.guard = KBGuard(self.kg, persist=persist)
+        self.guard.load()
 
     def reset(self):
-        self.kg.reset()
+        """Back to the curated static baseline (also removes runtime assets)."""
+        self.guard.revert("static")
         ts.clear_memory_cache()
+
+    # ------------------------------------------------------------------------------------------
+    def add_asset(self, ticker, name=None, sector=None, verify=True):
+        """Add a market asset to the live graph: validated against Yahoo, linked from a sector, guarded."""
+        t = (ticker or "").strip().upper()
+        if not quotes.valid_symbol(t):
+            return {"error": "not a valid ticker symbol: %r" % ticker}
+        if self.guard.mode == "static":
+            return {"error": "The knowledge base is in static mode (learning frozen). Switch to dynamic to add assets."}
+        for nid in kb.NODES:
+            if (kb.yf_symbol(nid) or "").upper() == t:
+                return {"error": "%s is already in the graph as %s" % (t, kb.NODES[nid]["label"])}
+        quote = None
+        if verify:
+            quote = quotes.HUB.fetch_now([t]).get(t)
+            if not quote or quote.get("error"):
+                return {"error": "Could not verify %s on Yahoo Finance: %s" % (t, (quote or {}).get("error", "no quote"))}
+        sectors = [n for n, d in kb.NODES.items() if d["type"] == "sector"]
+        how = "chosen by you"
+        if sector and sector not in sectors:
+            return {"error": "unknown sector: %s" % sector}
+        label = (name or "").strip() or t
+        if not sector:
+            sector, how = llm.suggest_sector(label, t, sectors), "suggested by the LLM"
+            if not sector:
+                low = label.lower()
+                sector = next((s for kws, s in kb.SECTOR_KEYWORDS if any(k in low for k in kws)), None)
+                how = "matched from the name" if sector else "none"
+        nid = "u_" + "".join(c for c in t.lower() if c.isalnum())
+        typ = "index" if t.startswith("^") else "company"
+        aliases = ["!" + t] if len(t) >= 3 and not t.startswith("^") else []
+        if name and len(name.strip()) >= 3:
+            aliases.append(name.strip())
+        spec = {"id": nid, "label": label, "type": typ, "aliases": aliases, "series": [("yf", t, "ret")], "kind": None}
+        before = self.guard.begin()
+        kb.NODES[nid] = spec
+        KBGuard._nodes_changed()
+        changes = self.kg.add_asset(spec, sector)
+        report = self.guard.finish(before, "added asset %s (%s)" % (label, t))
+        if report["rolled_back"]:
+            return {"error": "The knowledge-base guard rolled this addition back: " +
+                    "; ".join(c["name"] for c in report["failed"]), "guard": report}
+        return {"node": nid, "label": label, "ticker": t, "type": typ, "sector": sector,
+                "sector_label": kb.NODES[sector]["label"] if sector else None, "sector_source": how,
+                "linked": bool(sector), "quote": quote, "changes": changes, "guard": report,
+                "note": None if sector else "No sector link: the asset is tracked for live prices but will not appear in impact "
+                                              "tables until it is connected to something in the graph."}
+
+    def remove_asset(self, node_id):
+        if node_id in kb.STATIC_IDS or node_id not in kb.NODES:
+            return {"error": "only assets you added can be removed"}
+        before = self.guard.begin()
+        label = kb.NODES[node_id]["label"]
+        del kb.NODES[node_id]
+        KBGuard._nodes_changed()
+        self.kg.remove_node(node_id)
+        report = self.guard.finish(before, "removed asset %s" % label)
+        return {"ok": not report["rolled_back"], "guard": report}
 
     # ------------------------------------------------------------------------------------------
     def _build_sources(self, events):
@@ -135,14 +197,23 @@ class Analyzer:
                     llm_note = "LLM added %d event(s) and proposed %d quote-verified link(s)." % (
                         sum(1 for e in events if e["source"] == "llm"), len(llm_links))
 
-        changes = self.kg.ingest(art_id, text, extraction)
-        changes += self.kg.add_llm_links(art_id, llm_links)
+        guard_report = {"rolled_back": False, "failed": [], "version": self.guard.version, "pruned": []}
+        if self.guard.mode == "dynamic":
+            before = self.guard.begin()
+            changes = self.kg.ingest(art_id, text, extraction)
+            changes += self.kg.add_llm_links(art_id, llm_links)
+            guard_report = dict(self.guard.finish(before, "article " + art_id), pruned=[])
+            if guard_report["rolled_back"]:
+                changes = []
+        else:
+            changes = []          # static mode: the graph is frozen at the curated baseline
         sources, claims = self._build_sources(events)
         result = {"article_id": art_id, "events": events, "mentions": [
             {"node": m["node"], "label": kb.NODES[m["node"]]["label"], "type": kb.NODES[m["node"]]["type"],
              "text": m["text"], "start": m["start"], "end": m["end"]} for m in extraction["mentions"]],
             "unlinked": extraction["unlinked"], "graph_changes": changes, "graph_stats": self.kg.stats(),
             "llm_note": llm_note, "text": text}
+        result["kb_guard"] = dict(guard_report, mode=self.guard.mode)
         if not sources:
             result.update({"paths": [], "assets": [], "sectors": [], "variables": [], "graph": {"nodes": [], "links": []},
                            "comparison": [], "summary": "No actionable financial event was detected in this text.",
@@ -156,6 +227,8 @@ class Analyzer:
         self._prefetch(nodes, live)
         for (u, v) in edges:
             self.kg.set_validation(u, v, ts.validate_edge(self.kg, u, v, live))
+        if self.guard.mode == "dynamic":      # runtime-proposed links that data contradicts are dropped
+            result["kb_guard"]["pruned"] = self.guard.heal()
         # pass 2: propagate again with data-adjusted strengths
         paths = pg.propagate(self.kg, sources)
         trig_nonanchor = {s["trigger"] for s in sources if not s["anchor"]}
@@ -197,7 +270,7 @@ class Analyzer:
                    "why": last["mechanism"] if last else "", "observed": n in anchors,
                    "inferred_node": bool(self.kg.g.nodes[n].get("inferred")),
                    "pos_mass": a["pos_mass"], "neg_mass": a["neg_mass"], "best_score": round(bp["score"], 3),
-                   "spark": sp}
+                   "spark": sp, "ticker": kb.yf_symbol(n), "user_added": bool(self.kg.g.nodes[n].get("user_added"))}
             rows.append(row)
         rank = lambda r: -(r["confidence"] * {"strong": 1.0, "moderate": 0.75, "mild": 0.5}[r["sensitivity"]])
         assets = sorted([r for r in rows if r["type"] in ASSET_TYPES], key=rank)
@@ -270,6 +343,7 @@ class Analyzer:
                          "horizon_days": a["horizon_days"], "sensitivity": a["sensitivity"],
                          "sensitivity_label": a["sensitivity_label"], "n_paths": a["n_paths"],
                          "headline": exp["headline"], "why": last["mechanism"] if last else "",
+                         "ticker": kb.yf_symbol(n),
                          "beyond_horizon": bool(horizon_days is not None and a["horizon_days"] > horizon_days)})
         rank = lambda r: -(r["confidence"] * {"strong": 1.0, "moderate": 0.75, "mild": 0.5}[r["sensitivity_label"]])
         rows.sort(key=rank)

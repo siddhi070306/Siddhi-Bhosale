@@ -60,6 +60,12 @@ def _compile_aliases():
 _ALIASES = _compile_aliases()
 
 
+def refresh_aliases():
+    """Re-read kb.NODES (after a runtime asset was added or removed)."""
+    global _ALIASES
+    _ALIASES = _compile_aliases()
+
+
 def split_sentences(text):
     """Yield (start, end, sentence) with offsets into the original text."""
     pos = 0
