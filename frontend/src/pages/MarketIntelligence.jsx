@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { ArrowUpRight, ArrowDownRight, ChevronRight, Zap, Plus, X } from 'lucide-react';
+import { ArrowUpRight, ArrowDownRight, ChevronRight, Zap, Plus, X, ExternalLink } from 'lucide-react';
 import SourceTag, { StreamChip } from '../components/common/SourceTag';
 import { useLiveQuotes, fmtPrice, fmtPct } from '../context/useLiveQuotes';
 import Sparkline from '../components/common/Sparkline';
@@ -245,7 +245,19 @@ export default function MarketIntelligence({
                 </div>
                 <div className="event-item-right">
                   <span className="badge badge-subtle">{ev.category}</span>
-                  <ChevronRight size={15} color="#71717a" />
+                  {ev.link && (
+                    <a
+                      href={ev.link}
+                      target="_blank"
+                      rel="noreferrer"
+                      title="Read original article"
+                      style={{ display: 'flex', alignItems: 'center', marginLeft: 8, color: '#71717a' }}
+                      onClick={(e) => e.stopPropagation()}
+                    >
+                      <ExternalLink size={15} />
+                    </a>
+                  )}
+                  <ChevronRight size={15} color="#71717a" style={{ marginLeft: 4 }} />
                 </div>
               </div>
             ))}

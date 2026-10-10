@@ -155,8 +155,8 @@ $("btnHead").onclick=()=>{
   $("headlines").textContent="Fetching...";
   fetch("/api/headlines").then(r=>r.json()).then(h=>{
     if(!h.length){$("headlines").textContent="No headlines reachable (offline?).";return;}
-    $("headlines").innerHTML=h.slice(0,12).map((x,i)=>`<div class="card" data-i="${i}"><b>${esc(x.title)}</b><div class="mute">${esc(x.source)}</div></div>`).join("");
-    document.querySelectorAll("#headlines .card").forEach(c=>c.onclick=()=>{const x=h[+c.dataset.i];$("txt").value=x.title+". "+(x.summary||"");});
+    $("headlines").innerHTML=h.slice(0,12).map((x,i)=>`<div class="card" data-i="${i}" style="display:flex;flex-direction:column;"><div style="display:flex;justify-content:space-between;align-items:flex-start;"><b style="padding-right:8px">${esc(x.title)}</b><a href="${esc(x.link)}" target="_blank" style="color:var(--mute);text-decoration:none;font-size:14px;line-height:1;" title="Read original article" onclick="event.stopPropagation()">↗</a></div><div class="mute" style="margin-top:2px;">${esc(x.source)}</div></div>`).join("");
+    document.querySelectorAll("#headlines .card").forEach(c=>c.onclick=()=>{const x=h[+c.dataset.i];$("txt").value=x.link;});
   }).catch(()=>$("headlines").textContent="Failed to fetch headlines.");
 };
 document.querySelectorAll("#tabs button").forEach(b=>b.onclick=()=>{tab=b.dataset.t;renderTab();});
