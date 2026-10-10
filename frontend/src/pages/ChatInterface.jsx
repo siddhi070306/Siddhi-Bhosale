@@ -12,7 +12,7 @@ import {
   CheckCircle2,
   RefreshCw,
 } from 'lucide-react';
-import { api, MOCK_DATA } from '../services/api';
+import { api } from '../services/api';
 
 export default function ChatInterface({ onOpenDashboard, onSelectEventText, onAnalysisComplete }) {
   const [messages, setMessages] = useState([]);
@@ -73,36 +73,20 @@ export default function ChatInterface({ onOpenDashboard, onSelectEventText, onAn
         id: Date.now() + 1,
         sender: 'ai',
         eventText: text,
-        summary:
-          result.summary ||
-          `Parsed market shock for "${text.slice(0, 65)}...". Identified core propagation chains across economic variables and equity sectors.`,
-        entities: result.extractedEntities || MOCK_DATA.eventAnalysis.extractedEntities,
-        details: result.details || MOCK_DATA.eventAnalysis.details,
+        summary: result.summary,
+        llmNote: result.llmNote,
+        entities: result.view.extractedEntities,
+        details: result.view.details,
+        noEvent: result.noEvent,
       };
       setMessages((prev) => [...prev, aiMsg]);
-
-      // Directly navigate to the dashboard so all things are immediately shown!
-      setTimeout(() => {
-        onOpenDashboard('home');
-      }, 400);
-    } catch (_) {
-      const fallbackMsg = {
-        id: Date.now() + 1,
-        sender: 'ai',
-        eventText: text,
-        summary: `Identified financial event from your text. Traced causal transmissions from origin shock into downstream assets and market indices.`,
-        entities: MOCK_DATA.eventAnalysis.extractedEntities,
-        details: MOCK_DATA.eventAnalysis.details,
-      };
-      if (onAnalysisComplete) {
-        onAnalysisComplete(text, fallbackMsg);
+      if (!result.noEvent) {
+        setTimeout(() => {
+          onOpenDashboard('home');
+        }, 400);
       }
-      setMessages((prev) => [...prev, fallbackMsg]);
-
-      // Directly navigate to the dashboard
-      setTimeout(() => {
-        onOpenDashboard('home');
-      }, 400);
+    } catch (e) {
+      setMessages((prev) => [...prev, { id: Date.now() + 1, sender: 'ai', error: e.message }]);
     } finally {
       setLoading(false);
     }
@@ -158,6 +142,17 @@ export default function ChatInterface({ onOpenDashboard, onSelectEventText, onAn
                 </div>
                 <div className="chat-msg-avatar user-avatar">U</div>
               </div>
+            ) : msg.error ? (
+              <div key={msg.id} className="chat-message-row">
+                <div className="chat-msg-avatar ai">
+                  <Triangle size={15} fill="#ffffff" stroke="#ffffff" />
+                </div>
+                <div className="chat-msg-body">
+                  <div className="chat-bubble-ai">
+                    <p style={{ fontSize: 13.5, color: '#991b1b', lineHeight: 1.6 }}>Analysis failed: {msg.error}</p>
+                  </div>
+                </div>
+              </div>
             ) : (
               <div key={msg.id} className="chat-message-row">
                 <div className="chat-msg-avatar ai">
@@ -171,13 +166,14 @@ export default function ChatInterface({ onOpenDashboard, onSelectEventText, onAn
                         <Sparkles size={16} />
                         <span>Analysis & Causal Mapping</span>
                       </div>
-                      <span className="badge badge-black">Analysis Complete</span>
+                      <span className="badge badge-black">{msg.noEvent ? 'No event detected' : 'Analysis Complete'}</span>
                     </div>
 
                     {/* Summary text */}
                     <p style={{ fontSize: 13.5, color: '#27272a', lineHeight: 1.6 }}>
                       {msg.summary}
                     </p>
+                    {msg.llmNote && <p style={{ fontSize: 11.5, color: '#71717a' }}>{msg.llmNote}</p>}
 
                     {/* Extracted metadata box */}
                     <div className="chat-extracted-meta-grid">
@@ -200,10 +196,10 @@ export default function ChatInterface({ onOpenDashboard, onSelectEventText, onAn
                     {/* Extracted Entities preview */}
                     <div style={{ marginTop: 10 }}>
                       <span style={{ fontSize: 12, fontWeight: 600, color: '#71717a' }}>
-                        Key Entities Detected:
+                        Entities mentioned in the text:
                       </span>
                       <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginTop: 6 }}>
-                        {msg.entities.commodities.concat(msg.entities.companies.slice(0, 3)).map((item) => (
+                        {msg.entities.commodities.concat(msg.entities.companies, msg.entities.sectors).slice(0, 8).map((item) => (
                           <span key={item} className="entity-tag" style={{ fontSize: 11.5 }}>
                             {item}
                           </span>

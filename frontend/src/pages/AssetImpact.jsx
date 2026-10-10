@@ -2,10 +2,20 @@ import React, { useState } from 'react';
 import { Search, ArrowUpRight, ArrowDownRight, Layers, PieChart } from 'lucide-react';
 import TrendChart from '../components/charts/TrendChart';
 import ExposureHeatmap from '../components/charts/ExposureHeatmap';
-import { MOCK_DATA } from '../services/api';
 
-export default function AssetImpact() {
-  const { assets, topSectors } = MOCK_DATA;
+
+function EmptyState({ onNavigateToChat, what }) {
+  return (
+    <div className="card" style={{ padding: 28, textAlign: 'center' }}>
+      <div style={{ fontSize: 15, fontWeight: 700, color: '#09090b', marginBottom: 6 }}>No analysis yet</div>
+      <p style={{ fontSize: 13, color: '#71717a', marginBottom: 14 }}>{what} is built from a real analysis. Paste a news event in the AI Chat first.</p>
+      {onNavigateToChat && <button className="btn btn-black" onClick={onNavigateToChat}>Open AI Chat</button>}
+    </div>
+  );
+}
+
+export default function AssetImpact({ analysis, onNavigateToChat }) {
+  const { assets, topSectors, sectorRows } = (analysis && analysis.assetView) || { assets: [], topSectors: [], sectorRows: [] };
   const [filter, setFilter] = useState('All');
   const [search, setSearch] = useState('');
   const [selectedAsset, setSelectedAsset] = useState(assets[0]);
@@ -26,6 +36,8 @@ export default function AssetImpact() {
 
     return matchesCategory && matchesSearch;
   });
+
+  if (!analysis) return <EmptyState onNavigateToChat={onNavigateToChat} what="Affected assets" />;
 
   return (
     <div>
@@ -124,8 +136,8 @@ export default function AssetImpact() {
 
         {/* Right Analytics: Trend Chart & Heatmap */}
         <div>
-          <TrendChart symbol={selectedAsset?.name?.split(' ')[0] || 'XOM'} change={selectedAsset?.impact || '+4.8%'} />
-          <ExposureHeatmap />
+          <TrendChart name={selectedAsset?.name} spark={selectedAsset?.spark} />
+          <ExposureHeatmap sectors={sectorRows} />
         </div>
       </div>
 

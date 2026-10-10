@@ -1,22 +1,33 @@
 import React, { useState, useEffect } from 'react';
 import { Settings as SettingsIcon, Database, Key, Server, RefreshCw, Check } from 'lucide-react';
-import { api } from '../services/api';
+import { api, prefs } from '../services/api';
 
 export default function Settings() {
   const [status, setStatus] = useState(null);
-  const [liveData, setLiveData] = useState(true);
-  const [offlineRulesOnly, setOfflineRulesOnly] = useState(false);
+  const [statusError, setStatusError] = useState(null);
+  const [resetMsg, setResetMsg] = useState(null);
+  const [liveData, setLiveDataState] = useState(prefs.getLive());
+  const setLiveData = (v) => {
+    setLiveDataState(v);
+    prefs.setLive(v);
+  };
   const [isResetting, setIsResetting] = useState(false);
   const [savedSuccess, setSavedSuccess] = useState(false);
 
   useEffect(() => {
-    api.getStatus().then((data) => setStatus(data));
+    api.getStatus().then((data) => setStatus(data)).catch((e) => setStatusError(e.message));
   }, []);
 
   const handleResetGraph = async () => {
     setIsResetting(true);
-    await api.resetGraph();
-    setTimeout(() => setIsResetting(false), 600);
+    try {
+      const r = await api.resetGraph();
+      setResetMsg(`Graph reset: ${r.graph.nodes} entities, ${r.graph.edges} links, ${r.graph.articles_ingested} articles learned.`);
+      api.getStatus().then(setStatus).catch(() => {});
+    } catch (e) {
+      setResetMsg(`Reset failed: ${e.message}`);
+    }
+    setIsResetting(false);
   };
 
   const handleSave = () => {
@@ -42,31 +53,31 @@ export default function Settings() {
               <Server size={16} />
               <span>Backend Connection & Keys</span>
             </div>
-            <span className="badge badge-positive">Connected</span>
+            <span className={`badge ${status ? 'badge-positive' : 'badge-negative'}`}>{status ? 'Connected' : statusError ? 'Backend offline' : 'Checking…'}</span>
           </div>
 
           <div className="event-detail-row">
             <span className="detail-key">LLM Provider</span>
-            <span className="detail-val">{status?.llm || 'Groq LLaMA 3.3 (Active)'}</span>
+            <span className="detail-val">{status ? (status.llm ? `${status.llm} (active)` : status.llm_required ? 'NOT CONFIGURED: required, set a key in .env' : 'none (rules only)') : statusError || '…'}</span>
           </div>
 
           <div className="event-detail-row">
             <span className="detail-key">FRED API Key</span>
             <span className="detail-val">
-              {status?.fred_key ? 'Configured (Live FRED Series)' : 'Public CSV Fallback'}
+              {!status ? '…' : status.fred_key ? 'Configured (official FRED API)' : 'Not set: public CSV download'}
             </span>
           </div>
 
           <div className="event-detail-row">
             <span className="detail-key">NewsAPI Key</span>
             <span className="detail-val">
-              {status?.news_key ? 'Configured (Live Wire)' : 'RSS Public Feeds'}
+              {!status ? '…' : status.news_key ? 'Configured (NewsAPI)' : 'Not set: public RSS feeds'}
             </span>
           </div>
 
           <div className="event-detail-row">
             <span className="detail-key">Knowledge Graph Entities</span>
-            <span className="detail-val">56 entities, 90 causal links</span>
+            <span className="detail-val">{status ? `${status.graph.nodes} entities, ${status.graph.edges} causal links, ${status.graph.articles_ingested} articles learned` : '…'}</span>
           </div>
         </div>
 
@@ -99,22 +110,14 @@ export default function Settings() {
 
             <div className="stitched-divider"></div>
 
-            <label style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', cursor: 'pointer' }}>
-              <div>
-                <div style={{ fontSize: 13.5, fontWeight: 600, color: '#09090b' }}>
-                  Deterministic Rules-Only Mode
-                </div>
-                <div style={{ fontSize: 12, color: '#71717a' }}>
-                  Disable LLM and use strict rule-based entity extraction and priors.
-                </div>
+            <div>
+              <div style={{ fontSize: 13.5, fontWeight: 600, color: '#09090b' }}>LLM extraction</div>
+              <div style={{ fontSize: 12, color: '#71717a' }}>
+                {status && status.llm_required
+                  ? 'Required by the backend: the LLM proposes events and links on every analysis, and the system keeps only quote-verified ones.'
+                  : 'Optional on this backend.'}
               </div>
-              <input
-                type="checkbox"
-                checked={offlineRulesOnly}
-                onChange={(e) => setOfflineRulesOnly(e.target.checked)}
-                style={{ width: 18, height: 18, accentColor: '#18181b' }}
-              />
-            </label>
+            </div>
           </div>
         </div>
 
@@ -128,6 +131,7 @@ export default function Settings() {
             Resetting clears dynamically inferred entities and evidence gathered from parsed articles, restoring analyst baseline priors.
           </p>
 
+          {resetMsg && <p style={{ fontSize: 12.5, color: '#27272a', marginBottom: 12 }}>{resetMsg}</p>}
           <div style={{ display: 'flex', gap: 12 }}>
             <button
               className="btn btn-outline"

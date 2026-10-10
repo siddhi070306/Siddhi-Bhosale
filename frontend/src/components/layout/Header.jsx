@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Search, RotateCw, Bell, HelpCircle, Menu } from 'lucide-react';
 
 export default function Header({
@@ -8,6 +8,11 @@ export default function Header({
 }) {
   const [searchValue, setSearchValue] = useState('');
   const [isRefreshing, setIsRefreshing] = useState(false);
+  const [now, setNow] = useState(new Date());
+  useEffect(() => {
+    const t = setInterval(() => setNow(new Date()), 30000);
+    return () => clearInterval(t);
+  }, []);
 
   const handleRefresh = () => {
     setIsRefreshing(true);
@@ -47,7 +52,7 @@ export default function Header({
       <div className="header-right">
         {/* Live Date / Time Badge */}
         <div className="live-time-badge">
-          <span className="live-time-text">Apr 25, 2025 10:24 AM</span>
+          <span className="live-time-text">{now.toLocaleString([], { dateStyle: 'medium', timeStyle: 'short' })}</span>
           <button
             className={`refresh-spin-btn ${isRefreshing ? 'spinning' : ''}`}
             onClick={handleRefresh}

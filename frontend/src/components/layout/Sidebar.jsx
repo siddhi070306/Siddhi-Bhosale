@@ -1,4 +1,5 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
+import { api } from '../../services/api';
 import {
   MessageSquare,
   Home,
@@ -21,6 +22,10 @@ export default function Sidebar({
   isMobileMenuOpen = false,
   onCloseMobileMenu,
 }) {
+  const [kg, setKg] = useState(null);
+  useEffect(() => {
+    api.getStatus().then(setKg).catch(() => setKg(null));
+  }, [hasAnalyzed, activeTab]);
   const dashboardItems = [
     { id: 'home', label: 'Market Intelligence', icon: Home },
     { id: 'event-analysis', label: 'Event Analysis', icon: Layers },
@@ -147,7 +152,7 @@ export default function Sidebar({
       <div className="sidebar-footer">
         <div className="system-status-indicator">
           <span className="status-dot"></span>
-          <span>Knowledge Graph: 90 links</span>
+          <span>{kg ? `Knowledge Graph: ${kg.graph.edges} links` : 'Backend offline'}</span>
         </div>
         <div style={{ fontSize: '11px', color: '#71717a' }}>
           {hasAnalyzed ? 'Event Active in Memory' : 'Ready for News Input'}

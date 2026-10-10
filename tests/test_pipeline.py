@@ -196,5 +196,28 @@ class LlmRequiredTests(unittest.TestCase):
         self.assertEqual(kg.g["gold"]["airlines"]["provenance"], ["llm_proposed"])
 
 
+class WhatIfTests(unittest.TestCase):
+    def test_whatif_is_read_only_and_signs_follow_shock(self):
+        a = Analyzer()
+        before = {(u, v): d["strength"] for u, v, d in a.kg.g.edges(data=True)}
+        n_before = a.kg.g.number_of_edges()
+        up = a.whatif("crude_oil", 25)
+        dn = a.whatif("crude_oil", -10)
+        self.assertEqual({(u, v): d["strength"] for u, v, d in a.kg.g.edges(data=True)}, before)
+        self.assertEqual(a.kg.g.number_of_edges(), n_before)
+        d_up = {r["node"]: r["direction"] for r in up["sectors"]}
+        d_dn = {r["node"]: r["direction"] for r in dn["sectors"]}
+        self.assertEqual(d_up["airlines"], -1)
+        self.assertEqual(d_dn["airlines"], 1)
+        small = {r["node"]: r["sensitivity"] for r in a.whatif("crude_oil", 2)["sectors"]}
+        big = {r["node"]: r["sensitivity"] for r in up["sectors"]}
+        self.assertGreater(big["airlines"], small["airlines"])
+
+    def test_whatif_rejects_bad_input(self):
+        a = Analyzer()
+        self.assertIn("error", a.whatif("nope", 5))
+        self.assertIn("error", a.whatif("crude_oil", 0))
+
+
 if __name__ == "__main__":
     unittest.main()

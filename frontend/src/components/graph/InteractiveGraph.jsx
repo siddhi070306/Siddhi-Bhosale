@@ -79,7 +79,7 @@ export default function InteractiveGraph({ data, selectedNode, onSelectNode }) {
   };
 
   // Determine active/highlighted path or connections
-  const activeNodeId = selectedNode?.id || 'oil_gas_producers';
+  const activeNodeId = selectedNode?.id || data?.centerNode?.id || null;
 
   const isEdgeHighlighted = (edge) => {
     if (edge.isActive) return true;
@@ -90,7 +90,7 @@ export default function InteractiveGraph({ data, selectedNode, onSelectNode }) {
   };
 
   const isNodeHighlighted = (nodeId) => {
-    if (nodeId === activeNodeId || nodeId === 'crude_oil') return true;
+    if (nodeId === activeNodeId || rawNodes.find((n) => n.id === nodeId)?.isAnchor) return true;
     if (hoveredNode === nodeId) return true;
     if (hoveredNode) {
       return rawEdges.some(
@@ -267,8 +267,8 @@ export default function InteractiveGraph({ data, selectedNode, onSelectNode }) {
           <g className="graph-nodes-layer">
             {rawNodes.map((node) => {
               const pos = getNodeCoord(node.id);
-              const isSelected = selectedNode?.id === node.id || (node.id === 'oil_gas_producers' && !selectedNode);
-              const isAnchor = node.isAnchor || node.id === 'crude_oil';
+              const isSelected = selectedNode?.id === node.id;
+              const isAnchor = !!node.isAnchor;
               const isHighlighted = isNodeHighlighted(node.id);
               const colors = getNodeColor(node.type);
 

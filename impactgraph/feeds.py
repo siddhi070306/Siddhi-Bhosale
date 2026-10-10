@@ -27,19 +27,35 @@ def newsapi_headlines(limit=25):
     if not key:
         return []
     out = []
-    for country in ("us", "in"):
-        try:
-            r = requests.get("https://newsapi.org/v2/top-headlines", timeout=10, headers={"X-Api-Key": key},
-                             params={"category": "business", "country": country, "pageSize": 20})
-            r.raise_for_status()
-            for a in r.json().get("articles", []):
-                title = _clean(a.get("title"))
-                if title and title != "[Removed]":
-                    out.append({"source": "NewsAPI/" + ((a.get("source") or {}).get("name") or country.upper()),
-                                "title": title, "summary": _clean(a.get("description") or a.get("content")),
-                                "link": a.get("url") or "", "published": a.get("publishedAt") or ""})
-        except Exception:
-            continue
+
+    def add(articles, tag):
+        for a in articles:
+            title = _clean(a.get("title"))
+            if title and title != "[Removed]":
+                out.append({"source": "NewsAPI/" + ((a.get("source") or {}).get("name") or tag),
+                            "title": title, "summary": _clean(a.get("description") or a.get("content")),
+                            "link": a.get("url") or "", "published": a.get("publishedAt") or ""})
+
+    def get(path, **params):
+        for attempt in range(2):  # NewsAPI is occasionally slow; one retry before giving up on a call
+            try:
+                r = requests.get("https://newsapi.org/v2/" + path, timeout=25, headers={"X-Api-Key": key}, params=params)
+                r.raise_for_status()
+                return r.json().get("articles", [])
+            except Exception:
+                continue
+        return []
+
+    add(get("top-headlines", category="business", country="us", pageSize=20), "US")
+    india = get("top-headlines", category="business", country="in", pageSize=20)
+    if not india:  # NewsAPI often has no India business top-headlines; search instead
+        india = get("everything", qInTitle="RBI OR Sensex OR Nifty OR rupee OR \"Indian economy\"", language="en",
+                    sortBy="publishedAt", pageSize=15)
+    add(india, "IN")
+    # interleave US and India items so a short list shows both markets
+    n_us = len(out) - len([1 for a in india if _clean(a.get("title")) and _clean(a.get("title")) != "[Removed]"])
+    us_items, in_items = out[:n_us], out[n_us:]
+    out = [x for pair in zip(us_items, in_items) for x in pair] + us_items[len(in_items):] + in_items[len(us_items):]
     return out[:limit]
 
 

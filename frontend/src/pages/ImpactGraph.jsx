@@ -1,14 +1,26 @@
 import React, { useState } from 'react';
-import { Search, ShieldCheck } from 'lucide-react';
+import { Search, Info, ExternalLink, ArrowRight, ShieldCheck } from 'lucide-react';
 import InteractiveGraph from '../components/graph/InteractiveGraph';
-import { MOCK_DATA } from '../services/api';
 
-export default function ImpactGraph() {
-  const { graphData } = MOCK_DATA;
+
+function EmptyState({ onNavigateToChat, what }) {
+  return (
+    <div className="card" style={{ padding: 28, textAlign: 'center' }}>
+      <div style={{ fontSize: 15, fontWeight: 700, color: '#09090b', marginBottom: 6 }}>No analysis yet</div>
+      <p style={{ fontSize: 13, color: '#71717a', marginBottom: 14 }}>{what} is built from a real analysis. Paste a news event in the AI Chat first.</p>
+      {onNavigateToChat && <button className="btn btn-black" onClick={onNavigateToChat}>Open AI Chat</button>}
+    </div>
+  );
+}
+
+export default function ImpactGraph({ analysis, onNavigateToChat }) {
+  const graphData = (analysis && analysis.graphView) || null;
   const [activeTab, setActiveTab] = useState('pathways');
-  const [selectedNode, setSelectedNode] = useState(graphData.centerNode);
+  const [selectedNode, setSelectedNode] = useState(graphData ? graphData.centerNode : null);
   const [searchQuery, setSearchQuery] = useState('');
   const [showEvidenceModal, setShowEvidenceModal] = useState(false);
+
+  if (!graphData) return <EmptyState onNavigateToChat={onNavigateToChat} what="The impact graph" />;
 
   const filteredNodes = searchQuery
     ? graphData.nodes.filter((n) =>
@@ -33,7 +45,7 @@ export default function ImpactGraph() {
         </div>
 
         {/* Node search filter */}
-        <div style={{ position: 'relative', width: '100%', maxWidth: 320 }}>
+        <div style={{ position: 'relative', width: 320 }}>
           <Search
             size={14}
             style={{ position: 'absolute', left: 12, top: '50%', transform: 'translateY(-50%)', color: '#71717a' }}
@@ -92,11 +104,7 @@ export default function ImpactGraph() {
                     className="pathway-card"
                     style={{ cursor: 'pointer' }}
                     onClick={() => {
-                      let targetId = 'oil_gas_producers';
-                      if (p.id === 2) targetId = 'airlines';
-                      else if (p.id === 3) targetId = 'real_estate';
-                      else if (p.id === 4) targetId = 'it_services';
-                      const target = graphData.nodes.find((n) => n.id === targetId);
+                      const target = graphData.nodes.find((n) => n.id === p.endId);
                       if (target) {
                         setSelectedNode(target);
                         setActiveTab('details');
@@ -143,11 +151,11 @@ export default function ImpactGraph() {
                       fontSize: 14,
                     }}
                   >
-                    {(selectedNode.label || selectedNode.fullName || 'NO').slice(0, 2).toUpperCase()}
+                    {selectedNode.label?.slice(0, 2).toUpperCase() || 'NO'}
                   </div>
                   <div>
                     <div style={{ fontSize: 15, fontWeight: 700, color: '#09090b' }}>
-                      {selectedNode.fullName || selectedNode.label || 'Selected Entity'}
+                      {selectedNode.fullName || (selectedNode.label || '').split('\n')[0] || 'Selected Entity'}
                     </div>
                     <div style={{ fontSize: 12, color: '#71717a' }}>
                       {selectedNode.category || selectedNode.type || 'Macro Entity'}
@@ -160,16 +168,16 @@ export default function ImpactGraph() {
                   <span
                     className="detail-val"
                     style={{
-                      color: (selectedNode.change || '+12%').startsWith('+') ? '#166534' : '#991b1b',
+                      color: (selectedNode.change || '').startsWith('↑') ? '#166534' : '#991b1b',
                     }}
                   >
-                    {selectedNode.change || '+12%'}
+                    {selectedNode.change || '–'}
                   </span>
                 </div>
 
                 <div className="event-detail-row">
                   <span className="detail-key">Confidence</span>
-                  <span className="detail-val">{selectedNode.confidence || '0.88'}</span>
+                  <span className="detail-val">{selectedNode.confidence != null ? (typeof selectedNode.confidence === 'number' ? selectedNode.confidence.toFixed(2) : selectedNode.confidence) : '–'}</span>
                 </div>
 
                 <div className="event-detail-row">
@@ -203,10 +211,10 @@ export default function ImpactGraph() {
                   >
                     <strong>Causal Evidence:</strong>
                     <p style={{ marginTop: 4 }}>
-                      "{graphData.centerNode.evidence}"
+                      {selectedNode.evidence || graphData.centerNode.evidence || 'No supporting text for this node.'}
                     </p>
                     <p style={{ marginTop: 6, color: '#71717a' }}>
-                      Correlated over 2 years of daily market series at 5-day lag.
+                      {selectedNode.observed ? 'Observed: stated in the article.' : 'Inferred by the graph; data checks need live market data (Settings).'}
                     </p>
                   </div>
                 )}

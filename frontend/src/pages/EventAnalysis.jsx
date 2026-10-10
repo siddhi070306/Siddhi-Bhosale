@@ -12,40 +12,32 @@ import {
   CheckCircle2,
   Sparkles,
 } from 'lucide-react';
-import { MOCK_DATA } from '../services/api';
+
+
+function EmptyState({ onNavigateToChat, what }) {
+  return (
+    <div className="card" style={{ padding: 28, textAlign: 'center' }}>
+      <div style={{ fontSize: 15, fontWeight: 700, color: '#09090b', marginBottom: 6 }}>No analysis yet</div>
+      <p style={{ fontSize: 13, color: '#71717a', marginBottom: 14 }}>{what} is built from a real analysis. Paste a news event in the AI Chat first.</p>
+      {onNavigateToChat && <button className="btn btn-black" onClick={onNavigateToChat}>Open AI Chat</button>}
+    </div>
+  );
+}
 
 export default function EventAnalysis({
-  analysisData = MOCK_DATA.eventAnalysis,
+  analysisData = null,
   eventText,
   onNavigateToChat,
   onNavigateToGraph,
 }) {
-  const text = eventText || analysisData.eventText || MOCK_DATA.eventAnalysis.eventText;
-  const entities = analysisData.extractedEntities || MOCK_DATA.eventAnalysis.extractedEntities;
-  const details = analysisData.details || MOCK_DATA.eventAnalysis.details;
-  const evidence = analysisData.evidence || MOCK_DATA.eventAnalysis.evidence;
+  if (!analysisData) return <EmptyState onNavigateToChat={onNavigateToChat} what="Event analysis" />;
+  const text = eventText || analysisData.eventText;
+  const entities = analysisData.extractedEntities;
+  const details = analysisData.details;
+  const evidence = analysisData.evidence;
 
-  // Comparison checks (Model vs Article)
-  const comparisonChecks = [
-    {
-      statement: entities.commodities?.[0] || 'Origin Shock',
-      article: 'Observed',
-      graph: 'Consistent',
-      status: 'consistent',
-    },
-    {
-      statement: entities.sectors?.[0] || 'Primary Sector',
-      article: 'Observed',
-      graph: 'Consistent',
-      status: 'consistent',
-    },
-    {
-      statement: entities.indicators?.[0] || 'Macro Indicator',
-      article: 'Expected',
-      graph: 'Graph Aligns',
-      status: 'consistent',
-    },
-  ];
+  // Model vs article: the backend compares each stated move with what the graph predicts
+  const comparisonChecks = analysisData.comparison || [];
 
   return (
     <div>
@@ -264,7 +256,7 @@ export default function EventAnalysis({
                   <span className="badge badge-black">{chk.article}</span>
                 </td>
                 <td>
-                  <span className="badge badge-positive">{chk.graph}</span>
+                  <span className={`badge ${chk.status === 'consistent' ? 'badge-positive' : 'badge-negative'}`}>{chk.graph}</span>
                 </td>
               </tr>
             ))}

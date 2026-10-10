@@ -196,6 +196,7 @@ class Analyzer:
                    "n_paths": a["n_paths"], "best_path_id": pid_of.get(tuple(bp["nodes"])), "headline": exp["headline"],
                    "why": last["mechanism"] if last else "", "observed": n in anchors,
                    "inferred_node": bool(self.kg.g.nodes[n].get("inferred")),
+                   "pos_mass": a["pos_mass"], "neg_mass": a["neg_mass"], "best_score": round(bp["score"], 3),
                    "spark": sp}
             rows.append(row)
         rank = lambda r: -(r["confidence"] * {"strong": 1.0, "moderate": 0.75, "mild": 0.5}[r["sensitivity"]])
@@ -233,6 +234,75 @@ class Analyzer:
                        "caveats": self._caveats(live, nodes)})
         result["summary"] = self._summary(result, sources, assets, sectors, comparison, use_llm or llm_required())
         return result
+
+    # ------------------------------------------------------------------------------------------
+    def whatif(self, trigger, magnitude_pct, horizon_days=None, live=False):
+        """Re-run propagation for a hypothetical shock. Read-only: never ingests or edits the graph."""
+        if trigger not in kb.NODES:
+            return {"error": "unknown trigger node: %s" % trigger}
+        try:
+            mag = float(magnitude_pct)
+        except (TypeError, ValueError):
+            return {"error": "magnitude_pct must be a number"}
+        if mag == 0:
+            return {"error": "magnitude_pct must be non-zero"}
+        direction = 1 if mag > 0 else -1
+        intensity = ex._price_intensity(abs(mag))
+        label = "%s %s%.4g%% (hypothetical)" % (kb.NODES[trigger]["label"], "+" if mag > 0 else "-", abs(mag))
+        sources = [{"id": "whatif", "trigger": trigger, "direction": direction, "intensity": intensity,
+                    "anchor": True, "label": label, "market": None}]
+        paths = pg.propagate(self.kg, sources)
+        if live:  # data-check the links on the strongest paths (validation is cached on the edge, not new knowledge)
+            edges = {e for p in paths[:40] for e in p["edges"]}
+            self._prefetch({n for e in edges for n in e}, True)
+            for (u, v) in edges:
+                self.kg.set_validation(u, v, ts.validate_edge(self.kg, u, v, True))
+            paths = pg.propagate(self.kg, sources)
+        agg = pg.aggregate(paths, exclude=(trigger,))
+        src_label = {"whatif": label}
+        rows = []
+        for n, a in agg.items():
+            exp = self._explain_path(a["best_path"], -1, label)
+            last = exp["steps"][-1] if exp["steps"] else None
+            rows.append({"node": n, "label": self.kg.g.nodes[n]["label"], "type": self.kg.g.nodes[n]["type"],
+                         "direction": a["direction"], "confidence": a["confidence"],
+                         "confidence_label": a["confidence_label"], "mixed": a["mixed"], "agreement": a["agreement"],
+                         "horizon_days": a["horizon_days"], "sensitivity": a["sensitivity"],
+                         "sensitivity_label": a["sensitivity_label"], "n_paths": a["n_paths"],
+                         "headline": exp["headline"], "why": last["mechanism"] if last else "",
+                         "beyond_horizon": bool(horizon_days is not None and a["horizon_days"] > horizon_days)})
+        rank = lambda r: -(r["confidence"] * {"strong": 1.0, "moderate": 0.75, "mild": 0.5}[r["sensitivity_label"]])
+        rows.sort(key=rank)
+        top, seen = [], set()
+        for p in paths:
+            k = tuple(p["nodes"])
+            if k not in seen and len(p["edges"]) > 1:
+                seen.add(k)
+                top.append(self._explain_path(p, len(top), label))
+            if len(top) >= 8:
+                break
+        evidence, ev_seen = [], set()
+        for p in top[:6]:
+            for st in p["steps"]:
+                k = (st["from"], st["to"])
+                if k in ev_seen:
+                    continue
+                ev_seen.add(k)
+                val = st["validation"] or {}
+                evidence.append({"edge": "%s -> %s" % (st["from_label"], st["to_label"]), "strength": st["effective"],
+                                 "lag_days": st["lag"], "provenance": st["provenance"],
+                                 "data_check": val.get("verdict") if val and not val.get("simulated") else None,
+                                 "r": val.get("r") if val and not val.get("simulated") else None})
+        return {"trigger": trigger, "trigger_label": kb.NODES[trigger]["label"], "magnitude_pct": mag,
+                "direction": direction, "intensity": round(intensity, 3), "horizon_days": horizon_days,
+                "assets": [r for r in rows if r["type"] in ASSET_TYPES],
+                "sectors": [r for r in rows if r["type"] == "sector"],
+                "variables": [r for r in rows if r["type"] in ("indicator", "commodity")],
+                "paths": top, "evidence": evidence,
+                "caveats": ["Hypothetical scenario: nothing here was reported in an article.",
+                            "Path plausibility depends on the chain of links, not on shock size; shock size changes "
+                            "sensitivity and ranking only, and the mapping from size to sensitivity is a heuristic.",
+                            "Scores are heuristic plausibility, not probabilities or forecasts. Not investment advice."]}
 
     # ------------------------------------------------------------------------------------------
     def _viz(self, top, explained, sources, agg, anchors, events):

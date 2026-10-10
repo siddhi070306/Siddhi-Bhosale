@@ -5,7 +5,7 @@ from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
-from impactgraph import feeds, llm
+from impactgraph import feeds, llm, market
 from impactgraph.service import SAMPLES, Analyzer, llm_required
 
 app = FastAPI(title="Apex Zenith")
@@ -49,6 +49,36 @@ def graph():
 def reset():
     analyzer.reset()
     return {"ok": True, "graph": analyzer.kg.stats()}
+
+
+class WhatIfBody(BaseModel):
+    trigger: str = "crude_oil"
+    magnitude_pct: float
+    horizon_days: int = None
+    live: bool = False
+
+
+@app.post("/api/whatif")
+def whatif(body: WhatIfBody):
+    res = analyzer.whatif(body.trigger, body.magnitude_pct, body.horizon_days, body.live)
+    if res.get("error"):
+        raise HTTPException(status_code=400, detail=res["error"])
+    return res
+
+
+@app.get("/api/market")
+def market_snapshot():
+    return market.snapshot()
+
+
+@app.get("/api/events")
+def events(limit: int = Query(8, ge=1, le=30)):
+    out = []
+    for i, h in enumerate(feeds.headlines(limit)):
+        out.append({"id": "n%d" % i, "time": h.get("published") or "", "title": h["title"], "category": h["source"],
+                    "text": (h["title"] + ". " + h["summary"]).strip() if h.get("summary") else h["title"],
+                    "link": h.get("link", "")})
+    return out
 
 
 @app.get("/api/headlines")

@@ -1,24 +1,34 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { ArrowUpRight, ArrowDownRight, ChevronRight, Zap, Sparkles } from 'lucide-react';
 import Sparkline from '../components/common/Sparkline';
-import { MOCK_DATA } from '../services/api';
+import { api } from '../services/api';
 
 export default function MarketIntelligence({
   activeEventText,
-  analysisData,
+  analysis,
   onSelectEvent,
   onNavigateToTab,
 }) {
-  const { tickers, events, sectors } = MOCK_DATA;
+  const [market, setMarket] = useState({ loading: true, tickers: [], error: null });
+  const [events, setEvents] = useState({ loading: true, items: [], error: null });
+  useEffect(() => {
+    api.getMarket().then((m) => setMarket({ loading: false, tickers: m.tickers || [], error: m.available ? null : m.note || 'Market data unavailable' }))
+      .catch((e) => setMarket({ loading: false, tickers: [], error: e.message }));
+    api.getEvents(8).then((items) => setEvents({ loading: false, items, error: items.length ? null : 'No headlines reachable.' }))
+      .catch((e) => setEvents({ loading: false, items: [], error: e.message }));
+  }, []);
+  const tickers = market.tickers;
+  const sectors = (analysis && analysis.marketSectors) || [];
+  const analysisData = analysis && analysis.view;
 
   const shockOrigin =
     analysisData?.extractedEntities?.commodities?.[0] ||
     analysisData?.extractedEntities?.companies?.[0] ||
-    'Origin Shock';
+    'No analysis yet';
 
   const shockTarget =
     analysisData?.extractedEntities?.sectors?.[0] ||
-    'Target Assets';
+    '–';
 
   return (
     <div>
@@ -88,10 +98,12 @@ export default function MarketIntelligence({
       {/* Page Header */}
       <div className="page-header">
         <h1 className="page-title">Market Intelligence</h1>
-        <p className="page-subtitle">Real-time insights. Connected markets. Smarter decisions.</p>
+        <p className="page-subtitle">Latest market levels (FRED), headlines, and the sectors your last analysis reached.</p>
       </div>
 
       {/* 5 Tickers Row */}
+      {market.loading && <p style={{ fontSize: 12.5, color: '#71717a' }}>Loading market data…</p>}
+      {market.error && <p style={{ fontSize: 12.5, color: '#991b1b' }}>{market.error}</p>}
       <div className="tickers-row">
         {tickers.map((t) => (
           <div key={t.id} className="ticker-card">
@@ -118,15 +130,17 @@ export default function MarketIntelligence({
           </div>
 
           <div className="events-list">
-            {events.map((ev) => (
+            {events.loading && <p style={{ fontSize: 12.5, color: '#71717a' }}>Loading headlines…</p>}
+            {events.error && <p style={{ fontSize: 12.5, color: '#991b1b' }}>{events.error}</p>}
+            {events.items.map((ev) => (
               <div
                 key={ev.id}
                 className="event-item-row"
-                onClick={() => onSelectEvent && onSelectEvent(ev.text)}
+                onClick={() => onSelectEvent && onSelectEvent(ev.text, ev.category)}
                 title="Click to analyze event"
               >
                 <div className="event-item-left">
-                  <span className="event-time">{ev.time}</span>
+                  <span className="event-time">{(ev.time || '').slice(5, 22)}</span>
                   <span className="event-title">{ev.title}</span>
                 </div>
                 <div className="event-item-right">
@@ -147,6 +161,7 @@ export default function MarketIntelligence({
             </div>
 
             <div className="sector-bar-list">
+              {sectors.length === 0 && <p style={{ fontSize: 12.5, color: '#71717a' }}>Analyse an event to see affected sectors.</p>}
               {sectors.map((sec) => (
                 <div key={sec.name} className="sector-bar-row">
                   <span className="sector-label">{sec.name}</span>
@@ -189,10 +204,10 @@ export default function MarketIntelligence({
                   <span>→</span>
                   <span>{shockTarget}</span>
                 </div>
-                <div className="analysis-date">Apr 25, 09:12 AM</div>
+                <div className="analysis-date">{analysis ? new Date(analysis.at).toLocaleString() : 'No analysis yet'}</div>
               </div>
               <span className="badge badge-black">
-                {analysisData?.details?.magnitude || 'High Impact'}
+                {analysisData?.details?.magnitude || 'n/a'}
               </span>
             </div>
           </div>
