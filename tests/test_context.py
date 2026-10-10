@@ -234,6 +234,34 @@ class EnrichTests(unittest.TestCase):
 
 
 class FeedHelperTests(unittest.TestCase):
+    def test_rss_items_are_interleaved_across_feeds(self):
+        def xml(prefix, n):
+            return ("<rss><channel>" + "".join("<item><title>%s %d</title><description>d</description><link>l%s%d</link></item>" % (prefix, i, prefix, i)
+                                               for i in range(n)) + "</channel></rss>").encode()
+        bodies = {"https://a.test/rss": xml("A", 3), "https://b.test/rss": xml("B", 1), "https://c.test/rss": xml("C", 2)}
+        def fake_get(url, **k):
+            r = mock.Mock(content=bodies[url])
+            r.raise_for_status = lambda: None
+            return r
+        feeds._CACHE.clear()
+        with mock.patch.object(feeds, "RSS_FEEDS", [("A", "https://a.test/rss"), ("B", "https://b.test/rss"), ("C", "https://c.test/rss")]),                 mock.patch.object(feeds.requests, "get", side_effect=fake_get):
+            titles = [i["title"] for i in feeds.rss_items()]
+        feeds._CACHE.clear()
+        self.assertEqual(titles, ["A 0", "B 0", "C 0", "A 1", "C 1", "A 2"])
+
+    def test_one_dead_feed_does_not_hide_the_others(self):
+        def fake_get(url, **k):
+            if "dead" in url:
+                raise feeds.requests.ConnectionError("down")
+            r = mock.Mock(content=b"<rss><channel><item><title>Alive</title><description>x</description><link>l</link></item></channel></rss>")
+            r.raise_for_status = lambda: None
+            return r
+        feeds._CACHE.clear()
+        with mock.patch.object(feeds, "RSS_FEEDS", [("Dead", "https://dead.test/rss"), ("Live", "https://live.test/rss")]),                 mock.patch.object(feeds.requests, "get", side_effect=fake_get):
+            titles = [i["title"] for i in feeds.rss_items()]
+        feeds._CACHE.clear()
+        self.assertEqual(titles, ["Alive"])
+
     def test_failures_are_not_cached(self):
         calls = []
         def flaky():
