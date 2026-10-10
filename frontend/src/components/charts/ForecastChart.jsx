@@ -11,14 +11,14 @@ import React, { useState } from 'react';
  *   horizon     – current horizon (15, 30, 60)
  *   onHorizonChange – callback(newHorizon)
  */
-export default function ForecastChart({ data, loading, error, name, horizon = 30, onHorizonChange }) {
+export default function ForecastChart({ data, loading, error, name, horizon = 30, onHorizonChange, isFullPage = false }) {
   const [hoverIdx, setHoverIdx] = useState(null);
 
-  const W = 460;
-  const H = 210;
-  const PX = 44;
-  const PY = 20;
-  const PB = 30;
+  const W = isFullPage ? 860 : 460;
+  const H = isFullPage ? 330 : 210;
+  const PX = isFullPage ? 54 : 44;
+  const PY = isFullPage ? 24 : 20;
+  const PB = isFullPage ? 34 : 30;
 
   const innerW = W - PX * 2;
   const innerH = H - PY - PB;
