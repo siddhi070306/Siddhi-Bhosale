@@ -86,6 +86,41 @@ def events(limit: int = Query(8, ge=1, le=30)):
     return out
 
 
+@app.get("/api/analogs")
+def analogs_endpoint(node_id: str = Query(..., min_length=1, max_length=80),
+                     shock_pct: float = Query(5.0, ge=0.1, le=200.0),
+                     live: bool = False):
+    """Return historical analog windows for a knowledge-graph node.
+
+    shock_pct is the magnitude of the current event in percent (absolute value;
+    the endpoint finds both up and down shocks above 0.6 * shock_pct threshold).
+    Past analogs do not constitute forecasts.
+    """
+    from impactgraph import analogs as _analogs
+    return _analogs.historical_analogs(node_id, shock_pct=shock_pct, live=live)
+
+
+@app.get("/api/forecast")
+def forecast_endpoint(node_id: str = Query(..., min_length=1, max_length=80),
+                      shock_pct: float = Query(0.0, ge=-90.0, le=200.0),
+                      horizon: int = Query(30, ge=10, le=90),
+                      simulations: int = Query(500, ge=100, le=2000),
+                      live: bool = False):
+    """Monte Carlo forward simulation fan chart for a knowledge-graph node.
+
+    Calibrates on historical time-series volatility, injects shock_pct at Day 0,
+    and returns percentile bands (p10, p25, p50, p75, p90) and risk metrics.
+    """
+    from impactgraph import forecast as _forecast
+    return _forecast.simulate_monte_carlo(
+        node_id=node_id,
+        shock_pct=shock_pct,
+        horizon_days=horizon,
+        simulations=simulations,
+        live=live
+    )
+
+
 # ---- live quotes (Yahoo Finance via yfinance: polled in the background, pushed over SSE) -------------
 def _symbols(s):
     return [x for x in (s or "").replace(" ", "").split(",") if x]
