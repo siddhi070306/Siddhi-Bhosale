@@ -9,16 +9,11 @@ import {
   ArrowRight,
   ShieldCheck,
   RefreshCw,
-  Fuel,
-  Landmark,
-  Building2,
-  Cpu,
   User,
   Home,
 } from 'lucide-react';
 import { api } from '../services/api';
 import { useUi } from '../context/UiContext';
-import { useSamples } from '../context/useSamples';
 
 export default function ChatInterface({
   messages: externalMessages,
@@ -36,14 +31,6 @@ export default function ChatInterface({
   const messagesEndRef = useRef(null);
 
   const { status } = useUi();
-  const { samples, error: samplesError } = useSamples();
-  const STARTER_STYLE = [
-    { icon: Fuel, colorClass: 'starter-icon-amber' },
-    { icon: Landmark, colorClass: 'starter-icon-indigo' },
-    { icon: Building2, colorClass: 'starter-icon-emerald' },
-    { icon: Cpu, colorClass: 'starter-icon-cyan' },
-  ];
-  const starters = samples.slice(0, 4).map((smp, i) => ({ ...STARTER_STYLE[i % STARTER_STYLE.length], title: smp.title, text: smp.text }));
   const engineLabel = status && status.llm ? `LLM (${status.llm}) + quote-verified graph` : status && status.error ? 'Backend offline' : 'Graph + quote grounding';
 
   const scrollToBottom = () => {
@@ -116,29 +103,6 @@ export default function ChatInterface({
           <p className="chat-welcome-desc">
             Paste news, earnings reports, or regulatory filings. Apex Zenith extracts entities, evaluates factual quotes, and maps causal propagation across connected markets instantly.
           </p>
-
-          {/* 4 Clickable Starter Cards */}
-          {samplesError && <p style={{ fontSize: 12.5, color: '#991b1b', marginBottom: 10 }}>Could not load sample prompts: {samplesError}</p>}
-          <div className="chat-starters-grid">
-            {starters.map((s, idx) => {
-              const Icon = s.icon;
-              return (
-                <div
-                  key={idx}
-                  className="chat-starter-card"
-                  onClick={() => handleSend(s.text)}
-                >
-                  <div className="chat-starter-title">
-                    <div className={`chat-starter-icon-badge ${s.colorClass}`}>
-                      <Icon size={16} />
-                    </div>
-                    <span>{s.title}</span>
-                  </div>
-                  <div className="chat-starter-snippet">"{s.text}"</div>
-                </div>
-              );
-            })}
-          </div>
         </div>
       ) : (
         /* Message Stream */
