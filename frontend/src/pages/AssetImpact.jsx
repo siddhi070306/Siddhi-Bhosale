@@ -1,11 +1,11 @@
 import React, { useState, useEffect } from 'react';
-import { Search, ArrowUpRight, ArrowDownRight, Plus, X } from 'lucide-react';
+import { Search, ArrowUpRight, ArrowDownRight, Plus, X, Sparkles } from 'lucide-react';
 import TrendChart from '../components/charts/TrendChart';
 import ExposureHeatmap from '../components/charts/ExposureHeatmap';
 import SourceTag, { StreamChip } from '../components/common/SourceTag';
 import { useUi } from '../context/UiContext';
 import { useLiveQuotes, fmtPrice, fmtPct } from '../context/useLiveQuotes';
-import { api } from '../services/api';
+import { api, toAssetView } from '../services/api';
 
 
 function EmptyState({ onNavigateToChat, what }) {
@@ -35,10 +35,62 @@ function LiveCell({ ticker, q }) {
 }
 
 export default function AssetImpact({ analysis, onNavigateToChat, onReanalyze }) {
-  const { assets, topSectors, sectorRows } = (analysis && analysis.assetView) || { assets: [], topSectors: [], sectorRows: [] };
+  const [baselineView, setBaselineView] = useState(null);
+  const [loadingBaseline, setLoadingBaseline] = useState(!analysis);
+
+  useEffect(() => {
+    if (!analysis && !baselineView) {
+      setLoadingBaseline(true);
+      api.whatIf('crude_oil', 5.0)
+        .then((res) => {
+          setBaselineView(toAssetView(res));
+        })
+        .catch(() => {
+          api.getGraph()
+            .then((g) => {
+              const rawAssets = (g.nodes || [])
+                .filter((n) => ['company', 'commodity', 'index', 'sector'].includes(n.type))
+                .map((n) => ({
+                  id: n.id,
+                  name: n.label,
+                  type: n.type === 'company' ? 'Stock' : n.type === 'commodity' ? 'Commodity' : n.type === 'index' ? 'Index' : 'Sector',
+                  impact: 'Baseline',
+                  isPositive: true,
+                  exposure: '0.00',
+                  confidence: '0.85',
+                  ticker: n.ticker || null,
+                  userAdded: !!n.user_added,
+                }));
+              setBaselineView({
+                assets: rawAssets,
+                topSectors: (g.nodes || []).filter((n) => n.type === 'sector').slice(0, 6).map((s) => ({
+                  name: s.label,
+                  val: '• Baseline',
+                  positive: true,
+                })),
+                sectorRows: rawAssets.filter((a) => a.type === 'Sector'),
+              });
+            })
+            .catch(() => {});
+        })
+        .finally(() => setLoadingBaseline(false));
+    }
+  }, [analysis, baselineView]);
+
+  const activeView = (analysis && analysis.assetView) || baselineView || { assets: [], topSectors: [], sectorRows: [] };
+  const { assets, topSectors, sectorRows } = activeView;
+  const isBaseline = !analysis && !!baselineView;
+
   const [filter, setFilter] = useState('All');
   const { search, setSearch } = useUi(); // shared with the header search box
-  const [selectedAsset, setSelectedAsset] = useState(assets[0]);
+  const [selectedAsset, setSelectedAsset] = useState(null);
+
+  useEffect(() => {
+    if ((!selectedAsset || !assets.some((a) => a.id === selectedAsset.id)) && assets.length) {
+      setSelectedAsset(assets[0]);
+    }
+  }, [assets, selectedAsset]);
+
   const live = useLiveQuotes(assets.map((a) => a.ticker));
 
   // add-asset form
@@ -68,7 +120,15 @@ export default function AssetImpact({ analysis, onNavigateToChat, onReanalyze })
     return matchesCategory && matchesSearch;
   });
 
-  if (!analysis) return <EmptyState onNavigateToChat={onNavigateToChat} what="Affected assets" />;
+  if (!analysis && !baselineView && loadingBaseline) {
+    return (
+      <div className="card" style={{ padding: 32, textAlign: 'center', color: '#71717a' }}>
+        Loading monitored market assets…
+      </div>
+    );
+  }
+
+  if (!analysis && !baselineView) return <EmptyState onNavigateToChat={onNavigateToChat} what="Affected assets" />;
 
   const addAsset = async (e) => {
     e.preventDefault();
@@ -114,6 +174,44 @@ export default function AssetImpact({ analysis, onNavigateToChat, onReanalyze })
           <StreamChip state={live.state} transport={live.transport} />
         </div>
       </div>
+
+      {/* Baseline Knowledge Graph Banner */}
+      {isBaseline && (
+        <div
+          className="card"
+          style={{
+            marginBottom: 18,
+            padding: '12px 18px',
+            backgroundColor: '#ffffff',
+            border: '1px solid #e4e4e7',
+            borderLeft: '4px solid #18181b',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            flexWrap: 'wrap',
+            gap: 12,
+          }}
+        >
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+            <span style={{ display: 'inline-flex', padding: 6, borderRadius: '50%', background: '#f4f4f5', color: '#18181b' }}>
+              <Sparkles size={16} />
+            </span>
+            <div>
+              <div style={{ fontSize: 13, fontWeight: 700, color: '#09090b' }}>
+                Monitored Knowledge Graph Assets & Live Market Data
+              </div>
+              <div style={{ fontSize: 12, color: '#71717a' }}>
+                Displaying baseline graph assets with live Yahoo Finance prices. Enter news in AI Chat to calculate event-specific causal impact.
+              </div>
+            </div>
+          </div>
+          {onNavigateToChat && (
+            <button className="btn btn-black" onClick={onNavigateToChat} style={{ fontSize: 12, padding: '7px 14px' }}>
+              Analyze News in Chat
+            </button>
+          )}
+        </div>
+      )}
 
       {/* Search and Filters Bar */}
       <div className="asset-filters-bar">
