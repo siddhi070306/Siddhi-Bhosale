@@ -6,6 +6,7 @@ import {
   PanelLeft,
   SquarePen,
   ChevronDown,
+  Sparkles,
 } from 'lucide-react';
 
 export default function Header({
@@ -20,6 +21,7 @@ export default function Header({
   onToggleMobileMenu,
   onToggleCollapse,
   onNewChat,
+  onStartTour,
 }) {
   const [now, setNow] = useState(new Date());
 
@@ -94,9 +96,16 @@ export default function Header({
         )}
 
 
+        {/* Quick Tour Button - Visible everywhere */}
+        <button className="btn btn-outline badge-outline" onClick={onStartTour} style={{ padding: '6px 12px', fontSize: 12.5, display: 'flex', alignItems: 'center', gap: 6, fontWeight: 600 }}>
+          <Sparkles size={13} style={{ color: '#52525b' }} />
+          Take a Quick Tour
+        </button>
+
         {/* Live Date / Time Badge (when on dashboards) */}
         {!isChat && (
-          <div className="live-time-badge">
+          <>
+            <div className="live-time-badge">
             <span className="live-time-text">
               {now.toLocaleString([], { dateStyle: 'medium', timeStyle: 'short' })}
             </span>
@@ -115,6 +124,7 @@ export default function Header({
               />
             </button>
           </div>
+          </>
         )}
 
         {/* Action Icons */}
