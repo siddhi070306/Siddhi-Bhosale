@@ -29,6 +29,7 @@ export default function ChatInterface({
   const [inputText, setInputText] = useState('');
   const [loading, setLoading] = useState(false);
   const messagesEndRef = useRef(null);
+  const textareaRef = useRef(null);
 
   const { status } = useUi();
   const engineLabel = status && status.llm ? `LLM (${status.llm}) + quote-verified graph` : status && status.error ? 'Backend offline' : 'Graph + quote grounding';
@@ -40,6 +41,13 @@ export default function ChatInterface({
   useEffect(() => {
     scrollToBottom();
   }, [messages, loading]);
+
+  useEffect(() => {
+    if (textareaRef.current) {
+      textareaRef.current.style.height = 'auto';
+      textareaRef.current.style.height = `${Math.min(Math.max(textareaRef.current.scrollHeight, 26), 180)}px`;
+    }
+  }, [inputText]);
 
   const handleSend = async (textToSend) => {
     const text = textToSend || inputText;
@@ -273,8 +281,9 @@ export default function ChatInterface({
       <div className="chat-input-container">
         <div className="chat-input-box">
           <textarea
+            ref={textareaRef}
             className="chat-input-textarea"
-            rows={2}
+            rows={1}
             placeholder="Enter financial news, headlines, or paste an article..."
             value={inputText}
             onChange={(e) => setInputText(e.target.value)}
@@ -284,7 +293,7 @@ export default function ChatInterface({
           <div className="chat-input-footer">
             <div className="chat-input-badges">
               <span className="chat-mode-pill">
-                <ShieldCheck size={13} color="#166534" />
+                <ShieldCheck size={13.5} color="#15803d" />
                 <span>{engineLabel}</span>
               </span>
             </div>
@@ -295,7 +304,7 @@ export default function ChatInterface({
               disabled={!inputText.trim() || loading}
               title="Send message (Enter)"
             >
-              <ArrowUp size={16} />
+              <ArrowUp size={16} strokeWidth={2.4} />
             </button>
           </div>
         </div>
