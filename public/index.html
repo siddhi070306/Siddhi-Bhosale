@@ -1,0 +1,369 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Apex Zenith - Event Impact Graph</title>
+<style>
+:root{
+  --bg:#0d1117; --panel:#161b22; --panel2:#1c232c; --line:#2a323d; --text:#e6edf3; --mute:#8b97a5;
+  --up:#3fb950; --down:#f85149; --warn:#d29922; --acc:#58a6ff; --pos:#2fbfae; --neg:#e0679a;
+}
+*{box-sizing:border-box}
+html,body{height:100%;margin:0}
+body{background:var(--bg);color:var(--text);font:13px/1.45 system-ui,Segoe UI,Roboto,sans-serif;display:flex;flex-direction:column}
+header{display:flex;align-items:center;gap:14px;padding:8px 14px;border-bottom:1px solid var(--line);background:var(--panel)}
+header h1{font-size:15px;margin:0;letter-spacing:.3px}
+header h1 span{color:var(--acc)}
+.chip{padding:2px 8px;border:1px solid var(--line);border-radius:10px;color:var(--mute);font-size:11px}
+.chip.on{color:var(--up);border-color:var(--up)}
+.spacer{flex:1}
+main{flex:1;display:grid;grid-template-columns:340px minmax(0,1fr) 420px;gap:0;min-height:0}
+section{min-height:0;overflow:auto}
+#left{border-right:1px solid var(--line);padding:12px;background:var(--panel)}
+#right{border-left:1px solid var(--line);background:var(--panel);display:flex;flex-direction:column}
+#center{position:relative;display:flex;flex-direction:column}
+h2{font-size:11px;text-transform:uppercase;letter-spacing:.8px;color:var(--mute);margin:14px 0 6px}
+textarea{width:100%;height:170px;background:var(--bg);color:var(--text);border:1px solid var(--line);border-radius:6px;padding:8px;resize:vertical;font:inherit}
+select,button{background:var(--panel2);color:var(--text);border:1px solid var(--line);border-radius:6px;padding:6px 10px;font:inherit;cursor:pointer}
+button.primary{background:var(--acc);color:#04111f;border-color:var(--acc);font-weight:600}
+button:disabled{opacity:.5;cursor:wait}
+button:hover:not(:disabled){filter:brightness(1.15)}
+.row{display:flex;gap:8px;align-items:center;margin-top:8px;flex-wrap:wrap}
+label.tg{display:flex;gap:5px;align-items:center;color:var(--mute);cursor:pointer}
+.ev{border:1px solid var(--line);border-left-width:3px;border-radius:6px;padding:6px 8px;margin-bottom:6px;background:var(--bg)}
+.ev.observed{border-left-color:var(--up)} .ev.expected{border-left-color:var(--warn)}
+.ev q{display:block;color:var(--mute);font-size:11.5px;margin-top:3px;quotes:none}
+.badge{display:inline-block;font-size:10px;padding:1px 6px;border-radius:8px;border:1px solid var(--line);color:var(--mute);margin-right:4px}
+.badge.obs{color:var(--up);border-color:var(--up)} .badge.exp{color:var(--warn);border-color:var(--warn)}
+.badge.inf{color:var(--acc);border-color:var(--acc)} .badge.val{color:var(--pos);border-color:var(--pos)}
+.badge.bad{color:var(--down);border-color:var(--down)} .badge.llm{color:#c297ff;border-color:#c297ff}
+#hl{white-space:pre-wrap;background:var(--bg);border:1px solid var(--line);border-radius:6px;padding:8px;max-height:200px;overflow:auto;font-size:12px}
+#hl mark{background:transparent;border-bottom:2px solid;color:inherit;padding:0 1px}
+#graphwrap{flex:1;position:relative;min-height:0}
+svg#g{width:100%;height:100%;display:block}
+#legend{position:absolute;left:10px;bottom:8px;background:#0d1117cc;border:1px solid var(--line);border-radius:6px;padding:6px 8px;font-size:11px;color:var(--mute);max-width:70%}
+#legend i{display:inline-block;width:9px;height:9px;border-radius:50%;margin:0 3px 0 8px;vertical-align:middle}
+#tools{position:absolute;right:10px;top:8px;display:flex;gap:6px;align-items:center}
+#day{color:var(--acc);font-weight:600;min-width:70px;text-align:right}
+#tip{position:fixed;pointer-events:none;background:#000d;border:1px solid var(--line);border-radius:6px;padding:6px 8px;font-size:12px;max-width:280px;display:none;z-index:9}
+#sumbar{border-top:1px solid var(--line);padding:8px 14px;background:var(--panel);max-height:150px;overflow:auto}
+#sumbar p{margin:0 0 4px}
+.tabs{display:flex;border-bottom:1px solid var(--line)}
+.tabs button{flex:1;border:0;border-radius:0;background:transparent;color:var(--mute);padding:9px 4px;border-bottom:2px solid transparent}
+.tabs button.act{color:var(--text);border-bottom-color:var(--acc)}
+#tabbody{flex:1;overflow:auto;padding:10px}
+.card{border:1px solid var(--line);border-radius:6px;padding:8px;margin-bottom:8px;background:var(--bg);cursor:pointer}
+.card:hover{border-color:var(--acc)}
+.card.sel{border-color:var(--acc);background:#10233a}
+.card .top{display:flex;align-items:center;gap:8px}
+.dir{font-weight:700;font-size:16px;width:16px;text-align:center}
+.up{color:var(--up)} .down{color:var(--down)}
+.bar{height:5px;background:var(--line);border-radius:3px;overflow:hidden;width:90px}
+.bar>div{height:100%;background:var(--acc)}
+.mute{color:var(--mute)} .small{font-size:11.5px}
+.step{border-left:2px solid var(--line);margin-left:6px;padding:2px 0 10px 12px;position:relative}
+.step:before{content:"";position:absolute;left:-6px;top:6px;width:10px;height:10px;border-radius:50%;background:var(--acc)}
+.step.neg:before{background:var(--neg)} .step.pos:before{background:var(--pos)}
+.step blockquote{margin:4px 0 0;padding:4px 8px;border-left:2px solid var(--warn);color:var(--mute);font-size:11.5px;background:#1c1a10}
+table{border-collapse:collapse;width:100%} td,th{border-bottom:1px solid var(--line);padding:4px 6px;text-align:left;font-size:12px}
+.disc{margin-top:10px;color:var(--mute);font-size:11px;border-top:1px dashed var(--line);padding-top:8px}
+svg.spark{width:96px;height:26px}
+#loading{position:absolute;inset:0;background:#0d1117bb;display:none;align-items:center;justify-content:center;font-size:15px;z-index:5}
+@media (max-width:1100px){main{grid-template-columns:1fr;overflow:auto}}
+</style>
+</head>
+<body>
+<header>
+  <h1>Apex <span>Zenith</span> &middot; financial event impact graph</h1>
+  <span class="chip" id="chipLlm">LLM: off</span>
+  <span class="chip" id="chipGraph"></span>
+  <span class="spacer"></span>
+  <button id="btnReset" title="Drop everything learned from analysed articles">Reset graph</button>
+</header>
+<main>
+  <section id="left">
+    <h2>News / event text</h2>
+    <textarea id="txt" placeholder="Paste a financial news article or headline..."></textarea>
+    <div class="row">
+      <select id="samples"></select>
+      <button id="btnHead" title="Fetch public finance RSS headlines">Headlines</button>
+    </div>
+    <div class="row">
+      <label class="tg"><input type="checkbox" id="live"> Live market data</label>
+      <label class="tg" title="Always on: the LLM proposes events and links; the system verifies each against the article"><input type="checkbox" id="useLlm" checked disabled> LLM (required)</label>
+    </div>
+    <div class="row"><button class="primary" id="btnGo" style="flex:1">Analyse event</button></div>
+    <div id="headlines" class="small" style="margin-top:8px"></div>
+    <h2>Detected entities</h2>
+    <div id="hl" class="mute">Run an analysis to see highlighted entities.</div>
+    <h2>Detected events</h2>
+    <div id="events" class="mute small">None yet.</div>
+  </section>
+
+  <section id="center">
+    <div id="graphwrap">
+      <div id="loading">Analysing... (first live run downloads market data)</div>
+      <svg id="g"></svg>
+      <div id="tools">
+        <span id="day"></span>
+        <button id="btnAnim">&#9654; Animate propagation</button>
+        <button id="btnAll">Show all</button>
+      </div>
+      <div id="legend"></div>
+    </div>
+    <div id="sumbar"><span class="mute">The summary appears here.</span></div>
+  </section>
+
+  <section id="right">
+    <div class="tabs" id="tabs">
+      <button data-t="assets" class="act">Assets</button>
+      <button data-t="sectors">Sectors</button>
+      <button data-t="paths">Paths</button>
+      <button data-t="explain">Explain</button>
+      <button data-t="checks">Checks</button>
+    </div>
+    <div id="tabbody"></div>
+  </section>
+</main>
+<div id="tip"></div>
+<script src="/vendor/d3.min.js"></script>
+<script>
+const TYPE_COLOR={commodity:"#d99a3d",indicator:"#6aa6e8",sector:"#9d7be0",company:"#4fb99f",index:"#e07aa2",
+  instrument:"#c8c24f",event:"#f0f0f0",institution:"#8fa3b5",event_class:"#e0605a"};
+const $=id=>document.getElementById(id);
+const esc=s=>String(s==null?"":s).replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
+const arrow=d=>d>0?"↑":d<0?"↓":"•";
+const cls=d=>d>0?"up":"down";
+let R=null, tab="assets", selPath=null, selNode=null, sim=null, gsel={};
+
+/* ---------- boot ---------- */
+fetch("/api/samples").then(r=>r.json()).then(list=>{
+  window.SAMPLES=list;
+  $("samples").innerHTML='<option value="">Sample events...</option>'+list.map((s,i)=>`<option value="${i}">${esc(s.title)}</option>`).join("");
+  const m=location.hash.match(/^#demo(\d*)$/);   // e.g. /#demo or /#demo2 auto-runs a sample
+  if(m){const i=+(m[1]||0);$("samples").value=i;$("txt").value=list[i].text;analyse();}
+});
+function status(){fetch("/api/status").then(r=>r.json()).then(s=>{
+  $("chipLlm").textContent="LLM: "+(s.llm||(s.llm_required?"NOT CONFIGURED (required)":"off (rules only)"))+" · FRED "+(s.fred_key?"key":"public")+" · news "+(s.news_key?"NewsAPI":"RSS");$("chipLlm").className="chip"+(s.llm?" on":"");
+  $("chipGraph").textContent=`graph: ${s.graph.nodes} nodes · ${s.graph.edges} edges · ${s.graph.articles_ingested} articles learned`;
+});}
+status();
+$("samples").onchange=e=>{if(e.target.value!=="")$("txt").value=SAMPLES[e.target.value].text};
+$("btnReset").onclick=()=>fetch("/api/reset",{method:"POST"}).then(()=>{status();});
+$("btnHead").onclick=()=>{
+  $("headlines").textContent="Fetching...";
+  fetch("/api/headlines").then(r=>r.json()).then(h=>{
+    if(!h.length){$("headlines").textContent="No headlines reachable (offline?).";return;}
+    $("headlines").innerHTML=h.slice(0,12).map((x,i)=>`<div class="card" data-i="${i}"><b>${esc(x.title)}</b><div class="mute">${esc(x.source)}</div></div>`).join("");
+    document.querySelectorAll("#headlines .card").forEach(c=>c.onclick=()=>{const x=h[+c.dataset.i];$("txt").value=x.title+". "+(x.summary||"");});
+  }).catch(()=>$("headlines").textContent="Failed to fetch headlines.");
+};
+document.querySelectorAll("#tabs button").forEach(b=>b.onclick=()=>{tab=b.dataset.t;renderTab();});
+$("btnGo").onclick=analyse;
+
+function analyse(){
+  const text=$("txt").value.trim(); if(!text)return;
+  $("btnGo").disabled=true;$("loading").style.display="flex";
+  fetch("/api/analyze",{method:"POST",headers:{"Content-Type":"application/json"},
+    body:JSON.stringify({text,live:$("live").checked,use_llm:true})})
+  .then(r=>r.json().then(d=>{if(!r.ok)throw new Error(d.detail||r.status);return d;})).then(d=>{R=d;selPath=null;selNode=null;render();status();})
+  .catch(e=>{$("sumbar").innerHTML='<span class="down">'+esc(e.message||e)+'</span>';})
+  .finally(()=>{$("btnGo").disabled=false;$("loading").style.display="none";});
+}
+
+/* ---------- render ---------- */
+function render(){
+  renderText();renderEvents();drawGraph();renderTab();
+  const cav=(R.caveats||[]).map(c=>"<li>"+esc(c)+"</li>").join("");
+  $("sumbar").innerHTML=`<p>${esc(R.summary||"")}</p>`+(R.llm_note?`<p class="mute small">${esc(R.llm_note)}</p>`:"")+
+    `<details class="small mute"><summary>Limits of this analysis</summary><ul>${cav}</ul></details>`;
+}
+function renderText(){
+  const t=R.text, ms=[...R.mentions].sort((a,b)=>a.start-b.start); let out="",pos=0;
+  ms.forEach(m=>{ if(m.start<pos)return; out+=esc(t.slice(pos,m.start))+`<mark style="border-color:${TYPE_COLOR[m.type]||"#888"}" title="${esc(m.label)} (${m.type})">${esc(t.slice(m.start,m.end))}</mark>`; pos=m.end;});
+  out+=esc(t.slice(pos)); $("hl").innerHTML=out;
+  if(R.unlinked&&R.unlinked.length)$("hl").innerHTML+=`<div class="small" style="margin-top:6px"><span class="badge inf">new entities</span>${R.unlinked.map(u=>esc(u.name)+(u.sector_guess?" → "+esc(u.sector_guess)+" (inferred)":"")).join("; ")}</div>`;
+}
+function renderEvents(){
+  if(!R.events.length){$("events").textContent="No event detected.";return;}
+  $("events").innerHTML=R.events.map(e=>`<div class="ev ${e.status}">
+    <span class="badge ${e.status==="observed"?"obs":"exp"}">${e.status==="observed"?"OBSERVED":"EXPECTED"}</span>
+    ${e.source==="llm"?'<span class="badge llm">LLM</span>':""}<b>${esc(e.label)}</b>
+    <span class="mute small"> · ${esc(e.type)} · conf ${Math.round(e.confidence*100)}%</span><q>“${esc(e.quote)}”</q></div>`).join("");
+}
+
+/* ---------- graph ---------- */
+function drawGraph(){
+  const svg=d3.select("#g"); svg.selectAll("*").remove();
+  const W=$("g").clientWidth,H=$("g").clientHeight;
+  const defs=svg.append("defs");
+  [["pos","#2fbfae"],["neg","#e0679a"],["rep","#8b97a5"]].forEach(([k,c])=>defs.append("marker").attr("id","ar-"+k).attr("viewBox","0 -5 10 10")
+    .attr("refX",17).attr("refY",0).attr("markerUnits","userSpaceOnUse").attr("markerWidth",9).attr("markerHeight",9).attr("orient","auto").append("path").attr("d","M0,-4L10,0L0,4").attr("fill",c));
+  const G=R.graph; if(!G||!G.nodes.length){return;}
+  const nodes=G.nodes.map(n=>({...n})), byId=Object.fromEntries(nodes.map(n=>[n.id,n]));
+  const links=G.links.map(l=>({...l,source:byId[l.source],target:byId[l.target]})).filter(l=>l.source&&l.target);
+  const root=svg.append("g");
+  svg.call(d3.zoom().scaleExtent([.3,3]).on("zoom",e=>root.attr("transform",e.transform)));
+  const link=root.append("g").selectAll("path").data(links).join("path").attr("fill","none")
+    .attr("stroke",l=>l.kind==="reports"?"#8b97a5":l.sign>0?"#2fbfae":"#e0679a")
+    .attr("stroke-width",l=>1+l.strength*4).attr("stroke-opacity",.75)
+    .attr("stroke-dasharray",l=>(l.inferred||l.kind==="reports")?"5,4":null)
+    .attr("marker-end",l=>`url(#ar-${l.kind==="reports"?"rep":l.sign>0?"pos":"neg"})`).style("cursor","pointer")
+    .on("click",(e,l)=>{selPath=null;selNode=null;selEdge=l;tab="explain";renderTab();e.stopPropagation();})
+    .on("mousemove",(e,l)=>tip(e,`<b>${esc(l.source.label)} → ${esc(l.target.label)}</b><br>${l.sign>0?"moves with":"moves against"} · strength ${l.strength} · lag ~${l.lag}d<br>${l.provenance.map(esc).join(", ")}${l.verdict?"<br>data: "+esc(l.verdict):""}`))
+    .on("mouseout",()=>tip());
+  const node=root.append("g").selectAll("g").data(nodes).join("g").style("cursor","pointer")
+    .on("click",(e,d)=>{selNode=d.id;selPath=null;selEdge=null;tab="explain";renderTab();highlightNode(d.id);e.stopPropagation();})
+    .on("mousemove",(e,d)=>tip(e,nodeTip(d))).on("mouseout",()=>tip());
+  node.each(function(d){
+    const g=d3.select(this), r=d.type==="event"?9:12+(d.confidence||.3)*10;
+    if(d.type==="event") g.append("rect").attr("x",-9).attr("y",-9).attr("width",18).attr("height",18).attr("transform","rotate(45)").attr("fill",TYPE_COLOR.event).attr("stroke",d.observed?"#3fb950":"#d29922").attr("stroke-width",3);
+    else g.append("circle").attr("r",r).attr("fill",TYPE_COLOR[d.type]||"#888").attr("fill-opacity",.85)
+      .attr("stroke",d.observed?"#fff":d.source?"#58a6ff":"#0d1117").attr("stroke-width",d.observed||d.source?3:1.5)
+      .attr("stroke-dasharray",d.inferred?"3,2":null);
+    if(d.direction&&d.type!=="event") g.append("text").attr("text-anchor","middle").attr("dy",".35em").attr("font-size",15).attr("font-weight",700)
+      .attr("fill",d.direction>0?"#0a3d16":"#5c0b08").text(arrow(d.direction));
+    if(d.mixed) g.append("text").attr("x",r-2).attr("y",-r+4).attr("font-size",11).attr("fill","#d29922").text("±");
+    g.append("text").attr("y",(d.type==="event"?22:r+12)).attr("text-anchor","middle").attr("font-size",11).attr("fill","#e6edf3")
+      .attr("paint-order","stroke").attr("stroke","#0d1117").attr("stroke-width",3).text(d.label.length>26?d.label.slice(0,25)+"…":d.label);
+  });
+  // layered layout: events -> sources -> hop 1 -> hop 2 ... so the flow reads left to right
+  const layer={}; nodes.forEach(n=>{if(n.type==="event")layer[n.id]=0;else if(n.source)layer[n.id]=1;});
+  let frontier=nodes.filter(n=>layer[n.id]===1).map(n=>n.id);
+  while(frontier.length){const nx=[];frontier.forEach(id=>links.forEach(l=>{if(l.kind!=="reports"&&l.source.id===id&&layer[l.target.id]==null){layer[l.target.id]=layer[id]+1;nx.push(l.target.id);}}));frontier=nx;}
+  const maxL=Math.max(2,...Object.values(layer));
+  nodes.forEach(n=>{if(layer[n.id]==null)layer[n.id]=maxL;});
+  const mx=80, colX=l=>mx+(l/maxL)*(W-2*mx);
+  const order={event:0,event_class:1,institution:1,commodity:2,indicator:3,sector:4,company:5,index:6,instrument:7};
+  const cols={}; nodes.forEach(n=>(cols[layer[n.id]]=cols[layer[n.id]]||[]).push(n));
+  Object.entries(cols).forEach(([l,arr])=>{
+    arr.sort((a,b)=>(order[a.type]||9)-(order[b.type]||9)||(b.direction||0)-(a.direction||0)||a.label.localeCompare(b.label));
+    arr.forEach((n,i)=>{n.x=colX(+l);n.y=40+(H-80)*(i+1)/(arr.length+1);});});
+  const curve=l=>{const x1=l.source.x,y1=l.source.y,x2=l.target.x,y2=l.target.y;
+    if(Math.abs(x2-x1)<4){const r=Math.abs(y2-y1)*.6+20;return `M${x1},${y1}A${r},${r} 0 0,${y2>y1?1:0} ${x2},${y2}`;}
+    const mxp=(x1+x2)/2;return `M${x1},${y1}C${mxp},${y1} ${mxp},${y2} ${x2},${y2}`;};
+  const redraw=()=>{link.attr("d",curve);node.attr("transform",d=>`translate(${d.x},${d.y})`);};
+  node.call(d3.drag().on("drag",(e,d)=>{d.x=e.x;d.y=e.y;redraw();}));
+  redraw(); sim=null;
+  svg.on("click",()=>{selPath=null;selNode=null;resetHL();});
+  gsel={link,node,nodes,links};
+  $("legend").innerHTML=Object.entries(TYPE_COLOR).filter(([k])=>["commodity","indicator","sector","company","index","instrument","event_class"].includes(k)).map(([k,c])=>`<i style="background:${c}"></i>${k.replace("_"," ")}`).join("")+
+   `<br><span style="color:#2fbfae">━</span> moves with &nbsp;<span style="color:#e0679a">━</span> moves against &nbsp;<b>┅</b> inferred/reported &nbsp;· white ring = observed in article · blue ring = event source · ± = mixed signals · thickness = strength`;
+}
+let selEdge=null;
+function nodeTip(d){return `<b>${esc(d.label)}</b> <span class="mute">(${esc(d.type)})</span><br>`+
+  (d.direction?`${arrow(d.direction)} ${d.observed?"observed in article":"inferred"}`:"")+
+  (d.confidence!=null?`<br>plausibility ${Math.round(d.confidence*100)}%${d.mixed?" (mixed signals)":""}`:"")+(d.eta?`<br>~${d.eta} days`:"")+(d.quote?`<br><i>“${esc(d.quote)}”</i>`:"");}
+function tip(e,html){const t=$("tip");if(!html){t.style.display="none";return;}t.innerHTML=html;t.style.display="block";t.style.left=(e.clientX+14)+"px";t.style.top=(e.clientY+14)+"px";}
+function resetHL(){if(!gsel.link)return;gsel.link.attr("stroke-opacity",.75);gsel.node.attr("opacity",1);}
+function highlightPath(pid){
+  if(!gsel.link)return; const ids=new Set(), p=R.paths.find(x=>x.id===pid); if(!p)return;
+  p.steps.forEach(s=>{ids.add(s.from);ids.add(s.to);});
+  gsel.link.attr("stroke-opacity",l=>l.paths&&l.paths.includes(pid)?1:.08);
+  gsel.node.attr("opacity",n=>ids.has(n.id)||(n.type==="event"&&gsel.links.some(l=>l.kind==="reports"&&l.source.id===n.id&&ids.has(l.target.id)))?1:.15);
+}
+function highlightNode(id){
+  if(!gsel.link)return; const keep=new Set([id]);
+  gsel.links.forEach(l=>{if(l.source.id===id)keep.add(l.target.id);if(l.target.id===id)keep.add(l.source.id);});
+  gsel.link.attr("stroke-opacity",l=>(l.source.id===id||l.target.id===id)?1:.08);
+  gsel.node.attr("opacity",n=>keep.has(n.id)?1:.2);
+}
+$("btnAll").onclick=()=>{selPath=null;selNode=null;selEdge=null;resetHL();renderTab();};
+
+/* animate propagation by estimated lag */
+let animT=null;
+$("btnAnim").onclick=()=>{
+  if(!gsel.node)return; if(animT){clearInterval(animT);animT=null;}
+  const etas=[...new Set(gsel.nodes.map(n=>n.eta||0))].sort((a,b)=>a-b); let i=0;
+  gsel.node.attr("opacity",.08);gsel.link.attr("stroke-opacity",.04);
+  const step=()=>{ if(i>=etas.length){clearInterval(animT);animT=null;$("day").textContent="";setTimeout(resetHL,1500);return;}
+    const t=etas[i++]; $("day").textContent="day ~"+t;
+    gsel.node.attr("opacity",n=>(n.eta||0)<=t?1:.08);
+    gsel.link.attr("stroke-opacity",l=>(Math.max(l.source.eta||0,l.target.eta||0))<=t?.9:.04);};
+  step();animT=setInterval(step,900);
+};
+
+/* ---------- right panel ---------- */
+function spark(sp){
+  if(!sp||!sp.values||sp.values.length<3)return '<span class="mute small">no series</span>';
+  const v=sp.values,mn=Math.min(...v),mx=Math.max(...v),w=96,h=26;
+  const pts=v.map((x,i)=>`${(i/(v.length-1))*w},${h-2-((x-mn)/((mx-mn)||1))*(h-4)}`).join(" ");
+  return `<svg class="spark" viewBox="0 0 ${w} ${h}"><polyline fill="none" stroke="${sp.info.simulated?"#8b97a5":"#58a6ff"}" stroke-width="1.5" ${sp.info.simulated?'stroke-dasharray="3,2"':""} points="${pts}"/></svg><div class="mute" style="font-size:10px">${sp.info.simulated?"simulated":esc(sp.info.source)}</div>`;
+}
+function row(a){
+  return `<div class="card ${selNode===a.node?"sel":""}" data-node="${a.node}">
+   <div class="top"><span class="dir ${cls(a.direction)}">${arrow(a.direction)}</span><b style="flex:1">${esc(a.label)}</b>
+     <div><div class="bar"><div style="width:${Math.round(a.confidence*100)}%"></div></div><div class="mute" style="font-size:10px">plausibility ${Math.round(a.confidence*100)}% · ${a.confidence_label}</div></div></div>
+   <div style="margin-top:4px">${a.observed?'<span class="badge obs">observed</span>':'<span class="badge inf">inferred</span>'}
+     ${a.mixed?'<span class="badge bad">mixed signals</span>':""}<span class="badge">${a.sensitivity} sensitivity</span><span class="badge">~${a.horizon_days}d</span><span class="badge">${a.n_paths} path${a.n_paths>1?"s":""}</span></div>
+   <div class="small mute" style="margin-top:4px">${esc(a.headline)}</div>
+   <div class="small" style="margin-top:3px">${esc(a.why)}</div>
+   <div style="margin-top:4px">${spark(a.spark)}</div></div>`;
+}
+function bindRows(){
+  document.querySelectorAll("#tabbody .card[data-node]").forEach(c=>c.onclick=()=>{
+    const id=c.dataset.node; selNode=id; selEdge=null;
+    const all=[...R.assets,...R.sectors,...R.variables], a=all.find(x=>x.node===id);
+    if(a&&a.best_path_id!=null){selPath=a.best_path_id;highlightPath(a.best_path_id);} else highlightNode(id);
+    tab="explain";renderTab();});
+}
+function renderTab(){
+  document.querySelectorAll("#tabs button").forEach(b=>b.classList.toggle("act",b.dataset.t===tab));
+  const B=$("tabbody"); if(!R){B.innerHTML='<p class="mute">Run an analysis first.</p>';return;}
+  const disc='<div class="disc">Plausibility scores are heuristic, derived from curated priors, article evidence and (when enabled) market data. They are not probabilities or forecasts. Not investment advice.</div>';
+  if(tab==="assets"){
+    B.innerHTML=(R.assets.length?R.assets.slice(0,14).map(row).join(""):'<p class="mute">No assets reached.</p>')+disc;bindRows();
+  }else if(tab==="sectors"){
+    B.innerHTML=`<h2 style="margin-top:0">Sectors</h2>`+(R.sectors.map(row).join("")||'<p class="mute">None.</p>')+`<h2>Variables &amp; commodities</h2>`+(R.variables.map(row).join("")||'<p class="mute">None.</p>')+disc;bindRows();
+  }else if(tab==="paths"){
+    B.innerHTML=(R.paths.length?R.paths.slice(0,25).map(p=>`<div class="card ${selPath===p.id?"sel":""}" data-p="${p.id}">
+      <div class="top"><b style="flex:1">${esc(p.headline)}</b></div>
+      <div class="small mute">from ${esc(p.source)} · score ${p.score} · ${p.hops} hop${p.hops>1?"s":""} · ~${p.horizon_days}d</div></div>`).join(""):'<p class="mute">No paths.</p>')+disc;
+    document.querySelectorAll("#tabbody .card[data-p]").forEach(c=>c.onclick=()=>{selPath=+c.dataset.p;selNode=null;selEdge=null;highlightPath(selPath);tab="explain";renderTab();});
+  }else if(tab==="explain"){
+    B.innerHTML=explain()+disc;
+  }else{
+    B.innerHTML=checks()+disc;
+  }
+}
+function prov(p){return (p||[]).map(x=>`<span class="badge ${x==="observed"?"obs":x==="validated"?"val":x==="inferred"?"inf":""}">${esc(x)}</span>`).join("");}
+function valBadge(v){
+  if(!v)return"";
+  if(v.verdict==="no_data")return '<span class="badge">no market series</span>';
+  const c=v.verdict==="supported"?"val":v.verdict==="contradicted"?"bad":"";
+  return `<span class="badge ${c}">data: ${esc(v.verdict)}</span><span class="mute small">r=${v.corr} @ lag ${v.lag_days}d, n=${v.n}${v.simulated?" · SIMULATED (no effect on confidence)":""}</span>`;
+}
+function explain(){
+  if(selEdge){const l=selEdge;return `<h2 style="margin-top:0">Link</h2><div class="card"><b>${esc(l.source.label)} → ${esc(l.target.label)}</b>
+    <div class="small">${l.sign>0?"Moves in the same direction":"Moves in the opposite direction"} · strength ${l.strength} · lag ~${l.lag} days</div><div style="margin-top:4px">${prov(l.provenance)}${l.kind==="reports"?'<span class="badge">event → entity</span>':""}</div></div>
+    <p class="small mute">Click a path or an asset for the full mechanism and evidence.</p>`;}
+  const p=selPath!=null?R.paths.find(x=>x.id===selPath):null;
+  if(!p)return '<p class="mute">Select a path, an asset or a node to see why each connection exists, the evidence behind it, and how sure we are.</p>';
+  let h=`<h2 style="margin-top:0">Impact chain</h2><div class="card" style="cursor:default"><b>${esc(p.headline)}</b>
+   <div class="small mute">Starts from: ${esc(p.source)} · plausibility ${p.score} · typical lag ~${p.horizon_days} days</div></div>`;
+  h+=`<div class="step"><span class="badge obs">fact / trigger</span> <b>${esc(p.source)}</b></div>`;
+  p.steps.forEach(s=>{
+    h+=`<div class="step ${s.sign>0?"pos":"neg"}"><div><b>${esc(s.from_label)}</b> → <b>${esc(s.to_label)}</b> <span class="dir ${cls(s.to_dir)}">${arrow(s.to_dir)}</span></div>
+     <div class="small">${esc(s.mechanism)}</div>
+     <div class="small mute">${s.sign>0?"moves with":"moves against"} · strength ${s.strength}${s.effective!==s.strength?" (data-adjusted "+s.effective+")":""} · lag ~${s.lag}d</div>
+     <div style="margin-top:3px"><span class="badge inf">inferred</span>${prov(s.provenance)}${valBadge(s.validation)}</div>
+     ${(s.evidence||[]).map(e=>`<blockquote>article: “${esc(e)}”</blockquote>`).join("")}</div>`;});
+  h+=`<p class="small mute">Everything after the trigger is inferred from relationships, not reported. Later steps carry compounding uncertainty.</p>`;
+  return h;
+}
+function checks(){
+  let h=`<h2 style="margin-top:0">Model vs article</h2>`;
+  const vmap={consistent:["val","consistent"],contradicts:["bad","graph disagrees"],model_mixed:["exp","model mixed"],no_upstream_path:["","no upstream path (cause stated in text)"],model_has_no_path:["","model has no path"]};
+  h+=R.comparison.length?`<table><tr><th>Statement</th><th>Article</th><th>Graph</th></tr>`+R.comparison.map(c=>{const v=vmap[c.verdict]||["",c.verdict];
+    return `<tr><td>${esc(c.label)} <span class="${cls(c.stated)}">${arrow(c.stated)}</span></td><td><span class="badge ${c.status==="observed"?"obs":"exp"}">${c.status}</span></td><td><span class="badge ${v[0]}">${esc(v[1])}</span></td></tr>`;}).join("")+"</table>":'<p class="mute small">Nothing to compare.</p>';
+  h+=`<h2>Data used</h2><p class="small">${(R.data_modes||[]).map(m=>`<span class="badge ${m==="simulated"?"bad":"val"}">${esc(m)}</span>`).join("")||'<span class="mute">none</span>'}</p>`;
+  if(R.macro&&R.macro.length)h+=`<h2>Macro backdrop (FRED)</h2><table>`+R.macro.map(m=>`<tr><td>${esc(m.label)}</td><td><b>${m.value}</b></td><td class="mute">${esc(m.as_of)}</td></tr>`).join("")+"</table>";
+  h+=`<h2>Graph updates from this article</h2>`;
+  const ch=R.graph_changes||[]; h+=ch.length?`<table>`+ch.slice(0,30).map(c=>`<tr><td>${esc(c.kind.replace("_"," "))}</td><td class="small">${esc(c.label||((c.src||"")+" → "+(c.dst||"")))}${c.from!=null?` <span class="mute">${c.from} → ${c.to}</span>`:""}</td></tr>`).join("")+"</table>":'<p class="mute small">No changes.</p>';
+  return h;
+}
+window.addEventListener("resize",()=>{if(R)drawGraph();});
+</script>
+</body>
+</html>
