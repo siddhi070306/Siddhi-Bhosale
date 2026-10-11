@@ -118,6 +118,25 @@ MAX_RESTORABLE = 30      # versions kept as snapshots (older ones stay in the hi
 MAX_HISTORY = 300
 
 
+
+def graph_to_json(g):
+    """The graph as node-link JSON, always with its edges under "links" (networkx 3.4+ changed the default key to "edges")."""
+    try:
+        return json_graph.node_link_data(g, edges="links")
+    except TypeError:                                 # networkx before 3.4 has no edges= argument and uses "links"
+        return json_graph.node_link_data(g)
+
+
+def graph_from_json(d):
+    """Read node-link JSON written by any networkx version, whether its edges are under "links" or "edges"."""
+    key = "links" if "links" in d else "edges"
+    try:
+        return json_graph.node_link_graph(d, directed=True, multigraph=False, edges=key)
+    except TypeError:                                 # networkx before 3.4 only reads "links"
+        if key == "edges":
+            d = dict(d, links=d["edges"])
+        return json_graph.node_link_graph(d, directed=True, multigraph=False)
+
 class KBGuard:
     def __init__(self, kg, persist=False):
         self.kg = kg
@@ -260,10 +279,7 @@ class KBGuard:
 
     # -- export / import
     def export_state(self):
-        try:
-            d = json_graph.node_link_data(self.kg.g, edges="links")
-        except TypeError:
-            d = json_graph.node_link_data(self.kg.g)
+        d = graph_to_json(self.kg.g)
         return {"format": "apex-zenith-kg", "schema": 1, "version": self.version, "epoch": self.epoch,
                 "exported_at": time.strftime("%Y-%m-%d %H:%M:%S"), "articles": list(self.kg.articles),
                 "nodes": kb.dynamic_specs(), "graph": d}
@@ -279,11 +295,7 @@ class KBGuard:
                 spec = dict(spec)
                 spec["series"] = [tuple(s) for s in spec.get("series", [])]
                 specs.append(spec)
-            edges_key = "links" if "links" in data.get("graph", {}) else "edges"
-            try:
-                g = json_graph.node_link_graph(data["graph"], directed=True, multigraph=False, edges=edges_key)
-            except TypeError:
-                g = json_graph.node_link_graph(data["graph"], directed=True, multigraph=False)
+            g = graph_from_json(data["graph"])
             kb.drop_dynamic_nodes()
             for spec in specs:
                 kb.NODES[spec["id"]] = spec
@@ -326,7 +338,7 @@ class KBGuard:
             os.makedirs(os.path.dirname(STATE_FILE), exist_ok=True)
             data = {"mode": self.mode, "version": self.version, "articles": self.kg.articles,
                     "history": self.history, "seq": self.seq, "epoch": self.epoch,
-                    "nodes": kb.dynamic_specs(), "graph": json_graph.node_link_data(self.kg.g)}
+                    "nodes": kb.dynamic_specs(), "graph": graph_to_json(self.kg.g)}
             tmp = STATE_FILE + ".tmp"
             with open(tmp, "w", encoding="utf-8") as f:
                 json.dump(data, f, default=str)
@@ -351,7 +363,7 @@ class KBGuard:
                 spec["series"] = [tuple(s) for s in spec["series"]]
                 kb.NODES[spec["id"]] = spec
             self._nodes_changed()
-            self.kg.g = json_graph.node_link_graph(data["graph"], directed=True, multigraph=False)
+            self.kg.g = graph_from_json(data["graph"])
             hierarchy.ensure_properties(self.kg)         # states saved before tiers and relations were stored
             self.kg.articles = data.get("articles", [])
             h = health(self.kg)
