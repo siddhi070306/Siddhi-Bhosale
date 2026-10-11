@@ -259,9 +259,13 @@ class KBGuard:
 
     # -- export / import
     def export_state(self):
+        try:
+            d = json_graph.node_link_data(self.kg.g, edges="links")
+        except TypeError:
+            d = json_graph.node_link_data(self.kg.g)
         return {"format": "apex-zenith-kg", "schema": 1, "version": self.version, "epoch": self.epoch,
                 "exported_at": time.strftime("%Y-%m-%d %H:%M:%S"), "articles": list(self.kg.articles),
-                "nodes": kb.dynamic_specs(), "graph": json_graph.node_link_data(self.kg.g)}
+                "nodes": kb.dynamic_specs(), "graph": d}
 
     def import_state(self, data, reason=None):
         """Replace the graph with an exported one, if it passes the health checks and the tier rules. Else nothing changes."""
@@ -274,7 +278,11 @@ class KBGuard:
                 spec = dict(spec)
                 spec["series"] = [tuple(s) for s in spec.get("series", [])]
                 specs.append(spec)
-            g = json_graph.node_link_graph(data["graph"], directed=True, multigraph=False)
+            edges_key = "links" if "links" in data.get("graph", {}) else "edges"
+            try:
+                g = json_graph.node_link_graph(data["graph"], directed=True, multigraph=False, edges=edges_key)
+            except TypeError:
+                g = json_graph.node_link_graph(data["graph"], directed=True, multigraph=False)
             kb.drop_dynamic_nodes()
             for spec in specs:
                 kb.NODES[spec["id"]] = spec
