@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
-import { api } from '../services/api';
+import { API_URL, api } from '../services/api';
 
 // Live quotes for a set of Yahoo Finance symbols.
 // Preferred transport: Server-Sent Events from the backend (/api/stream), which the backend feeds from the
@@ -36,7 +36,7 @@ export function useLiveQuotes(symbols) {
 
     if (typeof EventSource === 'undefined') startPolling();
     else {
-      es = new EventSource(`/api/stream?symbols=${encodeURIComponent(key)}`);
+      es = new EventSource(`${API_URL}/api/stream?symbols=${encodeURIComponent(key)}`);
       es.addEventListener('quotes', (ev) => {
         try {
           apply(JSON.parse(ev.data), 'streaming');
