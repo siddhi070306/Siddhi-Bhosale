@@ -289,9 +289,16 @@ def rss_items():
     return _cached("rss", 300, load)
 
 
-def headlines(limit=25):
+def headlines(limit=25, deduplicate=True):
+    """Fetch current headlines across NewsAPI and RSS.
+    When deduplicate=True (default), clusters duplicate stories across feeds, selects the primary
+    headline using the priority scorer (trust + speed + quality), and annotates cluster metadata.
+    """
+    from .priority import deduplicate_and_rank_headlines
+
+    fetch_n = max(limit * 2, 30) if deduplicate else limit
     with ThreadPoolExecutor(max_workers=2) as ex:                     # NewsAPI and the RSS feeds do not depend on each other
-        f_api = ex.submit(lambda: _cached("newsapi:%d" % limit, 120, lambda: newsapi_headlines(limit)))
+        f_api = ex.submit(lambda: _cached("newsapi:%d" % fetch_n, 120, lambda: newsapi_headlines(fetch_n)))
         f_rss = ex.submit(rss_items)
         api, rss = f_api.result() or [], f_rss.result() or []
     
@@ -300,6 +307,9 @@ def headlines(limit=25):
         combined.extend([a, b])
     combined.extend(api[len(rss):])
     combined.extend(rss[len(api):])
+
+    if deduplicate:
+        return deduplicate_and_rank_headlines(combined)[:limit]
     return combined[:limit]
 
 

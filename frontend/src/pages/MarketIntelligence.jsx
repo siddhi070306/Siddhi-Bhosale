@@ -249,6 +249,21 @@ export default function MarketIntelligence({
                   <span className="event-title">{ev.title}</span>
                 </div>
                 <div className="event-item-right">
+                  {ev.cluster_size > 1 && (
+                    <span
+                      className="badge badge-subtle"
+                      title={`Clustered ${ev.cluster_size} sources: ${(ev.sources || []).join(', ')}`}
+                      style={{
+                        marginRight: 6,
+                        fontWeight: 600,
+                        color: '#1d4ed8',
+                        backgroundColor: '#eff6ff',
+                        borderColor: '#bfdbfe',
+                      }}
+                    >
+                      {ev.cluster_size} sources
+                    </span>
+                  )}
                   <span className="badge badge-subtle">{ev.category}</span>
                   {ev.link && (
                     <a

@@ -16,6 +16,7 @@ Factors:
 
 from __future__ import annotations
 
+import difflib
 import math
 import re
 from dataclasses import dataclass
@@ -36,6 +37,42 @@ class Article:
     has_quotes: bool = False
     link: str = ""
     metadata: Optional[Dict[str, Any]] = None
+
+    @classmethod
+    def from_dict(cls, d: Dict[str, Any], default_id: str = "") -> Article:
+        """Create an Article instance from a dictionary (e.g. from feeds or API)."""
+        src = d.get("source") or d.get("source_name") or d.get("category") or "Unknown"
+        title = d.get("title") or ""
+        summary = d.get("summary") or d.get("description") or ""
+        body = d.get("body_text") or d.get("text") or d.get("content") or ""
+        link = d.get("link") or d.get("url") or ""
+        published = d.get("published") or d.get("published_at") or d.get("publishedAt") or d.get("time")
+        art_id = str(d.get("id") or default_id or (link or title))
+        has_quotes = bool(d.get("has_quotes", False))
+        return cls(
+            id=art_id,
+            source_name=src,
+            title=title,
+            body_text=body,
+            summary=summary,
+            published_at=published,
+            has_quotes=has_quotes,
+            link=link,
+            metadata=d.get("metadata") or {},
+        )
+
+    def to_dict(self) -> Dict[str, Any]:
+        """Convert Article instance to a standard dictionary representation."""
+        return {
+            "id": self.id,
+            "source": self.source_name,
+            "title": self.title,
+            "summary": self.summary,
+            "text": (self.title + ". " + self.summary).strip() if self.summary else self.title,
+            "link": self.link,
+            "published": self.published_at.isoformat() if isinstance(self.published_at, datetime) else str(self.published_at or ""),
+            "has_quotes": self.has_quotes,
+        }
 
 
 def parse_timestamp(ts: Optional[Union[datetime, str, int, float]]) -> datetime:
@@ -95,24 +132,41 @@ class ArticlePriorityScorer:
 
     # Pre-defined authority scores normalized between 0.0 and 1.0
     DEFAULT_SOURCE_AUTHORITY: Dict[str, float] = {
-        "moneycontrol": 1.0,
+        # Tier 1 (1.00): Top-tier institutional global wires & financial presses
         "reuters": 1.0,
         "bloomberg": 1.0,
         "financial times": 1.0,
+        "wall street journal": 1.0,
+        "wsj": 1.0,
+        # Note: Moneycontrol feed was excluded from direct RSS because non-browser clients return HTTP 403,
+        # but is retained at 1.0 as a prior authority score for syndicated and NewsAPI imports.
+        "moneycontrol": 1.0,
+
+        # Tier 2 (0.90): Major national business & financial dailies
         "the hindu": 0.90,
         "the hindu businessline": 0.90,
         "economic times": 0.90,
         "et markets": 0.90,
         "et economy": 0.90,
         "et industry": 0.90,
+
+        # Tier 3 (0.85): High-reputation digital financial portals & market outlets
         "livemint": 0.85,
+        "mint": 0.85,
         "business standard": 0.85,
         "cnbc": 0.85,
         "cnbc markets": 0.85,
         "marketwatch": 0.85,
+
+        # Tier 4 (0.80): Major general national dailies (business sections)
+        "times of india": 0.80,
         "times of india business": 0.80,
+
+        # Tier 5 (0.75): Broad broadcast news outlets
         "ndtv": 0.75,
         "ndtv profit": 0.75,
+
+        # Tier 6 (0.50): News aggregators & generic syndicators
         "newsapi aggregate": 0.50,
         "newsapi": 0.50,
     }
@@ -198,10 +252,24 @@ class ArticlePriorityScorer:
 
         has_quotes = article.has_quotes
         if not has_quotes and content:
-            # Check for direct quotation marks or attribution verbs
-            if '"' in content or '“' in content or "”" in content:
-                has_quotes = True
-            elif re.search(r'\b(said|stated|told|announced|commented)\b', content, re.IGNORECASE):
+            # 1. Require matched quotation marks with substantive quoted speech (at least 8 chars)
+            # Matches "..." or “...”
+            paired_quote = bool(re.search(r'["“][^"”]{8,}[”"]', content))
+
+            # 2. Attribution verb with direct speech or attributed entity:
+            # e.g., 'said "..."', 'stated that "..."', '"..." said Governor Das', 'told reporters that'
+            direct_attribution = bool(re.search(
+                r'(?:'
+                r'["“][^"”]{6,}[”"]\s*(?:,\s*)?(?:said|stated|told|remarked|commented)\b|'
+                r'\b(?:said|stated|told|remarked|commented)\s*(?:that\s+)?["“][^"”]{6,}[”"]|'
+                r'\b(?:told\s+reporters|stated\s+in\s+a\s+statement|commented\s+that)\b|'
+                r'\b(?:said|stated|remarked)\s+(?:that\s+)?(?:the\s+governor|the\s+ceo|analysts|officials|spokesperson)\b'
+                r')',
+                content,
+                re.IGNORECASE,
+            ))
+
+            if paired_quote or direct_attribution:
                 has_quotes = True
 
         quote_score = 1.0 if has_quotes else 0.0
@@ -275,3 +343,147 @@ def select_primary_headline(
 ) -> Optional[Article]:
     """Helper function to pick the primary headline from a cluster using default weights."""
     return default_scorer.select_primary_headline(cluster, reference_time)
+
+
+# ---- Duplicate Cluster Detection & End-to-End Pipeline ---------------------------------------
+
+def norm_title(t: str) -> str:
+    """Normalize a headline by lowercasing, stripping publisher suffixes, and removing punctuation."""
+    t = (t or "").lower()
+    # Strip trailing publisher tag: " - Reuters", " | Livemint", " — Bloomberg"
+    m = re.search(r"\s[-|–—]\s([^-|–—]{2,35})$", t)
+    if m:
+        t = t[:m.start()]
+    return " ".join(re.sub(r"[^a-z0-9% ]+", " ", t).split())
+
+
+_STOP_WORDS = frozenset({
+    "a", "an", "the", "and", "or", "in", "on", "at", "to", "for", "of", "with",
+    "by", "from", "as", "is", "are", "was", "were", "be", "been", "has", "have",
+    "had", "it", "its", "that", "this", "after", "over"
+})
+
+
+def title_similarity(t1: str, t2: str) -> float:
+    """
+    Computes a hybrid similarity metric in [0.0, 1.0] between two article titles
+    combining character-sequence alignment (difflib) and keyword set overlap (Jaccard).
+    """
+    n1 = norm_title(t1)
+    n2 = norm_title(t2)
+    if not n1 or not n2:
+        return 0.0
+    if n1 == n2:
+        return 1.0
+
+    seq_ratio = difflib.SequenceMatcher(None, n1, n2).ratio()
+
+    w1 = {w for w in n1.split() if w not in _STOP_WORDS}
+    w2 = {w for w in n2.split() if w not in _STOP_WORDS}
+    if not w1 or not w2:
+        return round(seq_ratio, 4)
+
+    intersection = len(w1 & w2)
+    union = len(w1 | w2)
+    jaccard = intersection / union if union > 0 else 0.0
+    min_coverage = intersection / min(len(w1), len(w2))
+
+    combined = max(seq_ratio, 0.3 * seq_ratio + 0.7 * jaccard)
+    if (min_coverage >= 0.60 and intersection >= 3) or (min_coverage >= 0.50 and intersection >= 4):
+        combined = max(combined, 0.70)
+
+    return round(combined, 4)
+
+
+def cluster_articles(
+    articles: Sequence[Union[Article, Dict[str, Any]]],
+    similarity_threshold: float = 0.60,
+) -> List[List[Article]]:
+    """
+    Groups a collection of articles into duplicate/event clusters based on title similarity.
+    Each cluster is a list of Article objects reporting on the same event/story.
+    """
+    art_list: List[Article] = []
+    for i, a in enumerate(articles):
+        if isinstance(a, Article):
+            art_list.append(a)
+        elif isinstance(a, dict):
+            art_list.append(Article.from_dict(a, default_id=f"art_{i}"))
+
+    clusters: List[List[Article]] = []
+
+    for art in art_list:
+        matched_cluster = None
+        best_sim = 0.0
+        for cluster in clusters:
+            sim = max(title_similarity(art.title, c_art.title) for c_art in cluster)
+            if sim >= similarity_threshold and sim > best_sim:
+                best_sim = sim
+                matched_cluster = cluster
+
+        if matched_cluster is not None:
+            matched_cluster.append(art)
+        else:
+            clusters.append([art])
+
+    return clusters
+
+
+def deduplicate_and_rank_headlines(
+    items: Sequence[Union[Article, Dict[str, Any]]],
+    similarity_threshold: float = 0.60,
+    reference_time: Optional[datetime] = None,
+    scorer: Optional[ArticlePriorityScorer] = None,
+) -> List[Dict[str, Any]]:
+    """
+    Full duplicate cluster detection and headline ranking pipeline:
+    1. Clusters duplicate stories across feeds.
+    2. Within each cluster, evaluates Priority Scores (trust + speed + quality) to select
+       the best primary headline publisher.
+    3. Sorts all unique story clusters by their primary article's priority score.
+    4. Returns rich headline dictionaries including cluster size, alternate sources, and factor breakdowns.
+    """
+    if not items:
+        return []
+
+    ref_time = reference_time or datetime.now(timezone.utc)
+    sc = scorer or default_scorer
+    clusters = cluster_articles(items, similarity_threshold=similarity_threshold)
+
+    results: List[Dict[str, Any]] = []
+    for cluster in clusters:
+        ranked = sc.rank_cluster(cluster, reference_time=ref_time)
+        primary_info = ranked[0]
+        primary_art: Article = primary_info["article"]
+
+        all_sources = []
+        for c in cluster:
+            if c.source_name and c.source_name not in all_sources:
+                all_sources.append(c.source_name)
+
+        duplicates = [
+            {
+                "id": r["article"].id,
+                "source": r["article"].source_name,
+                "title": r["article"].title,
+                "link": r["article"].link,
+                "priority_score": r["priority_score"],
+            }
+            for r in ranked[1:]
+        ]
+
+        d = primary_art.to_dict()
+        d.update({
+            "priority_score": primary_info["priority_score"],
+            "trust_score": primary_info["trust_score"],
+            "speed_score": primary_info["speed_score"],
+            "quality_score": primary_info["quality_score"],
+            "cluster_size": len(cluster),
+            "sources": all_sources,
+            "duplicates": duplicates,
+            "duplicates_count": len(duplicates),
+        })
+        results.append(d)
+
+    results.sort(key=lambda x: x["priority_score"], reverse=True)
+    return results
