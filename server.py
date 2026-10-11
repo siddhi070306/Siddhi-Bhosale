@@ -134,7 +134,11 @@ def events(limit: int = Query(8, ge=1, le=30), deduplicate: bool = Query(True)):
             "cluster_size": h.get("cluster_size", 1),
             "sources": h.get("sources", [h["source"]]),
             "priority_score": h.get("priority_score"),
+            "trust_score": h.get("trust_score"),
+            "speed_score": h.get("speed_score"),
+            "quality_score": h.get("quality_score"),
             "duplicates_count": h.get("duplicates_count", 0),
+            "duplicates": h.get("duplicates", []),
         })
     return out
 

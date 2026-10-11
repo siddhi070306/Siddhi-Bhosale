@@ -249,17 +249,24 @@ export default function MarketIntelligence({
                   <span className="event-title">{ev.title}</span>
                 </div>
                 <div className="event-item-right">
+                  {ev.priority_score != null && (
+                    <span
+                      className="badge"
+                      style={{
+                        backgroundColor: '#e4e4e7',
+                        color: '#18181b',
+                        border: '1px solid #d4d4d8',
+                        fontWeight: 600,
+                      }}
+                      title={`Priority Score: ${(ev.priority_score * 100).toFixed(0)}`}
+                    >
+                      P:{(ev.priority_score * 100).toFixed(0)}
+                    </span>
+                  )}
                   {ev.cluster_size > 1 && (
                     <span
                       className="badge badge-subtle"
                       title={`Clustered ${ev.cluster_size} sources: ${(ev.sources || []).join(', ')}`}
-                      style={{
-                        marginRight: 6,
-                        fontWeight: 600,
-                        color: '#1d4ed8',
-                        backgroundColor: '#eff6ff',
-                        borderColor: '#bfdbfe',
-                      }}
                     >
                       {ev.cluster_size} sources
                     </span>
