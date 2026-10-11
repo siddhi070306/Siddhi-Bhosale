@@ -14,49 +14,165 @@ function evalCubicBezier(p1, cx1, cy1, cx2, cy2, p2, t) {
   };
 }
 
-// Extract primary start-to-end causal chain sequence for animated shock cascade
-function extractCausalPath(nodes, edges) {
-  if (!nodes || nodes.length === 0) return { pathNodes: [], pathEdges: [] };
+// Extract primary start-to-end causal pipeline sequence for animated shock cascade
+function extractCausalPipeline(nodes, edges, pathways = [], selectedNode = null, selectedEdge = null, centerNode = null) {
+  if (!nodes || nodes.length === 0) return { pathNodes: [], pathEdges: [], pipelineTitle: '' };
 
-  // 1. Trace edges marked isActive: true (the primary causal pathway)
-  const activeEdges = (edges || []).filter((e) => e.isActive);
-  if (activeEdges.length > 0) {
-    const targetSet = new Set(activeEdges.map((e) => e.to));
-    let startNodeId = activeEdges.find((e) => !targetSet.has(e.from))?.from;
-    if (!startNodeId) {
-      const anchor = nodes.find((n) => n.isAnchor);
-      startNodeId = anchor ? anchor.id : activeEdges[0].from;
+  const nodeMap = new Map(nodes.map((n) => [n.id, n]));
+  const edgeList = edges || [];
+
+  const findEdge = (fromId, toId) => {
+    return edgeList.find((e) => e.from === fromId && e.to === toId) ||
+           edgeList.find((e) => (e.from === fromId && e.to === toId) || (e.to === fromId && e.from === toId));
+  };
+
+  // 1. Identify Root / Origin Node (Column 0 or Anchor node)
+  const anchorNode = nodes.find((n) => n.isAnchor) ||
+                     (centerNode?.id && nodeMap.get(centerNode.id)) ||
+                     nodes.find((n) => n.col === 0) ||
+                     nodes.find((n) => n.col === 1 && (n.type === 'commodity' || n.type === 'event_class')) ||
+                     nodes[0];
+  const rootId = anchorNode?.id;
+
+  // 2. Check if curated pathways are provided in data.pathways
+  if (Array.isArray(pathways) && pathways.length > 0) {
+    let chosenPathway = pathways[0];
+    if (selectedNode) {
+      const match = pathways.find((p) => {
+        if (p.endId === selectedNode.id || p.end === selectedNode.id) return true;
+        if (Array.isArray(p.nodes) && p.nodes.includes(selectedNode.id)) return true;
+        if (Array.isArray(p.steps) && p.steps.some((s) => s.from === selectedNode.id || s.to === selectedNode.id)) return true;
+        return false;
+      });
+      if (match) chosenPathway = match;
     }
 
-    const pathNodes = [startNodeId];
-    const pathEdges = [];
-    let currentId = startNodeId;
-
-    while (true) {
-      const nextEdge = activeEdges.find((e) => e.from === currentId);
-      if (!nextEdge || pathNodes.includes(nextEdge.to)) break;
-      pathEdges.push(nextEdge);
-      pathNodes.push(nextEdge.to);
-      currentId = nextEdge.to;
+    let candidateNodes = [];
+    if (Array.isArray(chosenPathway.nodes) && chosenPathway.nodes.length >= 2) {
+      candidateNodes = chosenPathway.nodes;
+    } else if (Array.isArray(chosenPathway.steps) && chosenPathway.steps.length > 0) {
+      candidateNodes = [chosenPathway.steps[0].from, ...chosenPathway.steps.map((s) => s.to)];
     }
 
-    if (pathNodes.length >= 2) {
-      return { pathNodes, pathEdges };
+    const validNodes = candidateNodes.filter((id) => nodeMap.has(id));
+    if (validNodes.length >= 2) {
+      const pathEdges = [];
+      for (let i = 0; i < validNodes.length - 1; i++) {
+        const e = findEdge(validNodes[i], validNodes[i + 1]);
+        if (e) pathEdges.push(e);
+      }
+      if (pathEdges.length === validNodes.length - 1) {
+        return {
+          pathNodes: validNodes,
+          pathEdges,
+          pipelineTitle: chosenPathway.path || 'Curated Causal Pipeline',
+        };
+      }
     }
   }
 
-  // 2. Fallback: Column-wise progression from the anchor/source node
-  const anchor = nodes.find((n) => n.isAnchor) || nodes.find((n) => n.col === 0) || nodes[0];
-  const pathNodes = [anchor.id];
-  const pathEdges = [];
-  let currentId = anchor.id;
+  // 3. Determine target terminal node for start-to-end pipeline
+  let targetId = null;
+  if (selectedNode && selectedNode.id !== rootId) {
+    // If selectedNode is in Col 3 (sector), check if it extends into Col 4 (company/asset)
+    const outToCol4 = edgeList
+      .filter((e) => e.from === selectedNode.id)
+      .map((e) => nodeMap.get(e.to))
+      .filter((n) => n && n.col === 4);
+    if (outToCol4.length > 0 && (selectedNode.col == null || selectedNode.col < 4)) {
+      targetId = outToCol4[0].id;
+    } else {
+      targetId = selectedNode.id;
+    }
+  }
 
-  for (let c = (anchor.col || 0) + 1; c <= 4; c++) {
-    const candidates = (edges || []).filter((e) => e.from === currentId);
-    let chosenEdge = candidates.find((e) => {
-      const target = nodes.find((n) => n.id === e.to);
-      return target && target.col === c;
+  // Check active edges (e.g. Autos -> Tata Motors)
+  if (!targetId) {
+    const active = edgeList.filter((e) => e.isActive);
+    if (active.length > 0) {
+      targetId = active[active.length - 1].to;
+    }
+  }
+
+  // Fallback to downstream terminal node in highest column (Col 4 company/asset)
+  if (!targetId) {
+    const col4Nodes = nodes.filter((n) => n.col === 4);
+    if (col4Nodes.length > 0) {
+      col4Nodes.sort((a, b) => (b.confidence || 0) - (a.confidence || 0));
+      targetId = col4Nodes[0].id;
+    } else {
+      const col3Nodes = nodes.filter((n) => n.col === 3);
+      if (col3Nodes.length > 0) targetId = col3Nodes[0].id;
+    }
+  }
+
+  // 4. Backward Trace from Target back to Root
+  if (targetId && targetId !== rootId) {
+    const incoming = new Map();
+    edgeList.forEach((e) => {
+      if (!incoming.has(e.to)) incoming.set(e.to, []);
+      incoming.get(e.to).push(e);
     });
+
+    const queue = [{ curr: targetId, path: [targetId] }];
+    const visited = new Set();
+    let bestBackPath = null;
+
+    while (queue.length > 0) {
+      const { curr, path } = queue.shift();
+      if (curr === rootId) {
+        bestBackPath = path;
+        break;
+      }
+      visited.add(curr);
+
+      const inEdges = incoming.get(curr) || [];
+      // Prioritize active edges, then higher strength
+      inEdges.sort((a, b) => {
+        if (a.isActive && !b.isActive) return -1;
+        if (!a.isActive && b.isActive) return 1;
+        return (b.strength || 0) - (a.strength || 0);
+      });
+
+      for (const e of inEdges) {
+        if (!visited.has(e.from) && !path.includes(e.from)) {
+          queue.push({ curr: e.from, path: [...path, e.from] });
+        }
+      }
+    }
+
+    if (bestBackPath && bestBackPath.length >= 2) {
+      const pathNodes = [...bestBackPath].reverse();
+      const pathEdges = [];
+      let valid = true;
+      for (let i = 0; i < pathNodes.length - 1; i++) {
+        const e = findEdge(pathNodes[i], pathNodes[i + 1]);
+        if (e) pathEdges.push(e);
+        else { valid = false; break; }
+      }
+      if (valid && pathEdges.length === pathNodes.length - 1) {
+        return { pathNodes, pathEdges, pipelineTitle: 'Multi-Hop Transmission Pipeline' };
+      }
+    }
+  }
+
+  // 5. Forward DAG Progression from Root to Terminal
+  const pathNodes = [rootId];
+  const pathEdges = [];
+  let currentId = rootId;
+
+  for (let c = (anchorNode?.col || 0) + 1; c <= 4; c++) {
+    const candidates = edgeList.filter((e) => e.from === currentId);
+    let chosenEdge = candidates.find((e) => {
+      const target = nodeMap.get(e.to);
+      return target && target.col === c && (e.isActive || (targetId && e.to === targetId));
+    });
+    if (!chosenEdge) {
+      chosenEdge = candidates.find((e) => {
+        const target = nodeMap.get(e.to);
+        return target && target.col === c;
+      });
+    }
     if (!chosenEdge && candidates.length > 0) {
       chosenEdge = candidates[0];
     }
@@ -69,7 +185,7 @@ function extractCausalPath(nodes, edges) {
     }
   }
 
-  return { pathNodes, pathEdges };
+  return { pathNodes, pathEdges, pipelineTitle: 'End-to-End Causal Pipeline' };
 }
 
 export default function InteractiveGraph({
@@ -104,29 +220,42 @@ export default function InteractiveGraph({
     setNodePositions(initialPos);
   }, [data]);
 
-  // Extract start-to-end causal chain sequence
+  // Extract guaranteed start-to-end causal pipeline sequence
   const causalPath = useMemo(() => {
-    return extractCausalPath(rawNodes, rawEdges);
-  }, [rawNodes, rawEdges]);
+    return extractCausalPipeline(
+      rawNodes,
+      rawEdges,
+      data?.pathways || [],
+      selectedNode,
+      selectedEdge,
+      data?.centerNode
+    );
+  }, [rawNodes, rawEdges, data?.pathways, selectedNode, selectedEdge, data?.centerNode]);
 
-  // Start-to-End simulation state & shockwave refs
+  // Start-to-End simulation state & shockwave progression refs
   const [isSimulating, setIsSimulating] = useState(true);
   const isSimulatingRef = useRef(true);
   const simStartTimeRef = useRef(performance.now());
   const simPhotonPartsRef = useRef({});
+  const [currentSimHop, setCurrentSimHop] = useState(0);
+  const currentSimHopRef = useRef(0);
 
-  // Automatically trigger start-to-end simulation whenever new graph/event loads
+  // Automatically trigger start-to-end simulation whenever new graph/event or pipeline loads
   useEffect(() => {
     if (causalPath.pathEdges.length > 0) {
       simStartTimeRef.current = performance.now();
       isSimulatingRef.current = true;
+      currentSimHopRef.current = 0;
+      setCurrentSimHop(0);
       setIsSimulating(true);
     }
-  }, [data, causalPath.pathEdges.length]);
+  }, [data, causalPath.pathNodes.join('-')]);
 
   const handleRestartSimulation = () => {
     simStartTimeRef.current = performance.now();
     isSimulatingRef.current = true;
+    currentSimHopRef.current = 0;
+    setCurrentSimHop(0);
     setIsSimulating(true);
   };
 
@@ -200,6 +329,7 @@ export default function InteractiveGraph({
   const activeNodeId = selectedNode?.id || data?.centerNode?.id || null;
 
   const isEdgeHighlighted = (edge) => {
+    if (causalPath.pathEdges.some((pe) => pe.from === edge.from && pe.to === edge.to)) return true;
     if (edge.isActive) return true;
     if (hoveredEdge === edge) return true;
     if (hoveredNode && (edge.from === hoveredNode || edge.to === hoveredNode)) return true;
@@ -208,6 +338,7 @@ export default function InteractiveGraph({
   };
 
   const isNodeHighlighted = (nodeId) => {
+    if (causalPath.pathNodes.includes(nodeId)) return true;
     if (nodeId === activeNodeId || rawNodes.find((n) => n.id === nodeId)?.isAnchor) return true;
     if (hoveredNode === nodeId) return true;
     if (hoveredNode) {
@@ -254,9 +385,10 @@ export default function InteractiveGraph({
       const isPos = edge.sign > 0;
       const isNeg = edge.sign < 0;
       const isEdgeSelected = selectedEdge && selectedEdge.from === edge.from && selectedEdge.to === edge.to;
+      const isPipelineEdge = causalPath.pathEdges.some((pe) => pe.from === edge.from && pe.to === edge.to);
 
       let pColor = isPos ? '#10b981' : isNeg ? '#f43f5e' : '#06b6d4';
-      if (isEdgeSelected || edge.isActive) {
+      if (isEdgeSelected || edge.isActive || isPipelineEdge) {
         pColor = '#2563eb';
       }
 
@@ -297,8 +429,8 @@ export default function InteractiveGraph({
         isSecondary: false,
       });
 
-      // Secondary particle for active / selected / highlighted pathways for rich stream density
-      if (isEdgeSelected || edge.isActive || isEdgeHighlighted(edge)) {
+      // Secondary particle for active / pipeline / selected / highlighted pathways for rich stream density
+      if (isEdgeSelected || edge.isActive || isPipelineEdge || isEdgeHighlighted(edge)) {
         list.push({
           id: `pt-${edge.from}-${edge.to}-1`,
           edge,
@@ -320,7 +452,7 @@ export default function InteractiveGraph({
       }
     });
     return list;
-  }, [rawEdges, rawNodes, nodePositions, selectedEdge, hoveredEdge, hoveredNode, activeNodeId]);
+  }, [rawEdges, rawNodes, nodePositions, selectedEdge, hoveredEdge, hoveredNode, activeNodeId, causalPath.pathEdges]);
 
   // High-performance 60 FPS requestAnimationFrame Particle & Destination Ripple Animation Engine
   useEffect(() => {
@@ -407,10 +539,10 @@ export default function InteractiveGraph({
         }
       }
 
-      // 1b. Animate Start-to-End Causal Cascade Simulation Shockwave
+      // 1b. Animate Start-to-End Causal Pipeline Simulation Shockwave
       if (isSimulatingRef.current && causalPath.pathEdges.length > 0) {
         const simElapsed = (now - simStartTimeRef.current) / 1000;
-        const hopDuration = 1.6;
+        const hopDuration = 1.45;
         const totalHops = causalPath.pathEdges.length;
         const totalSimTime = totalHops * hopDuration;
 
@@ -418,6 +550,11 @@ export default function InteractiveGraph({
           const hopIdx = Math.floor(simElapsed / hopDuration);
           const hopProgress = (simElapsed % hopDuration) / hopDuration;
           const currentEdge = causalPath.pathEdges[hopIdx];
+
+          if (hopIdx !== currentSimHopRef.current) {
+            currentSimHopRef.current = hopIdx;
+            setCurrentSimHop(hopIdx);
+          }
 
           if (currentEdge) {
             const p1 = getNodeCoord(currentEdge.from);
@@ -454,6 +591,8 @@ export default function InteractiveGraph({
         } else {
           isSimulatingRef.current = false;
           setIsSimulating(false);
+          currentSimHopRef.current = totalHops;
+          setCurrentSimHop(totalHops);
           const simDom = simPhotonPartsRef.current;
           if (simDom && simDom.group) {
             simDom.group.style.display = 'none';
@@ -539,7 +678,7 @@ export default function InteractiveGraph({
       onWheel={handleWheel}
       style={{ userSelect: 'none', position: 'relative', width: '100%', height: '100%', overflow: 'hidden' }}
     >
-      {/* Floating Start-to-End Causal Cascade Simulation HUD Bar */}
+      {/* Floating Start-to-End Causal Pipeline Simulation HUD Bar */}
       {causalPath.pathNodes.length >= 2 && (
         <div
           className="graph-sim-hud"
@@ -552,15 +691,16 @@ export default function InteractiveGraph({
             display: 'flex',
             alignItems: 'center',
             gap: 10,
-            background: 'rgba(255, 255, 255, 0.94)',
-            backdropFilter: 'blur(12px)',
-            WebkitBackdropFilter: 'blur(12px)',
-            border: isSimulating ? '1px solid #93c5fd' : '1px solid #e2e8f0',
-            boxShadow: isSimulating ? '0 4px 20px rgba(37, 99, 235, 0.16)' : '0 2px 10px rgba(0, 0, 0, 0.05)',
+            background: 'rgba(255, 255, 255, 0.96)',
+            backdropFilter: 'blur(14px)',
+            WebkitBackdropFilter: 'blur(14px)',
+            border: isSimulating ? '1.5px solid #60a5fa' : '1px solid #e2e8f0',
+            boxShadow: isSimulating ? '0 6px 24px rgba(37, 99, 235, 0.20)' : '0 2px 10px rgba(0, 0, 0, 0.05)',
             borderRadius: 30,
-            padding: '5px 14px 5px 8px',
+            padding: '5px 16px 5px 8px',
             transition: 'all 0.25s ease',
             pointerEvents: 'auto',
+            maxWidth: '92%',
           }}
         >
           <button
@@ -574,38 +714,85 @@ export default function InteractiveGraph({
               display: 'inline-flex',
               alignItems: 'center',
               gap: 6,
+              background: isSimulating ? '#1d4ed8' : '#09090b',
+              boxShadow: isSimulating ? '0 0 10px rgba(37, 99, 235, 0.4)' : 'none',
+              flexShrink: 0,
             }}
           >
             <Play size={12} fill="currentColor" />
-            <span>{isSimulating ? 'Restart' : 'Run Simulation'}</span>
+            <span>{isSimulating ? 'Restart' : 'Replay Pipeline'}</span>
           </button>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12 }}>
+
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 12, flexWrap: 'nowrap', overflow: 'hidden' }}>
             <span
               style={{
-                width: 8,
-                height: 8,
+                width: 9,
+                height: 9,
                 borderRadius: '50%',
                 backgroundColor: isSimulating ? '#2563eb' : '#10b981',
-                boxShadow: isSimulating ? '0 0 8px #2563eb' : '0 0 6px #10b981',
+                boxShadow: isSimulating ? '0 0 10px #2563eb' : '0 0 6px #10b981',
+                flexShrink: 0,
               }}
             />
-            <span style={{ fontWeight: 600, color: '#0f172a' }}>
-              {isSimulating ? (
-                <span>
-                  Simulating Shock Cascade:{' '}
+
+            <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
+              <span style={{ fontWeight: 700, color: '#0f172a', whiteSpace: 'nowrap' }}>
+                {isSimulating ? (
                   <span style={{ color: '#2563eb' }}>
-                    {causalPath.pathNodes.map((id) => rawNodes.find((n) => n.id === id)?.label || id).join(' → ')}
+                    Pipeline Step {Math.min(currentSimHop + 1, causalPath.pathEdges.length)}/{causalPath.pathEdges.length}:
                   </span>
-                </span>
-              ) : (
-                <span>
-                  Cascade Complete:{' '}
-                  <span style={{ color: '#64748b' }}>
-                    {causalPath.pathNodes.map((id) => rawNodes.find((n) => n.id === id)?.label || id).join(' → ')}
-                  </span>
-                </span>
-              )}
-            </span>
+                ) : (
+                  <span style={{ color: '#059669' }}>Pipeline Delivered:</span>
+                )}
+              </span>
+
+              {/* Start-to-End Pipeline Node Breadcrumbs */}
+              <div style={{ display: 'inline-flex', alignItems: 'center', gap: 4, flexWrap: 'nowrap' }}>
+                {causalPath.pathNodes.map((id, nIdx) => {
+                  const node = rawNodes.find((n) => n.id === id);
+                  const label = node?.label || id;
+                  const isCurrentActive = isSimulating && (nIdx === currentSimHop || nIdx === currentSimHop + 1);
+                  const isCompleted = isSimulating ? nIdx <= currentSimHop : true;
+
+                  return (
+                    <React.Fragment key={id}>
+                      {nIdx > 0 && (
+                        <span style={{
+                          color: isSimulating && nIdx - 1 === currentSimHop ? '#2563eb' : '#94a3b8',
+                          fontWeight: isSimulating && nIdx - 1 === currentSimHop ? 700 : 400,
+                          fontSize: 11,
+                        }}>
+                          →
+                        </span>
+                      )}
+                      <span
+                        style={{
+                          padding: '2px 7px',
+                          borderRadius: 6,
+                          fontSize: 11,
+                          fontWeight: isCurrentActive ? 700 : isCompleted ? 600 : 500,
+                          backgroundColor: isCurrentActive
+                            ? 'rgba(37, 99, 235, 0.12)'
+                            : isCompleted
+                            ? 'rgba(241, 245, 249, 0.8)'
+                            : 'transparent',
+                          color: isCurrentActive
+                            ? '#1d4ed8'
+                            : isCompleted
+                            ? '#0f172a'
+                            : '#94a3b8',
+                          border: isCurrentActive ? '1px solid #93c5fd' : '1px solid transparent',
+                          transition: 'all 0.2s ease',
+                          whiteSpace: 'nowrap',
+                        }}
+                      >
+                        {label}
+                      </span>
+                    </React.Fragment>
+                  );
+                })}
+              </div>
+            </div>
           </div>
         </div>
       )}
@@ -727,6 +914,14 @@ export default function InteractiveGraph({
             .edge-traveling-dash {
               animation: edgeFlowDash 1.6s linear infinite;
             }
+            @keyframes pipelineFluidFlow {
+              to {
+                stroke-dashoffset: -40;
+              }
+            }
+            .pipeline-fluid-pulse {
+              animation: pipelineFluidFlow 1.3s linear infinite;
+            }
             .graph-node {
               transition: opacity 0.25s cubic-bezier(0.16, 1, 0.3, 1);
             }
@@ -734,10 +929,10 @@ export default function InteractiveGraph({
               filter: drop-shadow(0 4px 14px rgba(99, 102, 241, 0.45)) !important;
             }
             @media (prefers-reduced-motion: reduce) {
-              .graph-edge-particle, .edge-traveling-dash {
+              .graph-edge-particle, .edge-traveling-dash, .pipeline-fluid-pulse {
                 display: none !important;
               }
-              .node-ambient-ring, .node-selected-ring, .node-anchor-ring, .node-neighbor-ring {
+              .node-ambient-ring, .node-selected-ring, .node-anchor-ring, .node-neighbor-ring, .node-pipeline-ring {
                 animation: none !important;
               }
             }
@@ -747,6 +942,54 @@ export default function InteractiveGraph({
         <g transform={`translate(${pan.x}, ${pan.y}) scale(${zoom})`}>
           {/* Subtle Grid Canvas */}
           <rect x="-2000" y="-2000" width="6000" height="6000" fill="url(#graph-grid)" />
+
+          {/* ===================== CAUSAL PIPELINE CONDUIT UNDERLAY ===================== */}
+          {causalPath.pathEdges.length > 0 && (
+            <g className="graph-pipeline-conduit-layer">
+              {causalPath.pathEdges.map((edge, pIdx) => {
+                const p1 = getNodeCoord(edge.from);
+                const p2 = getNodeCoord(edge.to);
+                const dx = Math.abs(p2.x - p1.x);
+                const cx1 = p1.x + Math.max(dx * 0.45, 25);
+                const cy1 = p1.y;
+                const cx2 = p2.x - Math.max(dx * 0.45, 25);
+                const cy2 = p2.y;
+                const pathData = `M ${p1.x} ${p1.y} C ${cx1} ${cy1}, ${cx2} ${cy2}, ${p2.x} ${p2.y}`;
+
+                const isCurrentHop = isSimulating && pIdx === currentSimHop;
+                const isPastHop = isSimulating ? pIdx < currentSimHop : true;
+
+                return (
+                  <g key={`pipeline-conduit-${edge.from}-${edge.to}-${pIdx}`}>
+                    {/* Glowing outer conduit tube */}
+                    <path
+                      d={pathData}
+                      fill="none"
+                      stroke={isCurrentHop ? '#2563eb' : isPastHop ? '#38bdf8' : '#93c5fd'}
+                      strokeWidth={isCurrentHop ? 9 : 6.5}
+                      strokeOpacity={isCurrentHop ? 0.45 : isPastHop ? 0.28 : 0.16}
+                      strokeLinecap="round"
+                      style={{
+                        pointerEvents: 'none',
+                        transition: 'all 0.3s ease',
+                      }}
+                    />
+                    {/* Directional fluid pulse along the pipeline tube */}
+                    <path
+                      d={pathData}
+                      fill="none"
+                      stroke={isCurrentHop ? '#60a5fa' : '#38bdf8'}
+                      strokeWidth={isCurrentHop ? 3.8 : 2.4}
+                      strokeOpacity={isCurrentHop ? 0.95 : 0.65}
+                      strokeDasharray={isCurrentHop ? '14 20' : '8 26'}
+                      className="pipeline-fluid-pulse"
+                      style={{ pointerEvents: 'none' }}
+                    />
+                  </g>
+                );
+              })}
+            </g>
+          )}
 
           {/* ===================== EDGES (BEZIER SPLINES) ===================== */}
           {/* Tier headers: the graph reads left to right through the four tiers of the hierarchy */}
@@ -782,6 +1025,8 @@ export default function InteractiveGraph({
               const isPositive = edge.sign > 0;
               const isNegative = edge.sign < 0;
               const isEdgeSelected = selectedEdge && selectedEdge.from === edge.from && selectedEdge.to === edge.to;
+              const isPipelineEdge = causalPath.pathEdges.some((pe) => pe.from === edge.from && pe.to === edge.to);
+              const pipelineHopIndex = causalPath.pathEdges.findIndex((pe) => pe.from === edge.from && pe.to === edge.to);
 
               let strokeColor = isPositive ? '#10b981' : '#f43f5e';
               let strokeWidth = 2.0;
@@ -802,6 +1047,16 @@ export default function InteractiveGraph({
                 markerEnd = 'url(#arrow-active)';
                 particleColor = '#2563eb';
                 particleRadius = 4.8;
+                haloRadius = 11.0;
+                particleOpacity = 1.0;
+              } else if (isPipelineEdge) {
+                const isCurrentHop = isSimulating && pipelineHopIndex === currentSimHop;
+                strokeColor = isCurrentHop ? '#2563eb' : (isSimulating && pipelineHopIndex < currentSimHop ? '#0284c7' : '#09090b');
+                strokeWidth = isCurrentHop ? 4.6 : 3.8;
+                opacity = 1.0;
+                markerEnd = 'url(#arrow-active)';
+                particleColor = '#2563eb';
+                particleRadius = 4.6;
                 haloRadius = 11.0;
                 particleOpacity = 1.0;
               } else if (edge.isActive) {
@@ -1054,6 +1309,12 @@ export default function InteractiveGraph({
               const colors = getNodeColor(node.type);
 
               const opacity = (hoveredNode || activeNodeId) && !isHighlighted ? 0.22 : 1.0;
+              const pipelineNodeIdx = causalPath.pathNodes.indexOf(node.id);
+              const isPipelineNode = pipelineNodeIdx !== -1;
+              const isPipelineStart = isPipelineNode && pipelineNodeIdx === 0;
+              const isPipelineEnd = isPipelineNode && pipelineNodeIdx === causalPath.pathNodes.length - 1;
+              const isPipelineCurrent = isSimulating && (pipelineNodeIdx === currentSimHop || pipelineNodeIdx === currentSimHop + 1);
+              const isPipelineCompleted = isSimulating ? pipelineNodeIdx <= currentSimHop : isPipelineNode;
 
               return (
                 <g
@@ -1103,6 +1364,50 @@ export default function InteractiveGraph({
                     strokeWidth="2.4"
                     style={{ opacity: 0, pointerEvents: 'none', transformOrigin: '0px 0px' }}
                   />
+
+                  {/* Luminous Pipeline Corridor Node Ring & Pulsing */}
+                  {isPipelineNode && (
+                    <circle
+                      className="node-pipeline-ring"
+                      r={isPipelineStart || isPipelineEnd ? 26 : 22}
+                      fill="none"
+                      stroke={isPipelineCurrent ? '#2563eb' : isPipelineCompleted ? '#0284c7' : '#38bdf8'}
+                      strokeWidth={isPipelineCurrent ? 3.0 : 1.8}
+                      strokeDasharray={isPipelineCurrent ? 'none' : '4 3'}
+                      opacity={isPipelineCurrent ? 1.0 : isPipelineCompleted ? 0.75 : 0.45}
+                      style={{
+                        pointerEvents: 'none',
+                        transformOrigin: '0px 0px',
+                        animation: isPipelineCurrent ? 'nodeAnchorPulse 1.5s ease-out infinite' : 'none',
+                      }}
+                    />
+                  )}
+
+                  {/* Pipeline Stage Badge Tag: START, STEP 1, STEP 2, END */}
+                  {isPipelineNode && (
+                    <g transform="translate(0, -23)" style={{ pointerEvents: 'none' }}>
+                      <rect
+                        x="-23"
+                        y="-12"
+                        width="46"
+                        height="14"
+                        rx="7"
+                        fill={isPipelineStart ? '#f59e0b' : isPipelineEnd ? '#2563eb' : '#0284c7'}
+                        opacity={isPipelineCurrent ? 1.0 : 0.88}
+                      />
+                      <text
+                        x="0"
+                        y="-2"
+                        textAnchor="middle"
+                        fill="#ffffff"
+                        fontSize="8.5"
+                        fontWeight="700"
+                        letterSpacing="0.04em"
+                      >
+                        {isPipelineStart ? 'START' : isPipelineEnd ? 'END' : `STEP ${pipelineNodeIdx}`}
+                      </text>
+                    </g>
+                  )}
                   {/* High-Visibility Ambient Breathing Glow Ring (All Nodes) */}
                   <circle
                     className="node-ambient-ring"

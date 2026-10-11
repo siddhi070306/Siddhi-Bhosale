@@ -288,6 +288,8 @@ export function toGraphView(res) {
       path: p.headline,
       score: fmt(p.score),
       impact: `${p.end_dir > 0 ? 'Positive' : 'Negative'} · ${p.hops} hop${p.hops === 1 ? '' : 's'} · ~${p.horizon_days}d`,
+      steps: p.steps || [],
+      nodes: p.nodes || (p.steps ? [p.steps[0]?.from, ...p.steps.map((s) => s.to)] : []),
     })),
   };
 }

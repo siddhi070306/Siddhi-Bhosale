@@ -263,7 +263,7 @@ class Analyzer:
                           "evidence": [ev["sentence"] for ev in e["evidence"][-2:]]})
             head.append(_fmt(kg.g.nodes[v]["label"], cur))
         return hierarchy.annotate_path(kg, {"id": pid, "source": src_label, "score": round(p["score"], 3), "horizon_days": p["lag"],
-                "nodes": p["nodes"], "end": p["nodes"][-1], "end_label": kg.g.nodes[p["nodes"][-1]]["label"], "end_dir": cur,
+                "nodes": p["nodes"], "edges": p["edges"], "end": p["nodes"][-1], "end_label": kg.g.nodes[p["nodes"][-1]]["label"], "end_dir": cur,
                 "headline": " → ".join(head), "steps": steps, "hops": len(p["edges"])})
 
     # ------------------------------------------------------------------------------------------
