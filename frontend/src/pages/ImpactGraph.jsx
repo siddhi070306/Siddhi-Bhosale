@@ -206,17 +206,103 @@ export default function ImpactGraph({ analysis, onNavigateToChat, onSelectEvent,
 
       {/* Main Graph Explorer Split Layout */}
       <div className="graph-explorer-container">
-        {/* Left: Interactive Canvas */}
-        <InteractiveGraph
-          data={currentGraphData}
-          selectedNode={selectedNode}
-          onSelectNode={(node) => {
-            setSelectedNode(node);
-            setActiveTab('details');
-          }}
-          selectedEdge={selectedEdge}
-          onSelectEdge={handleSelectEdge}
-        />
+        {/* Left: Interactive Canvas with On-Canvas Floating Sensitivity Drawer */}
+        <div style={{ position: 'relative', width: '100%', height: '100%', minWidth: 0 }}>
+          <InteractiveGraph
+            data={currentGraphData}
+            selectedNode={selectedNode}
+            onSelectNode={(node) => {
+              setSelectedNode(node);
+              setActiveTab('details');
+            }}
+            selectedEdge={selectedEdge}
+            onSelectEdge={handleSelectEdge}
+          />
+
+          {/* Floating On-Canvas Live Edge Sensitivity Drawer */}
+          {selectedEdge && (
+            <div
+              className="on-canvas-edge-drawer"
+              style={{
+                position: 'absolute',
+                bottom: 20,
+                left: '50%',
+                transform: 'translateX(-50%)',
+                background: 'rgba(255, 255, 255, 0.94)',
+                backdropFilter: 'blur(12px)',
+                WebkitBackdropFilter: 'blur(12px)',
+                border: '1px solid #bfdbfe',
+                borderRadius: 12,
+                boxShadow: '0 10px 30px rgba(0, 0, 0, 0.12)',
+                padding: '10px 16px',
+                zIndex: 35,
+                display: 'flex',
+                alignItems: 'center',
+                gap: 14,
+                maxWidth: '92%',
+                flexWrap: 'wrap',
+              }}
+            >
+              <div style={{ display: 'flex', alignItems: 'center', gap: 6, minWidth: 140 }}>
+                <Sliders size={15} color="#2563eb" />
+                <span style={{ fontSize: 12, fontWeight: 700, color: '#0f172a' }}>
+                  {selectedEdge.from?.replace(/_/g, ' ').toUpperCase()} → {selectedEdge.to?.replace(/_/g, ' ').toUpperCase()}
+                </span>
+              </div>
+
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8, minWidth: 200, flex: 1 }}>
+                <input
+                  type="range"
+                  min="-0.99"
+                  max="0.99"
+                  step="0.05"
+                  value={edgeWeight != null ? edgeWeight : 0}
+                  onChange={(e) => {
+                    setEdgeWeight(parseFloat(e.target.value));
+                    setEdgeSuccessMsg(null);
+                  }}
+                  style={{ flex: 1, accentColor: '#2563eb', cursor: 'pointer' }}
+                />
+                <span
+                  style={{
+                    fontFamily: 'monospace',
+                    fontSize: 12,
+                    fontWeight: 700,
+                    padding: '2px 7px',
+                    borderRadius: 4,
+                    background: edgeWeight >= 0 ? '#f0fdf4' : '#fef2f2',
+                    color: edgeWeight >= 0 ? '#166534' : '#991b1b',
+                    border: `1px solid ${edgeWeight >= 0 ? '#bbf7d0' : '#fecaca'}`,
+                    minWidth: 44,
+                    textAlign: 'center',
+                  }}
+                >
+                  {edgeWeight >= 0 ? `+${Number(edgeWeight).toFixed(2)}` : Number(edgeWeight).toFixed(2)}
+                </span>
+              </div>
+
+              <button
+                type="button"
+                className="btn btn-black btn-sm"
+                onClick={handleSaveEdge}
+                disabled={edgeUpdating}
+                style={{ fontSize: 11.5, display: 'flex', alignItems: 'center', gap: 5, padding: '5px 12px', whiteSpace: 'nowrap' }}
+              >
+                <RefreshCw size={12} className={edgeUpdating ? 'spin' : ''} />
+                <span>{edgeUpdating ? 'Rebalancing…' : 'Rebalance Graph'}</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setSelectedEdge(null)}
+                style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#94a3b8', padding: '2px 6px', fontSize: 14 }}
+                title="Close"
+              >
+                ✕
+              </button>
+            </div>
+          )}
+        </div>
 
         {/* Right Panel: Pathways & Details */}
         <aside className="graph-side-panel">
