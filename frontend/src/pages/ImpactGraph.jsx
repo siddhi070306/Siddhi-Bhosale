@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { Search, ShieldCheck, Sparkles, ArrowRight, Sliders, RefreshCw, Check, RotateCcw } from 'lucide-react';
 import InteractiveGraph from '../components/graph/InteractiveGraph';
 import CausalChainWalkthrough from '../components/common/CausalChainWalkthrough';
+import HierarchyPanel from '../components/graph/HierarchyPanel';
 import { useUi } from '../context/UiContext';
 import { api } from '../services/api';
 
@@ -426,6 +427,12 @@ export default function ImpactGraph({ analysis, onNavigateToChat, onSelectEvent,
                 }} />
               )}
             </button>
+            <button
+              className={`panel-tab ${activeTab === 'hierarchy' ? 'active' : ''}`}
+              onClick={() => setActiveTab('hierarchy')}
+            >
+              Hierarchy
+            </button>
           </div>
 
           {/* Panel Body */}
@@ -482,6 +489,17 @@ export default function ImpactGraph({ analysis, onNavigateToChat, onSelectEvent,
                   <strong>Propagation Engine:</strong> Multi-path graph scoring with depth attenuation and per-hop causal decay.
                 </div>
               </div>
+            ) : activeTab === 'hierarchy' ? (
+              <HierarchyPanel
+                hierarchy={analysis && analysis.raw ? analysis.raw.hierarchy : null}
+                onSelectNode={(id) => {
+                  const n = (graphData.nodes || []).find((x) => x.id === id);
+                  if (n) {
+                    setSelectedNode(n);
+                    setActiveTab('details');
+                  }
+                }}
+              />
             ) : activeTab === 'edge' ? (
               <div>
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 14 }}>
@@ -705,6 +723,17 @@ export default function ImpactGraph({ analysis, onNavigateToChat, onSelectEvent,
                     {selectedNode.change || '–'}
                   </span>
                 </div>
+
+                <div className="event-detail-row">
+                  <span className="detail-key">Tier</span>
+                  <span className="detail-val">{selectedNode.layerName ? `${selectedNode.layerLevel} · ${selectedNode.layerName}` : '–'}</span>
+                </div>
+                {selectedNode.parent && (
+                  <div className="event-detail-row">
+                    <span className="detail-key">Member of</span>
+                    <span className="detail-val">{selectedNode.parent.label}</span>
+                  </div>
+                )}
 
                 <div className="event-detail-row">
                   <span className="detail-key">Confidence</span>

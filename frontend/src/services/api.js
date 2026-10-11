@@ -228,6 +228,9 @@ export function toGraphView(res) {
         hasMixedSignals: !!n.mixed,
         observed: n.observed,
         provenance: provenanceOf(n),
+        layerName: n.layer_name || null,
+        layerLevel: typeof n.level === 'number' ? n.level : null,
+        parent: n.parent || null,
       });
     });
   });
@@ -259,6 +262,7 @@ export function toGraphView(res) {
       isActive: (l.paths || []).includes(0),
       provenance: l.provenance,
       verdict: l.verdict,
+      tierKind: l.kind_tier || null,
       type: l.inferred ? 'indirect' : 'direct',
       style: l.inferred || l.kind === 'context' || l.verdict === 'inconclusive' ? 'dashed' : 'solid',
     }));
@@ -329,6 +333,23 @@ export const api = {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ source, target, weight }),
     }),
+
+  // knowledge-graph assistant (read only) and the graph's change history
+  askAssistant: (question, history) =>
+    request('/api/assistant', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ question, history: history || [] }),
+    }),
+  getKbHistory: (limit = 50, offset = 0) => request(`/api/kb/history?limit=${limit}&offset=${offset}`),
+  getKbHistoryEntry: (seq) => request(`/api/kb/history/${seq}`),
+  restoreKbVersion: (version, reason) =>
+    request('/api/kb/restore', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ version, reason: reason || null }),
+    }),
+  exportKb: () => request('/api/kb/export'),
 
   // portfolio contagion & optimal hedge finder
   getPortfolioPresets: () => request('/api/portfolio/presets'),

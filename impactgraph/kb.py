@@ -249,6 +249,10 @@ def market_of(node_id):
     return "GLOBAL"
 EDGES = _E
 
+# The few curated links whose type of relation cannot be told from the endpoint types alone (see hierarchy.relation_for).
+# Sector indices track their sector; every other sector -> index link is the sector's weight inside a broad index.
+RELATION_OVERRIDES = {("banks", "nifty_bank"): "tracks", ("real_estate", "nifty_realty"): "tracks"}
+
 # Simulated-data factor loadings (oil, inflation, rates, risk) per node. Used ONLY when no live
 # or cached market data is reachable, and always labelled "simulated" in the UI.
 SIM_LOADINGS = {

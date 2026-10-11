@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { Database, Key, Server, RefreshCw, ShieldCheck } from 'lucide-react';
 import { api, prefs } from '../services/api';
 import { useUi } from '../context/UiContext';
+import KbHistory from '../components/graph/KbHistory';
 
 export default function Settings() {
   const { refreshStatus } = useUi(); // keeps the header pill in sync after KB changes
@@ -226,6 +227,15 @@ export default function Settings() {
                   </li>
                 ))}
               </ul>
+
+              <KbHistory
+                refreshKey={kb.version}
+                onChanged={() => {
+                  loadKb();
+                  api.getStatus().then(setStatus).catch(() => {});
+                  refreshStatus();
+                }}
+              />
             </>
           )}
         </div>

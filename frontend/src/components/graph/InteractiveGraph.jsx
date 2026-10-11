@@ -749,6 +749,22 @@ export default function InteractiveGraph({
           <rect x="-2000" y="-2000" width="6000" height="6000" fill="url(#graph-grid)" />
 
           {/* ===================== EDGES (BEZIER SPLINES) ===================== */}
+          {/* Tier headers: the graph reads left to right through the four tiers of the hierarchy */}
+          <g className="graph-tier-headers" style={{ pointerEvents: 'none' }}>
+            {[
+              [0, 150, 'Tier 0', 'EVENTS & POLICY'],
+              [1, 340, 'Tier 1', 'COMMODITIES'],
+              [2, 510, 'Tier 1', 'INDICATORS'],
+              [3, 680, 'Tier 2', 'SECTORS'],
+              [4, 850, 'Tier 3', 'ASSETS'],
+            ].filter(([c]) => rawNodes.some((n) => n.col === c)).map(([c, x, tier, name]) => (
+              <g key={`tier-${c}`}>
+                <text x={x} y={30} textAnchor="middle" fontSize="9.5" fill="#a1a1aa" letterSpacing="0.6px">{tier}</text>
+                <text x={x} y={45} textAnchor="middle" fontSize="10.5" fontWeight="700" fill="#52525b" letterSpacing="0.4px">{name}</text>
+              </g>
+            ))}
+          </g>
+
           <g className="graph-edges-layer">
             {rawEdges.map((edge, idx) => {
               const p1 = getNodeCoord(edge.from);

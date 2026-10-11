@@ -4,7 +4,7 @@ import os
 from concurrent.futures import ThreadPoolExecutor
 
 from . import extract as ex
-from . import kb, llm, propagate as pg, quotes, timeseries as ts, feeds
+from . import hierarchy, kb, llm, propagate as pg, quotes, timeseries as ts, feeds
 from . import context as ctxmod
 from . import enrich
 from .graph import KnowledgeGraph
@@ -94,7 +94,7 @@ class Analyzer:
         kb.NODES[nid] = spec
         KBGuard._nodes_changed()
         changes = self.kg.add_asset(spec, sector)
-        report = self.guard.finish(before, "added asset %s (%s)" % (label, t))
+        report = self.guard.finish(before, "added asset %s (%s)" % (label, t), actor="user", action="add_asset")
         if report["rolled_back"]:
             return {"error": "The knowledge-base guard rolled this addition back: " +
                     "; ".join(c["name"] for c in report["failed"]), "guard": report}
@@ -112,11 +112,21 @@ class Analyzer:
         del kb.NODES[node_id]
         KBGuard._nodes_changed()
         self.kg.remove_node(node_id)
-        report = self.guard.finish(before, "removed asset %s" % label)
+        report = self.guard.finish(before, "removed asset %s" % label, actor="user", action="remove_asset")
         return {"ok": not report["rolled_back"], "guard": report}
 
-    def update_edge(self, source, target, weight=None, strength=None, sign=None):
-        """Update transmission weight/strength of an edge in the graph."""
+    # -- editing. Every edit is one guarded, recorded change (see kbstate.py and changelog.py).
+    def _guarded_edit(self, mutate, label, action, reason):
+        before = self.guard.begin()
+        mutate()
+        report = self.guard.finish(before, label, actor="user", action=action, reason=reason, user_edit=True)
+        if report["rolled_back"]:
+            return {"error": "The knowledge-base guard rolled this change back: " + "; ".join(
+                c["name"] + " (" + c["detail"] + ")" for c in report["failed"]), "guard": report}
+        return {"ok": True, "guard": report, "version": report["version"]}
+
+    def update_edge(self, source, target, weight=None, strength=None, sign=None, reason=None):
+        """Change the weight (sign and strength) of an existing link."""
         if not self.kg.g.has_edge(source, target):
             return {"error": "Edge (%s -> %s) does not exist in graph." % (source, target)}
         if weight is not None:
@@ -125,19 +135,77 @@ class Analyzer:
             strength = abs(w)
         if strength is not None:
             strength = max(0.01, min(0.99, float(strength)))
-        res = self.kg.update_edge_weight(source, target, strength=strength, sign=sign)
-        self.guard.version += 1
-        self.guard.save()
-        self.guard._note("edit-edge", "%s -> %s weight adjusted to %.2f" % (source, target, res["effective_weight"]))
-        return {
-            "ok": True,
-            "source": source,
-            "target": target,
-            "strength": res["strength"],
-            "sign": res["sign"],
-            "effective_weight": res["effective_weight"],
-            "before_strength": res["before_strength"],
-        }
+        out = {}
+
+        def mutate():
+            out.update(self.kg.update_edge_weight(source, target, strength=strength, sign=sign))
+
+        res = self._guarded_edit(mutate, "edited link %s -> %s to %+.2f" % (
+            self.kg.g.nodes[source]["label"], self.kg.g.nodes[target]["label"],
+            (sign if sign is not None else self.kg.g[source][target]["sign"]) * (strength if strength is not None else self.kg.g[source][target]["strength"])),
+            "edit_link", reason)
+        if res.get("error"):
+            return res
+        return dict(res, source=source, target=target, strength=out["strength"], sign=out["sign"],
+                    effective_weight=out["effective_weight"], before_strength=out["before_strength"])
+
+    def add_link(self, source, target, sign, strength=0.5, lag=1, mechanism="", relation=None, reason=None):
+        """Add a link the user is asserting between two nodes already in the graph."""
+        chk = hierarchy.check_link(self.kg, source, target, relation)
+        if not chk["ok"]:
+            return {"error": "; ".join(chk["errors"]), "errors": chk["errors"], "warnings": chk["warnings"]}
+        if sign not in (-1, 1):
+            return {"error": "sign must be 1 or -1"}
+        mechanism = (mechanism or "").strip()
+        if len(mechanism) < 10:
+            return {"error": "give the mechanism in a sentence (at least 10 characters): why does the source move the target?"}
+        strength = max(0.05, min(0.95, float(strength)))
+        g = self.kg.g
+
+        def mutate():
+            g.add_edge(source, target, sign=int(sign), strength=strength, base_strength=strength, lag=max(0, int(lag)),
+                       mechanism="User-added: " + mechanism, provenance=["user_added"], evidence=[], validation=None,
+                       inferred=True, relation=chk["relation"])
+
+        res = self._guarded_edit(mutate, "added link %s -> %s" % (g.nodes[source]["label"], g.nodes[target]["label"]),
+                                 "add_link", reason)
+        return dict(res, warnings=chk["warnings"], relation=chk["relation"]) if not res.get("error") else res
+
+    def remove_link(self, source, target, reason=None):
+        """Remove a link the user added. Curated and article-learned links cannot be removed this way."""
+        g = self.kg.g
+        if not g.has_edge(source, target):
+            return {"error": "Edge (%s -> %s) does not exist in graph." % (source, target)}
+        if "user_added" not in g[source][target].get("provenance", []):
+            return {"error": "only links you added can be removed; edit the weight of a curated link instead"}
+        label = "removed link %s -> %s" % (g.nodes[source]["label"], g.nodes[target]["label"])
+        return self._guarded_edit(lambda: g.remove_edge(source, target), label, "remove_link", reason)
+
+    def move_asset(self, asset_id, new_sector, reason=None):
+        """Move an asset the user added (or the system learned) from its sector to another one."""
+        g = self.kg.g
+        if asset_id not in g or new_sector not in g:
+            return {"error": "unknown asset or sector"}
+        if g.nodes[asset_id].get("tier") != "asset" or g.nodes[new_sector].get("tier") != "sector":
+            return {"error": "an asset can only be moved into a sector"}
+        if g.nodes[asset_id].get("origin") == "curated":
+            return {"error": "curated memberships are part of the baseline and cannot be moved; add a link instead"}
+        old = hierarchy.parent_sector(self.kg, asset_id)
+        if old and old["id"] == new_sector:
+            return {"error": "the asset is already in that sector"}
+        typ = g.nodes[asset_id]["type"]
+
+        def mutate():
+            if old:
+                g.remove_edge(old["id"], asset_id)
+            g.add_edge(new_sector, asset_id, sign=1, strength=0.5, base_strength=0.5, lag=0,
+                       mechanism="User-added: %s assigned to %s (unverified until checked against data)" % (
+                           g.nodes[asset_id]["label"], g.nodes[new_sector]["label"]),
+                       provenance=["user_added", "inferred"], evidence=[], validation=None, inferred=True,
+                       relation="member_of" if typ == "company" else "tracks")
+
+        return self._guarded_edit(mutate, "moved %s to %s" % (g.nodes[asset_id]["label"], g.nodes[new_sector]["label"]),
+                                  "move_asset", reason)
 
     # ------------------------------------------------------------------------------------------
     def _build_sources(self, events):
@@ -180,21 +248,23 @@ class Analyzer:
         src_dir = p["sign"] * prod  # the path sign already includes the source direction
         cur = src_dir
         head = [_fmt(kg.g.nodes[p["nodes"][0]]["label"], cur)]
-        for (u, v) in p["edges"]:
+        decays = p.get("edge_decays") or []
+        for i, (u, v) in enumerate(p["edges"]):
             e = kg.g[u][v]
             val = e.get("validation") or {}
             eff_lag = kg.eff_lag(u, v)
             cur *= e["sign"]
-            steps.append({"from": u, "to": v, "from_label": kg.g.nodes[u]["label"], "to_label": kg.g.nodes[v]["label"],
+            steps.append({"decay": decays[i] if i < len(decays) else (1.0 if i == 0 else pg.DECAY_DEFAULT),
+                          "from": u, "to": v, "from_label": kg.g.nodes[u]["label"], "to_label": kg.g.nodes[v]["label"],
                           "to_dir": cur, "sign": e["sign"], "strength": round(e["strength"], 3),
                           "effective": round(kg.eff_strength(u, v), 3), "lag": eff_lag, "base_lag": e["lag"],
                           "vol_regime": val.get("vol_regime", "normal"), "mechanism": e["mechanism"],
                           "provenance": e["provenance"], "validation": e.get("validation"),
                           "evidence": [ev["sentence"] for ev in e["evidence"][-2:]]})
             head.append(_fmt(kg.g.nodes[v]["label"], cur))
-        return {"id": pid, "source": src_label, "score": round(p["score"], 3), "horizon_days": p["lag"],
-                "end": p["nodes"][-1], "end_label": kg.g.nodes[p["nodes"][-1]]["label"], "end_dir": cur,
-                "headline": " → ".join(head), "steps": steps, "hops": len(p["edges"])}
+        return hierarchy.annotate_path(kg, {"id": pid, "source": src_label, "score": round(p["score"], 3), "horizon_days": p["lag"],
+                "nodes": p["nodes"], "end": p["nodes"][-1], "end_label": kg.g.nodes[p["nodes"][-1]]["label"], "end_dir": cur,
+                "headline": " → ".join(head), "steps": steps, "hops": len(p["edges"])})
 
     # ------------------------------------------------------------------------------------------
     def analyze(self, text, live=False, use_llm=False, link=None, full_text=False, title=None):
@@ -246,7 +316,8 @@ class Analyzer:
             before = self.guard.begin()
             changes = self.kg.ingest(art_id, text, extraction)
             changes += self.kg.add_llm_links(art_id, llm_links)
-            guard_report = dict(self.guard.finish(before, "article " + art_id), pruned=[])
+            guard_report = dict(self.guard.finish(before, "article " + art_id, actor="system", action="ingest",
+                                                  article_id=art_id), pruned=[])
             if guard_report["rolled_back"]:
                 changes = []
         else:
@@ -258,6 +329,7 @@ class Analyzer:
             "unlinked": extraction["unlinked"], "graph_changes": changes, "graph_stats": self.kg.stats(),
             "llm_note": llm_note, "text": text}
         result["kb_guard"] = dict(guard_report, mode=self.guard.mode)
+        result["kb_version"] = {"version": self.guard.version, "epoch": self.guard.epoch}   # the graph this analysis ran on
         result["input"] = dict(input_info, chars=len(text))
         hypothesis = None
         if not sources and (use_llm or llm_required()) and llm.available():
@@ -368,6 +440,8 @@ class Analyzer:
             graph["nodes"] += ctx["nodes"]
             graph["links"] += ctx["links"]
             result["context"] = {k: ctx[k] for k in ("drivers", "peers", "reason")}
+        hierarchy.annotate_nodes(self.kg, graph["nodes"])
+        hierarchy.annotate_links(self.kg, graph["links"])
         sparks = {}
         for s in sources:
             sp = ts.sparkline(s["trigger"], live)
@@ -376,6 +450,10 @@ class Analyzer:
         result.update({"sources": [{k: v for k, v in s.items() if k != "event"} for s in sources],
                        "paths": explained, "assets": assets, "sectors": sectors, "variables": variables,
                        "comparison": comparison, "graph": graph, "sparks": sparks,
+                       "hierarchy": hierarchy.rollup(self.kg, assets, sectors, variables,
+                                                     [{"trigger": s["trigger"], "label": s["event"]["label"],
+                                                       "direction": s["event"]["direction"], "status": s["event"]["status"]}
+                                                      for s in sources]),
                        "data_modes": sorted({(ts.get_returns(n, live) or (0, 0, {"mode": "none"}))[2]["mode"] for n in nodes}),
                        "macro": ts.macro_snapshot(live) if live else [],
                        "caveats": self._caveats(live, nodes)})
@@ -502,6 +580,11 @@ class Analyzer:
                 "sectors": [r for r in rows if r["type"] == "sector"],
                 "variables": [r for r in rows if r["type"] in ("indicator", "commodity")],
                 "paths": top, "evidence": evidence,
+                "hierarchy": hierarchy.rollup(self.kg, [r for r in rows if r["type"] in ASSET_TYPES],
+                                              [r for r in rows if r["type"] == "sector"],
+                                              [r for r in rows if r["type"] in ("indicator", "commodity")],
+                                              [{"trigger": s["trigger"], "label": s["label"], "direction": s["direction"],
+                                                "status": "hypothetical"} for s in sources]),
                 "caveats": ["Hypothetical scenario: nothing here was reported in an article.",
                             "Path plausibility depends on the chain of links, not on shock size; shock size changes "
                             "sensitivity and ranking only, and the mapping from size to sensitivity is a heuristic.",

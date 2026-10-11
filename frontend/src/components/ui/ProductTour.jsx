@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useLayoutEffect, useRef } from 'react';
 
 const TOUR_STEPS = [
   { tab: 'chat', el: '.chat-input-box', fallback: '.chat-input-container', title: "1. The News Input", desc: "Paste any financial news article here, or select a sample event. You can also fetch live headlines to start analyzing." },
@@ -11,6 +11,8 @@ const TOUR_STEPS = [
 export default function ProductTour({ isActive, onComplete, setActiveTab, setHasAnalyzed }) {
   const [step, setStep] = useState(0);
   const [rect, setRect] = useState(null);
+  const popRef = useRef(null);
+  const [popH, setPopH] = useState(240);   // the popover's real height, so it can be kept fully on screen
 
   // Reset step to 0 whenever tour is opened
   useEffect(() => {
@@ -51,6 +53,13 @@ export default function ProductTour({ isActive, onComplete, setActiveTab, setHas
     };
   }, [isActive, step, setActiveTab, setHasAnalyzed]);
 
+  useLayoutEffect(() => {
+    if (popRef.current) {
+      const h = popRef.current.offsetHeight;
+      if (h && Math.abs(h - popH) > 1) setPopH(h);
+    }
+  });
+
   if (!isActive || !rect) return null;
 
   const currentStep = TOUR_STEPS[step];
@@ -60,7 +69,7 @@ export default function ProductTour({ isActive, onComplete, setActiveTab, setHas
   if (pLeft + 320 > window.innerWidth) pLeft = rect.left - 345;
   if (pLeft < 0) { pLeft = rect.left + 25; pTop = rect.bottom + 25; }
   if (pTop < 15) pTop = 15;
-  if (pTop + 200 > window.innerHeight) pTop = window.innerHeight - 200;
+  if (pTop + popH + 15 > window.innerHeight) pTop = Math.max(15, window.innerHeight - popH - 15);   // never push the buttons off screen
 
   return (
     <>
@@ -73,7 +82,7 @@ export default function ProductTour({ isActive, onComplete, setActiveTab, setHas
         width: rect.width + 16, height: rect.height + 16
       }} />
 
-      <div style={{
+      <div ref={popRef} style={{
         position: 'fixed', zIndex: 10000,
         background: '#ffffff', border: '1px solid #09090b', borderRadius: 12,
         padding: 20, width: 340, color: '#09090b',

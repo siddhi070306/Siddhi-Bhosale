@@ -1,15 +1,24 @@
 import os
 from typing import Optional, List, Dict, Any
 
-from fastapi import FastAPI, HTTPException, Query
+from fastapi import Body, FastAPI, HTTPException, Query
 from fastapi.responses import FileResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
-from impactgraph import feeds, llm, market, quotes, hedge
+from impactgraph import assistant, feeds, hedge, hierarchy, llm, market, quotes
 from impactgraph.service import SAMPLES, Analyzer, llm_required
 
 app = FastAPI(title="Apex Zenith")
+
+
+@app.on_event("startup")
+def _warm_feeds():
+    """Fetch the RSS feeds in the background once, so the first page load does not wait for them."""
+    if os.environ.get("VERCEL"):
+        return
+    import threading
+    threading.Thread(target=feeds.rss_items, daemon=True).start()     # RSS only: NewsAPI has a small daily quota, so it is never called at startup
 analyzer = Analyzer(persist=not os.environ.get("VERCEL"))
 ROOT = os.path.dirname(os.path.abspath(__file__))
 
@@ -48,6 +57,34 @@ def status():
 @app.get("/api/graph")
 def graph():
     return analyzer.kg.full_json()
+
+
+@app.get("/api/hierarchy")
+def hierarchy_info():
+    return {"layers": hierarchy.describe(), "audit": hierarchy.audit(analyzer.kg)}
+
+
+class AssistantBody(BaseModel):
+    question: str
+    history: Optional[list] = None
+
+
+@app.post("/api/assistant")
+def assistant_answer(body: AssistantBody):
+    """Answer a question from the knowledge graph. Read only: the question is never analysed as an article."""
+    res = assistant.answer(analyzer.kg, {"version": analyzer.guard.version, "epoch": analyzer.guard.epoch}, body.question,
+                           history=body.history or [], use_llm=True)
+    if res.get("error"):
+        raise HTTPException(status_code=400, detail=res["error"])
+    return res
+
+
+@app.get("/api/node/{node_id}")
+def node_info(node_id: str):
+    p = hierarchy.node_properties(analyzer.kg, node_id)
+    if p is None:
+        raise HTTPException(status_code=404, detail="no such node: %s" % node_id)
+    return p
 
 
 @app.post("/api/reset")
@@ -231,13 +268,104 @@ class EdgeWeightBody(BaseModel):
     weight: Optional[float] = None
     strength: Optional[float] = None
     sign: Optional[int] = None
+    reason: Optional[str] = None
+
+
+def _edit_result(res):
+    if res.get("error"):
+        raise HTTPException(status_code=400, detail=res["error"])
+    return res
 
 
 @app.post("/api/kb/edge")
 def kb_update_edge(body: EdgeWeightBody):
-    res = analyzer.update_edge(body.source, body.target, weight=body.weight, strength=body.strength, sign=body.sign)
-    if res.get("error"):
-        raise HTTPException(status_code=400, detail=res["error"])
+    return _edit_result(analyzer.update_edge(body.source, body.target, weight=body.weight, strength=body.strength,
+                                             sign=body.sign, reason=body.reason))
+
+
+class LinkBody(BaseModel):
+    source: str
+    target: str
+    sign: int
+    strength: float = 0.5
+    lag: int = 1
+    mechanism: str = ""
+    relation: Optional[str] = None
+    reason: Optional[str] = None
+
+
+@app.post("/api/kb/link")
+def kb_add_link(body: LinkBody):
+    return _edit_result(analyzer.add_link(body.source, body.target, body.sign, body.strength, body.lag, body.mechanism,
+                                          body.relation, body.reason))
+
+
+@app.post("/api/kb/link/check")
+def kb_check_link(body: LinkBody):
+    """Dry run: the tier rules for this link, without adding it."""
+    return hierarchy.check_link(analyzer.kg, body.source, body.target, body.relation)
+
+
+class LinkRemoveBody(BaseModel):
+    source: str
+    target: str
+    reason: Optional[str] = None
+
+
+@app.post("/api/kb/link/remove")
+def kb_remove_link(body: LinkRemoveBody):
+    return _edit_result(analyzer.remove_link(body.source, body.target, body.reason))
+
+
+class MoveBody(BaseModel):
+    asset: str
+    sector: str
+    reason: Optional[str] = None
+
+
+@app.post("/api/kb/move-asset")
+def kb_move_asset(body: MoveBody):
+    return _edit_result(analyzer.move_asset(body.asset, body.sector, body.reason))
+
+
+@app.get("/api/kb/history")
+def kb_history(limit: int = Query(50, ge=1, le=300), offset: int = Query(0, ge=0)):
+    return analyzer.guard.history_view(limit, offset)
+
+
+@app.get("/api/kb/history/{seq}")
+def kb_history_entry(seq: int):
+    e = analyzer.guard.entry(seq)
+    if not e:
+        raise HTTPException(status_code=404, detail="no such history entry")
+    return e
+
+
+class RestoreBody(BaseModel):
+    version: int
+    reason: Optional[str] = None
+
+
+@app.post("/api/kb/restore")
+def kb_restore(body: RestoreBody):
+    try:
+        e = analyzer.guard.restore_version(body.version, body.reason)
+    except ValueError as err:
+        raise HTTPException(status_code=400, detail=str(err))
+    return {**analyzer.guard.status(), "graph": analyzer.kg.stats(), "entry": {k: v for k, v in e.items() if k != "diff"}}
+
+
+@app.get("/api/kb/export")
+def kb_export():
+    return analyzer.guard.export_state()
+
+
+@app.post("/api/kb/import")
+def kb_import(payload: dict = Body(...), reason: Optional[str] = None):
+    res = analyzer.guard.import_state(payload, reason)
+    if not res.get("ok"):
+        raise HTTPException(status_code=400, detail=res.get("error", "import failed") + (
+            ": " + "; ".join(res["failed"]) if res.get("failed") else ""))
     return res
 
 
