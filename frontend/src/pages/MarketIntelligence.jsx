@@ -158,20 +158,25 @@ export default function MarketIntelligence({
       {market.loading && <p style={{ fontSize: 12.5, color: '#71717a' }}>Loading market data…</p>}
       {market.error && <p style={{ fontSize: 12.5, color: '#991b1b' }}>{market.error}</p>}
       <div className="tickers-row">
-        {tickers.map((t) => (
-          <div key={t.id} className="ticker-card">
-            <div className="ticker-header">
-              <span className="ticker-name">{t.name}</span>
-              <span className={`ticker-change ${t.isPositive ? 'up' : 'down'}`}>
-                {t.isPositive ? <ArrowUpRight size={13} /> : <ArrowDownRight size={13} />}
-                {t.change}
-              </span>
+        {tickers.map((t) => {
+          const trend = !t.change || t.change === '+0.00%' || t.change === '-0.00%' || t.change === '0.00%'
+            ? 'flat'
+            : (t.isPositive ? 'up' : 'down');
+          return (
+            <div key={t.id} className="ticker-card" data-trend={trend}>
+              <div className="ticker-header">
+                <span className="ticker-name">{t.name}</span>
+                <span className={`ticker-change ${t.isPositive ? 'up' : 'down'}`}>
+                  {t.isPositive ? <ArrowUpRight size={13} /> : <ArrowDownRight size={13} />}
+                  {t.change}
+                </span>
+              </div>
+              <div className="ticker-price">{t.price}</div>
+              <div style={{ fontSize: 10.5, color: '#a1a1aa', marginBottom: 2 }} title={t.source}>as of {t.asof}</div>
+              <Sparkline data={t.sparkline} isPositive={t.isPositive} width={160} height={38} />
             </div>
-            <div className="ticker-price">{t.price}</div>
-            <div style={{ fontSize: 10.5, color: '#a1a1aa', marginBottom: 2 }} title={t.source}>as of {t.asof}</div>
-            <Sparkline data={t.sparkline} isPositive={t.isPositive} width={160} height={38} />
-          </div>
-        ))}
+          );
+        })}
       </div>
 
       {/* My watchlist: live Yahoo Finance quotes */}

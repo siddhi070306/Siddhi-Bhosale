@@ -80,6 +80,17 @@
   box-shadow: 0 12px 24px -8px rgba(0,0,0,0.12), 0 4px 8px -4px rgba(0,0,0,0.05);
 }
 
+[data-trend="up"],
+[data-trend="up"] * {
+  cursor: var(--cursor-positive);
+}
+
+[data-trend="down"],
+[data-trend="down"] * {
+  cursor: var(--cursor-negative);
+}
+
+
 .ticker-header {
   display: flex;
   justify-content: space-between;

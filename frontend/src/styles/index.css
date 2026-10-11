@@ -53,7 +53,23 @@
   --indicator-up-bg: #f0fdf4;
   --indicator-down-text: #991b1b;
   --indicator-down-bg: #fef2f2;
+
+  /* Custom Trend Cursors */
+  --cursor-positive: url("/assets/cursor-positive.png") 24 24, pointer;
+  --cursor-negative: url("/assets/cursor-negative.png") 24 24, pointer;
 }
+
+/* Custom mouse cursors for trend-aware cards and children */
+[data-trend="up"],
+[data-trend="up"] * {
+  cursor: var(--cursor-positive);
+}
+
+[data-trend="down"],
+[data-trend="down"] * {
+  cursor: var(--cursor-negative);
+}
+
 
 * {
   box-sizing: border-box;
