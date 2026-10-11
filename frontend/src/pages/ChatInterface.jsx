@@ -184,11 +184,6 @@ export default function ChatInterface({
                         <strong>Background (model knowledge, not from the article):</strong> {msg.hypothesis.background}
                       </p>
                     )}
-                    {msg.hypothesis && msg.hypothesis.themes.length > 0 && (
-                      <p style={{ fontSize: 11.5, color: '#92400e' }}>
-                        Hypothesis: nothing was stated that the graph knows, so the model suggested themes this story could touch ({msg.hypothesis.themes.map((t) => `${t.node.replace(/_/g, ' ')} ${t.direction > 0 ? '↑' : '↓'}`).join(', ')}). They are guesses, drawn dashed, and the graph did not learn from them.
-                      </p>
-                    )}
                     {msg.context && (
                       <p style={{ fontSize: 11.5, color: '#92400e' }}>
                         Thin graph: {msg.context.reason}
