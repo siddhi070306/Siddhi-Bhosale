@@ -8,6 +8,37 @@ import TierFilterBar from '../components/graph/TierFilterBar';
 import { useUi } from '../context/UiContext';
 import { api } from '../services/api';
 
+const CURATED_MACRO_SAMPLES = [
+  {
+    id: 'oil',
+    icon: '🛢️',
+    title: 'Brent Crude Oil Surge (+12%)',
+    summary: 'Supply disruption lifts inflation expectations; pressure on airlines, boost for energy producers.',
+    text: "Brent crude jumped 12% on Monday after an attack on tankers near the Strait of Hormuz raised fears of a supply disruption. OPEC+ signalled it would keep its output cuts in place. Analysts warned that higher energy costs could lift inflation expectations and push central banks to keep interest rates higher for longer. Airline stocks fell sharply, with Delta Air Lines among the biggest decliners, while ExxonMobil and ONGC gained. The rupee weakened as India's import bill is expected to widen.",
+  },
+  {
+    id: 'fed',
+    icon: '🏛️',
+    title: 'Fed Hikes Rates 50 bps',
+    summary: 'Hawkish rate decision boosts 10Y US Treasury yields & US Dollar; real estate contracts.',
+    text: "The Federal Reserve raised interest rates by 50 basis points on Wednesday, more than markets had expected. The dollar index jumped 1.2% and 10-year yields rose as investors priced in a longer period of tight policy. Real estate stocks fell, while analysts said banks could benefit from wider lending margins.",
+  },
+  {
+    id: 'gas',
+    icon: '⚡',
+    title: 'Natural Gas Spike (+18%)',
+    summary: 'Severe cold weather drives feedstock cost surge for utilities and industrial chemical makers.',
+    text: "Natural gas surged 18% after cold weather and supply outages. Chemical makers warned that higher feedstock costs could squeeze margins, and utilities were expected to pass on part of the increase to customers.",
+  },
+  {
+    id: 'gold',
+    icon: '🥇',
+    title: 'Gold Safe-Haven Flight (+3.4%)',
+    summary: 'Geopolitical flight to safety lifts bullion; equity indices slip and Treasury yields decline.',
+    text: "Gold rallied 3.4% as military conflict in the Middle East escalated and investors fled to safe havens. US stocks slipped while Treasury yields fell. Analysts warned that a prolonged conflict could push oil higher and revive inflation fears.",
+  },
+];
+
 function EmptyState({ onNavigateToChat, onSelectEvent }) {
   const [inputText, setInputText] = useState('');
 
@@ -138,26 +169,110 @@ export default function ImpactGraph({ analysis, onNavigateToChat, onSelectEvent,
     }
   };
 
+  const [fallbackCustomInput, setFallbackCustomInput] = useState('');
+
   if (!graphData && analysis) {
-    // an analysis ran but found nothing to draw: say why, instead of pretending nothing was analysed
-    const hyp = analysis.hypothesis;
+    // an analysis ran but found no economic entities: show actionable macro presets and custom input
     return (
-      <div className="card" style={{ padding: 28, maxWidth: 760, margin: '24px auto' }}>
-        <div style={{ fontSize: 16, fontWeight: 700, color: '#09090b', marginBottom: 8 }}>Nothing to draw for this text</div>
-        <p style={{ fontSize: 13.5, color: '#27272a', lineHeight: 1.6, marginBottom: 8 }}>{analysis.emptyReason || 'No event the graph knows about was found.'}</p>
-        {analysis.emptyHint && <p style={{ fontSize: 13, color: '#52525b', lineHeight: 1.6, marginBottom: 10 }}>{analysis.emptyHint}</p>}
-        {analysis.input && (
-          <p style={{ fontSize: 12, color: '#71717a', marginBottom: 10 }}>
-            Analysed {analysis.input.chars.toLocaleString()} characters ({{ article: 'full article', description: 'headline + description', headline_only: 'headline only', pasted: 'pasted text' }[analysis.input.quality] || 'text'}).
-            {analysis.input.note ? ` ${analysis.input.note}` : ''}
-          </p>
-        )}
-        {hyp && hyp.background && (
-          <p style={{ fontSize: 12, color: '#71717a', borderLeft: '3px solid #e4e4e7', paddingLeft: 8, marginBottom: 12 }}>
-            <strong>Background (model knowledge, not from the article):</strong> {hyp.background}
-          </p>
-        )}
-        {onNavigateToChat && <button className="btn btn-black" onClick={onNavigateToChat}>Back to AI Chat</button>}
+      <div className="card" style={{ padding: '32px 28px', maxWidth: 840, margin: '24px auto', borderRadius: 16 }}>
+        <div style={{ display: 'flex', alignItems: 'flex-start', gap: 14, marginBottom: 16 }}>
+          <div style={{ width: 42, height: 42, borderRadius: 10, background: '#fef3c7', color: '#d97706', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 20, flexShrink: 0 }}>
+            ⚡
+          </div>
+          <div style={{ flex: 1 }}>
+            <div style={{ fontSize: 18, fontWeight: 700, color: '#09090b', marginBottom: 4 }}>
+              No Direct Financial Entities Detected in Headline
+            </div>
+            <p style={{ fontSize: 13.5, color: '#52525b', lineHeight: 1.5, margin: 0 }}>
+              The analysed text appears to be a general personal opinion or lifestyle article. The Knowledge Graph tracks specific economic drivers (commodities, central banks, interest rates, industry sectors, or corporate tickers).
+            </p>
+          </div>
+        </div>
+
+        <div style={{ background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: 10, padding: '12px 16px', marginBottom: 22 }}>
+          <div style={{ fontSize: 11, fontWeight: 700, color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.04em', marginBottom: 4 }}>
+            Headline Analysed:
+          </div>
+          <div style={{ fontSize: 13.5, color: '#1e293b', fontStyle: 'italic', marginBottom: 4 }}>
+            "{analysis.text?.length > 160 ? analysis.text.slice(0, 160) + '…' : analysis.text}"
+          </div>
+          <div style={{ fontSize: 12, color: '#64748b' }}>
+            {analysis.emptyReason || 'No market driver or financial instrument found in the text.'}
+            {analysis.input?.note ? ` (${analysis.input.note})` : ''}
+          </div>
+        </div>
+
+        {/* 1-Click Curated Macro Scenarios */}
+        <div style={{ marginBottom: 24 }}>
+          <div style={{ fontSize: 14, fontWeight: 600, color: '#18181b', marginBottom: 12 }}>
+            Select a High-Impact Macro Shock to View the Full Causal Graph:
+          </div>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(360px, 1fr))', gap: 10 }}>
+            {CURATED_MACRO_SAMPLES.map((sample) => (
+              <button
+                key={sample.id}
+                onClick={() => onSelectEvent && onSelectEvent(sample.text, 'sample', null, sample.title)}
+                style={{
+                  textAlign: 'left',
+                  padding: '14px 16px',
+                  background: '#ffffff',
+                  border: '1px solid #e2e8f0',
+                  borderRadius: 12,
+                  cursor: 'pointer',
+                  transition: 'all 0.15s ease',
+                  display: 'flex',
+                  alignItems: 'flex-start',
+                  gap: 12,
+                }}
+                onMouseEnter={(e) => {
+                  e.currentTarget.style.borderColor = '#6366f1';
+                  e.currentTarget.style.background = '#f5f3ff';
+                }}
+                onMouseLeave={(e) => {
+                  e.currentTarget.style.borderColor = '#e2e8f0';
+                  e.currentTarget.style.background = '#ffffff';
+                }}
+              >
+                <span style={{ fontSize: 24, lineHeight: 1 }}>{sample.icon}</span>
+                <div style={{ flex: 1 }}>
+                  <div style={{ fontSize: 14, fontWeight: 600, color: '#09090b', marginBottom: 3 }}>{sample.title}</div>
+                  <div style={{ fontSize: 12, color: '#64748b', lineHeight: 1.45 }}>{sample.summary}</div>
+                </div>
+                <ArrowRight size={16} style={{ color: '#6366f1', marginTop: 4, flexShrink: 0 }} />
+              </button>
+            ))}
+          </div>
+        </div>
+
+        {/* Direct Custom Input & Navigation */}
+        <div style={{ paddingTop: 18, borderTop: '1px solid #f1f5f9', display: 'flex', gap: 10 }}>
+          <input
+            type="text"
+            className="header-search-input"
+            style={{ flex: 1, padding: '10px 14px', fontSize: 13, borderRadius: 8, border: '1px solid #cbd5e1' }}
+            placeholder="Or type a financial event (e.g. Brent crude jumped 12%, Fed raises rates 50 bps...)"
+            value={fallbackCustomInput}
+            onChange={(e) => setFallbackCustomInput(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter' && fallbackCustomInput.trim() && onSelectEvent) {
+                onSelectEvent(fallbackCustomInput.trim());
+              }
+            }}
+          />
+          <button
+            className="btn btn-black"
+            style={{ fontSize: 13, padding: '10px 18px', whiteSpace: 'nowrap' }}
+            disabled={!fallbackCustomInput.trim()}
+            onClick={() => onSelectEvent && onSelectEvent(fallbackCustomInput.trim())}
+          >
+            Analyse Event
+          </button>
+          {onNavigateToChat && (
+            <button className="btn btn-outline" style={{ fontSize: 13, padding: '10px 16px', whiteSpace: 'nowrap' }} onClick={onNavigateToChat}>
+              Back to AI Chat
+            </button>
+          )}
+        </div>
       </div>
     );
   }
