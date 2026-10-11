@@ -32,9 +32,10 @@ export default function CausalChainWalkthrough({
     return null;
   }
 
-  // The score of a path is the product of its links' effective strengths with a 0.92 decay for every hop after the first
-  // (impactgraph/propagate.py). It is a 0-1 plausibility score, never a price move, so no % is derived from it here.
-  const DECAY = 0.92;
+  // The score of a path is the product of its links' effective strengths and a decay for every hop after the first. The decay
+  // is per link (0.97, 0.93 or 0.82 by how well market data supports it, 0.92 when untested) and is sent by the backend as
+  // step.decay (impactgraph/propagate.py). It is a 0-1 plausibility score, never a price move, so no % is derived from it.
+  const decayOf = (st, i) => (typeof st.decay === 'number' ? st.decay : i > 0 ? 0.92 : 1);
   const linkW = (st) => (typeof st.effective === 'number' ? st.effective : st.strength);
   const currentPath = paths[selectedPathIdx] || paths[0];
   const steps = currentPath.steps || [];
@@ -49,7 +50,7 @@ export default function CausalChainWalkthrough({
   }];
 
   steps.forEach((step, i) => {
-    running = running * linkW(step) * (i > 0 ? DECAY : 1);
+    running = running * linkW(step) * decayOf(step, i);
     mathSteps.push({
       nodeLabel: step.to_label,
       value: running,
@@ -126,7 +127,7 @@ export default function CausalChainWalkthrough({
           >
             <div>
               <div style={{ fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.04em', color: '#71717a', marginBottom: 4 }}>
-                Path plausibility = link strengths × 0.92 per extra hop (a 0–1 score, not a price move)
+                Path plausibility = link strengths × a per-link decay (0.82–0.97 by data support, 0.92 if untested; a 0–1 score, not a price move)
               </div>
               <div style={{ fontFamily: 'var(--font-mono)', fontSize: 13, fontWeight: 600, color: '#18181b', display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
                 <span style={{ color: '#18181b' }}>
@@ -148,7 +149,8 @@ export default function CausalChainWalkthrough({
                   <>
                     <span style={{ color: '#a1a1aa' }}>×</span>
                     <span style={{ background: '#ffffff', padding: '1px 6px', borderRadius: 4, border: '1px solid #e4e4e7' }}>
-                      {Math.pow(DECAY, steps.length - 1).toFixed(2)} decay
+                      {steps.reduce((acc, st, i) => acc * decayOf(st, i), 1).toFixed(2)} decay
+                      {' '}({steps.slice(1).map((st, i) => decayOf(st, i + 1).toFixed(2)).join(' × ')})
                     </span>
                   </>
                 )}
@@ -219,6 +221,12 @@ export default function CausalChainWalkthrough({
                       </div>
 
                       <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                        {stepObj && stepObj.from_layer && (
+                          <span style={{ fontSize: 10.5, color: '#a1a1aa', textTransform: 'capitalize' }}>
+                            {stepObj.from_layer} → {stepObj.to_layer}
+                            {stepObj.step_kind === 'skip' ? ' · skips a tier' : stepObj.step_kind === 'feedback' ? ' · feedback' : stepObj.step_kind === 'lateral' ? ' · same tier' : ''}
+                          </span>
+                        )}
                         {stepObj && (
                           <span style={{ fontSize: 11, color: '#71717a', fontFamily: 'var(--font-mono)' }}>
                             Link weight: {stepObj.sign >= 0 ? '+' : '−'}{linkW(stepObj).toFixed(2)}

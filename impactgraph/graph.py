@@ -9,7 +9,7 @@ import time
 
 import networkx as nx
 
-from . import kb
+from . import hierarchy, kb
 
 
 class KnowledgeGraph:
@@ -24,10 +24,12 @@ class KnowledgeGraph:
         for nid, n in kb.NODES.items():
             if nid not in kb.STATIC_IDS:       # reset means the curated baseline, not runtime additions
                 continue
-            self.g.add_node(nid, label=n["label"], type=n["type"], inferred=False, series=n["series"], kind=n["kind"])
+            self.g.add_node(nid, label=n["label"], type=n["type"], inferred=False, series=n["series"], kind=n["kind"],
+                            **hierarchy.node_attrs(nid, n["type"], "curated"))
         for s, d, sign, st, lag, why in kb.EDGES:
             self.g.add_edge(s, d, sign=sign, strength=st, base_strength=st, lag=lag, mechanism=why,
-                            provenance=["prior"], evidence=[], validation=None, inferred=False)
+                            provenance=["prior"], evidence=[], validation=None, inferred=False,
+                            relation=hierarchy.relation_for(kb.NODES[s]["type"], kb.NODES[d]["type"], s, d))
 
     # ---- effective strength ----------------------------------------------------------------
     def eff_strength(self, u, v):
@@ -63,13 +65,14 @@ class KnowledgeGraph:
             nid = "ent_" + "".join(c for c in u["name"].lower() if c.isalnum())[:30]
             if nid in self.g:
                 continue
-            self.g.add_node(nid, label=u["name"], type="company", inferred=True, series=[], kind=None)
+            self.g.add_node(nid, label=u["name"], type="company", inferred=True, series=[], kind=None,
+                            **hierarchy.node_attrs(nid, "company", "learned", article_id))
             changes.append({"kind": "new_node", "node": nid, "label": u["name"]})
             if u.get("sector_guess"):
                 sec = u["sector_guess"]
                 self.g.add_edge(sec, nid, sign=1, strength=0.5, base_strength=0.5, lag=0,
                                 mechanism="Sector inferred from the company name (%s); unverified" % u["name"],
-                                provenance=["inferred"], evidence=[], validation=None, inferred=True)
+                                provenance=["inferred"], evidence=[], validation=None, inferred=True, relation="member_of")
                 changes.append({"kind": "new_edge", "src": sec, "dst": nid, "inferred": True})
 
         # article evidence for existing edges whose endpoints co-occur in a sentence
@@ -90,6 +93,12 @@ class KnowledgeGraph:
                         e["strength"] = round(before + (0.97 - before) * 0.05, 4)  # diminishing reinforcement
                         changes.append({"kind": "edge_reinforced", "src": u, "dst": v,
                                         "from": before, "to": e["strength"]})
+        for nid in {m["node"] for m in extraction.get("mentions", [])}:       # which articles mention each entity
+            if nid in self.g:
+                arts = self.g.nodes[nid].setdefault("articles", [])
+                if article_id not in arts:
+                    arts.append(article_id)
+                    del arts[:-20]
         self.articles.append(article_id)
         return changes
 
@@ -116,7 +125,7 @@ class KnowledgeGraph:
             else:
                 self.g.add_edge(u, v, sign=l["sign"], strength=0.35, base_strength=0.35, lag=1,
                                 mechanism=l["mechanism"] + " (LLM-proposed, quote-verified)",
-                                provenance=["llm_proposed"], evidence=[ev], validation=None, inferred=True)
+                                provenance=["llm_proposed"], evidence=[ev], validation=None, inferred=True, relation="causes")
                 changes.append({"kind": "new_edge", "src": u, "dst": v, "inferred": True, "by": "llm"})
         return changes
 
@@ -124,13 +133,14 @@ class KnowledgeGraph:
         """Add a user-supplied asset node, linked from a sector as a low-confidence, user-added inference."""
         nid = spec["id"]
         self.g.add_node(nid, label=spec["label"], type=spec["type"], inferred=True, user_added=True,
-                        series=spec["series"], kind=spec["kind"])
+                        series=spec["series"], kind=spec["kind"], **hierarchy.node_attrs(nid, spec["type"], "user"))
         changes = [{"kind": "new_node", "node": nid, "label": spec["label"], "by": "user"}]
         if sector:
             self.g.add_edge(sector, nid, sign=1, strength=0.5, base_strength=0.5, lag=0,
                             mechanism="User-added: %s assigned to %s (unverified until checked against data)" % (
                                 spec["label"], self.g.nodes[sector]["label"]),
-                            provenance=["user_added", "inferred"], evidence=[], validation=None, inferred=True)
+                            provenance=["user_added", "inferred"], evidence=[], validation=None, inferred=True,
+                            relation="member_of" if spec["type"] == "company" else "tracks")   # an index or fund the user ties to a sector follows it
             changes.append({"kind": "new_edge", "src": sector, "dst": nid, "inferred": True, "by": "user"})
         return changes
 
@@ -174,8 +184,12 @@ class KnowledgeGraph:
                 "observed_edges": sum(1 for _, _, d in self.g.edges(data=True) if "observed" in d["provenance"])}
 
     def full_json(self):
-        return {"nodes": [dict(id=n, label=d["label"], type=d["type"], inferred=d.get("inferred", False))
-                          for n, d in self.g.nodes(data=True)],
+        from . import hierarchy
+        return {"nodes": hierarchy.annotate_nodes(self, [dict(id=n, label=d["label"], type=d["type"], inferred=d.get("inferred", False),
+                                                                  origin=d.get("origin"), market=d.get("market"))
+                                                         for n, d in self.g.nodes(data=True)]),
                 "links": [dict(source=u, target=v, sign=d["sign"], strength=round(d["strength"], 3),
-                               lag=d["lag"], provenance=d["provenance"])
-                          for u, v, d in self.g.edges(data=True)]}
+                               lag=d["lag"], provenance=d["provenance"], relation=hierarchy.rel(self.g, u, v),
+                               kind=hierarchy.edge_kind(self.g.nodes[u]["type"], self.g.nodes[v]["type"])["kind"])
+                          for u, v, d in self.g.edges(data=True)],
+                "layers": hierarchy.describe()}

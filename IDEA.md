@@ -273,7 +273,7 @@ Known blind spots: unusual phrasing, negation ("did not fall"), figures expresse
 Depth-limited DFS (max 5 hops, no revisiting a node) from each source.
 
 ```
-score(path) = Π strength(edge)  ×  0.92^(hops − 1)
+score(path) = Π strength(edge)  ×  Π decay(edge)   (decay = 1 on the first hop; per link 0.97 / 0.93 / 0.82 by data support, 0.92 if untested)
 sign(path)  = source direction × Π sign(edge)
 lag(path)   = Σ lag(edge)
 drop paths with score < 0.04

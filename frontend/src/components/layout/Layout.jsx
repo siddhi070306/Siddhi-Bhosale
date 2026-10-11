@@ -20,6 +20,7 @@ export default function Layout({
   onDeleteSession,
   onClearAllSessions,
   children,
+  overlay = null,
 }) {
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
@@ -110,6 +111,9 @@ export default function Layout({
               {children}
             </div>
           </main>
+          {/* Rendered outside the page wrapper, which is re-keyed on every tab change: anything inside it (the product tour)
+              would be remounted, and lose its state, each time it switched tab. */}
+          {overlay}
         </div>
       </div>
     </UiContext.Provider>

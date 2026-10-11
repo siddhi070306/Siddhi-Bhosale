@@ -21,7 +21,7 @@ from collections import deque
 from networkx.readwrite import json_graph
 
 from . import extract as ex
-from . import kb, llm, propagate as pg
+from . import changelog, hierarchy, kb, llm, propagate as pg
 
 STATE_FILE = (None if os.environ.get("VERCEL") else
               os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "data", "kb_state.json"))
@@ -61,8 +61,12 @@ def baseline_profile():
     return _baseline["p"]
 
 
-def health(kg, before=None):
-    """Run all checks. `before` is the snapshot taken before the change being judged (optional)."""
+def health(kg, before=None, user_edit=False):
+    """Run all checks. `before` is the snapshot taken before the change being judged (optional).
+
+    A deliberate user edit (a changed weight, a link the user added, an import) is judged on structure only: the
+    regression against the curated baseline is skipped, because the user is choosing to depart from it, and a curated link
+    the user edited on purpose is not reported as a broken curated link."""
     checks = []
 
     def add(name, ok, detail):
@@ -71,11 +75,14 @@ def health(kg, before=None):
     g = kg.g
     missing = [n for n in kb.STATIC_IDS if n not in g]
     add("curated entities present", not missing, "missing: %s" % missing[:5] if missing else "all %d present" % len(kb.STATIC_IDS))
-    flipped = [(s, d) for (s, d, sign, *_r) in kb.EDGES if not g.has_edge(s, d) or g[s][d]["sign"] != sign]
+    flipped = [(s, d) for (s, d, sign, *_r) in kb.EDGES
+               if not g.has_edge(s, d) or (g[s][d]["sign"] != sign and "user_edited" not in g[s][d].get("provenance", []))]
     add("curated links intact (same sign)", not flipped, "changed: %s" % flipped[:5] if flipped else "all %d intact" % len(kb.EDGES))
     bad = [(u, v) for u, v, e in g.edges(data=True) if not (0 < e["strength"] <= 0.99)]
     add("link strengths within (0, 0.99]", not bad, "out of range: %s" % bad[:5] if bad else "ok")
     add("no self-loops", not any(u == v for u, v in g.edges), "ok")
+    up = hierarchy.audit(kg)["learned_links_pointing_up_from_assets"]
+    add("hierarchy: no learned link points up from an asset", not up, "upward learned links: %s" % up[:5] if up else "ok")
     dyn = sum(1 for _, _, e in g.edges(data=True) if e.get("inferred"))
     share = dyn / max(1, g.number_of_edges())
     add("runtime links stay a minority", share <= MAX_DYNAMIC_SHARE, "%.0f%% of links are runtime-added (limit %.0f%%)" % (share * 100, MAX_DYNAMIC_SHARE * 100))
@@ -84,6 +91,9 @@ def health(kg, before=None):
         new_n = set(g.nodes) - set(before["graph"].nodes)
         add("growth per change bounded", len(new_e) <= MAX_NEW_EDGES and len(new_n) <= MAX_NEW_NODES,
             "%d new links (max %d), %d new entities (max %d)" % (len(new_e), MAX_NEW_EDGES, len(new_n), MAX_NEW_NODES))
+    if user_edit:
+        add("baseline regression", True, "skipped: a deliberate user edit may depart from the curated baseline")
+        return {"ok": all(c["ok"] for c in checks), "checks": checks, "t": time.time()}
     # regression: the sample articles must still conclude the same things as the static baseline
     base, cur = baseline_profile(), _profile(kg)
     agree = total = strong = kept = 0
@@ -103,13 +113,20 @@ def health(kg, before=None):
 
 
 # ---- guard ---------------------------------------------------------------------------------------
+MAX_RESTORABLE = 30      # versions kept as snapshots (older ones stay in the history but cannot be restored)
+MAX_HISTORY = 300
+
+
 class KBGuard:
     def __init__(self, kg, persist=False):
         self.kg = kg
         self.persist = bool(persist and STATE_FILE)
         self.mode = "dynamic"            # "dynamic" learns; "static" is frozen at the curated baseline
         self.version = 0
-        self.versions = deque(maxlen=10)  # good states, newest last; the first is always the baseline
+        self.versions = deque(maxlen=MAX_RESTORABLE)  # good states, newest last; the first is always the baseline
+        self.history = []                 # change entries (see changelog.py), oldest first
+        self.seq = 0                      # id of the latest history entry
+        self.epoch = 0                    # bumped when the graph is reset to the curated baseline
         self.log = deque(maxlen=60)
         self.last_health = None
         self._note("init", "curated baseline loaded (%d entities, %d links)" % (kg.g.number_of_nodes(), kg.g.number_of_edges()))
@@ -140,18 +157,29 @@ class KBGuard:
     def begin(self):
         return self.snapshot("before change")
 
-    def finish(self, before, label):
+    def _record(self, old_graph, new_graph, **kw):
+        self.seq += 1
+        e = changelog.entry(old_graph, new_graph, seq=self.seq, epoch=self.epoch, **kw)
+        self.history.append(e)
+        del self.history[:-MAX_HISTORY]
+        return e
+
+    def finish(self, before, label, actor="system", action="change", reason=None, article_id=None, user_edit=False):
         """Judge the change made since `before`. Rolls back on failure. Returns a report dict."""
-        h = health(self.kg, before)
+        h = health(self.kg, before, user_edit=user_edit)
         self.last_health = h
         failed = [c for c in h["checks"] if not c["ok"]]
         if failed:
             self.restore(before)
             self._note("rollback", "%s: %s" % (label, "; ".join("%s (%s)" % (c["name"], c["detail"]) for c in failed)))
             return {"rolled_back": True, "failed": failed, "version": self.version}
+        parent = self.version
         self.version += 1
         self.versions.append(self.snapshot(label))
         self._note("commit", "v%d %s" % (self.version, label))
+        if not (action == "ingest" and changelog.is_empty(changelog.diff_graphs(before["graph"], self.kg.g))):
+            self._record(before["graph"], self.kg.g, version=self.version, parent=parent, actor=actor, action=action,
+                         summary=label, reason=reason, article_id=article_id)
         self.save()
         return {"rolled_back": False, "failed": [], "version": self.version}
 
@@ -172,22 +200,96 @@ class KBGuard:
 
     # -- manual controls
     def revert(self, to="static"):
+        old = copy.deepcopy(self.kg.g)
         if to == "previous" and len(self.versions) > 1:
+            dropped = self.version
             self.versions.pop()                       # drop the current state
             self.restore(self.versions[-1])
             self.version = max(0, self.version - 1)
+            for e in reversed(self.history):          # the undone change stays in the history, marked
+                if e["epoch"] == self.epoch and e["version"] == dropped and not e["undone"]:
+                    e["undone"] = True
+                    break
             self._note("undo", "restored v%d (%s)" % (self.version, self.versions[-1]["label"]))
+            self._record(old, self.kg.g, version=self.version, parent=dropped, actor="user", action="undo",
+                         summary="undid v%d" % dropped)
         else:
             self.kg.reset()
             kb.drop_dynamic_nodes()
             self._nodes_changed()
+            self.epoch += 1
             self.version = 0
             self.versions.clear()
             self.versions.append(self.snapshot("baseline"))
             self._note("revert-static", "back to the curated baseline (%d entities, %d links)" % (
                 self.kg.g.number_of_nodes(), self.kg.g.number_of_edges()))
+            self._record(old, self.kg.g, version=0, parent=None, actor="user", action="reset",
+                         summary="reset to the curated baseline")
         self.save()
         return self.status()
+
+    def restorable_versions(self):
+        return [s["version"] for s in self.versions]
+
+    def restore_version(self, version, reason=None):
+        """Go back to the graph as it was at `version`. This is a new forward change: nothing is erased from the history."""
+        snap = next((s for s in self.versions if s["version"] == version), None)
+        if snap is None:
+            raise ValueError("version %s cannot be restored: only the last %d versions of this session are kept (restorable: %s)"
+                             % (version, MAX_RESTORABLE, self.restorable_versions()))
+        old, parent = copy.deepcopy(self.kg.g), self.version
+        self.restore(snap)
+        self.version += 1
+        self.versions.append(self.snapshot("restored v%d" % version))
+        self._note("restore", "v%d restored as v%d" % (version, self.version))
+        e = self._record(old, self.kg.g, version=self.version, parent=parent, actor="user", action="restore",
+                         summary="restored v%d" % version, reason=reason)
+        self.save()
+        return e
+
+    # -- history
+    def history_view(self, limit=50, offset=0):
+        rows = [dict({k: v for k, v in e.items() if k != "diff"}, diff_counts=e["diff"]["counts"])
+                for e in reversed(self.history)]
+        return {"total": len(rows), "entries": rows[offset:offset + limit], "version": self.version, "epoch": self.epoch,
+                "restorable": self.restorable_versions()}
+
+    def entry(self, seq):
+        return next((e for e in self.history if e["seq"] == seq), None)
+
+    # -- export / import
+    def export_state(self):
+        return {"format": "apex-zenith-kg", "schema": 1, "version": self.version, "epoch": self.epoch,
+                "exported_at": time.strftime("%Y-%m-%d %H:%M:%S"), "articles": list(self.kg.articles),
+                "nodes": kb.dynamic_specs(), "graph": json_graph.node_link_data(self.kg.g)}
+
+    def import_state(self, data, reason=None):
+        """Replace the graph with an exported one, if it passes the health checks and the tier rules. Else nothing changes."""
+        if not isinstance(data, dict) or data.get("format") != "apex-zenith-kg" or data.get("schema") != 1 or "graph" not in data:
+            return {"ok": False, "error": "not an Apex Zenith graph export (format 'apex-zenith-kg', schema 1)"}
+        before = self.begin()
+        try:
+            specs = []
+            for spec in data.get("nodes", []):
+                spec = dict(spec)
+                spec["series"] = [tuple(s) for s in spec.get("series", [])]
+                specs.append(spec)
+            g = json_graph.node_link_graph(data["graph"], directed=True, multigraph=False)
+            kb.drop_dynamic_nodes()
+            for spec in specs:
+                kb.NODES[spec["id"]] = spec
+            self.kg.g = g
+            self.kg.articles = list(data.get("articles", []))
+            hierarchy.ensure_properties(self.kg)
+            self._nodes_changed()
+        except Exception as e:
+            self.restore(before)
+            return {"ok": False, "error": "could not read the graph: %s" % e}
+        report = self.finish(before, "imported a graph export", actor="user", action="import", reason=reason, user_edit=True)
+        if report["rolled_back"]:
+            return {"ok": False, "error": "the import was rejected by the health checks",
+                    "failed": [c["name"] + ": " + c["detail"] for c in report["failed"]]}
+        return {"ok": True, "version": self.version, "nodes": self.kg.g.number_of_nodes(), "links": self.kg.g.number_of_edges()}
 
     def set_mode(self, mode):
         if mode not in ("dynamic", "static"):
@@ -200,7 +302,9 @@ class KBGuard:
         return self.status()
 
     def status(self):
-        return {"mode": self.mode, "version": self.version, "history": [v["label"] for v in self.versions],
+        return {"mode": self.mode, "version": self.version, "epoch": self.epoch, "history": [v["label"] for v in self.versions],
+                "history_count": len(self.history), "restorable": self.restorable_versions(),
+                "edited_links": sum(1 for _, _, e in self.kg.g.edges(data=True) if "user_edited" in e.get("provenance", [])),
                 "can_undo": len(self.versions) > 1, "last_health": self.last_health, "log": list(self.log),
                 "persisted": self.persist,
                 "runtime_assets": [{"id": s["id"], "label": s["label"], "ticker": kb.yf_symbol(s["id"])} for s in kb.dynamic_specs()]}
@@ -212,6 +316,7 @@ class KBGuard:
         try:
             os.makedirs(os.path.dirname(STATE_FILE), exist_ok=True)
             data = {"mode": self.mode, "version": self.version, "articles": self.kg.articles,
+                    "history": self.history, "seq": self.seq, "epoch": self.epoch,
                     "nodes": kb.dynamic_specs(), "graph": json_graph.node_link_data(self.kg.g)}
             tmp = STATE_FILE + ".tmp"
             with open(tmp, "w", encoding="utf-8") as f:
@@ -232,11 +337,13 @@ class KBGuard:
                 kb.NODES[spec["id"]] = spec
             self._nodes_changed()
             self.kg.g = json_graph.node_link_graph(data["graph"], directed=True, multigraph=False)
+            hierarchy.ensure_properties(self.kg)         # states saved before tiers and relations were stored
             self.kg.articles = data.get("articles", [])
             h = health(self.kg)
             if not h["ok"]:
                 raise ValueError("saved state failed health checks: " + "; ".join(c["name"] for c in h["checks"] if not c["ok"]))
             self.version, self.mode = data.get("version", 0), data.get("mode", "dynamic")
+            self.history, self.seq, self.epoch = list(data.get("history", [])), data.get("seq", 0), data.get("epoch", 0)
             self.last_health = h
             self.versions.clear()
             self.versions.append(self.snapshot("restored from disk"))

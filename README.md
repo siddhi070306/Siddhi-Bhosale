@@ -75,6 +75,54 @@ public/       index.html (D3 UI, vendored d3 for offline use)
 server.py     FastAPI app      run.py   launcher      tests/   unit + end-to-end tests
 ```
 
+## Hierarchical knowledge graph
+
+The graph is organised in four tiers, from the cause of a move down to what an investor can hold: **0 Events & policy**
+(event classes, institutions, the events an article reports), **1 Economic variables** (commodities, indicators),
+**2 Sectors**, **3 Assets** (companies, indices, instruments). `impactgraph/hierarchy.py` derives each node's tier from its
+type (nothing is learned or guessed) and classifies every link as `next` (one tier down), `skip` (more than one tier),
+`lateral` (same tier) or `feedback` (back up). The curated graph has 2 feedback links (banks to growth and to consumer
+spending); the guard rejects any link learned at run time that points up from an asset. A sector also *contains* the
+companies and funds linked to it as members, so an impact on a sector can be read down to its members.
+
+Tiers are stored data, not just labels. Every node carries its `tier`, `origin` (curated, learned from an article, or added by a user), `market`, `first_seen` and the articles that mention it. Every link carries a `relation`: `causes`, `policy_reaction`, `member_of` (company in a sector), `tracks` (a fund or sector index follows a sector, commodity or yield) or `weight_in` (a sector or company is part of a broad index). The relation says what a link means, and sector membership is read from it, not from the mechanism text. The tier-crossing kind (`next`, `skip`, `lateral`, `feedback`) is information only and blocks nothing. `GET /api/node/{id}` returns the properties that belong to a node's tier (for example a sector's members, a variable's measure and whether it has market data, an asset's ticker and parent sector). A graph saved before these fields existed is filled in when it loads.
+
+Where you see it: tier headers on the Impact Graph, a **Hierarchy** tab (per-tier roll-up of the analysis and a
+sector-to-members drill-down), the tier and containing sector in Node Details, a tier label on every hop of the causal
+walkthrough, and `hierarchy` in the `/api/analyze` and `/api/whatif` results. `GET /api/hierarchy` returns the tiers and an
+audit of the links. The roll-up only re-groups the impact rows the analysis already produced; it adds no new estimates.
+
+## Editable, versioned graph
+
+Every change to the graph is one recorded, guarded change: an article folded in, a weight edited, a link added or removed, an
+asset added, removed or moved to another sector, a restore, a reset, an import. `impactgraph/changelog.py` records, for each,
+who made it (user or system), the tiers it touched, a reason if the user gave one, and an exact diff computed by comparing the
+graph before and after (entities and links added or removed, and every changed field with its before and after).
+
+- **History:** `GET /api/kb/history` and `/api/kb/history/{seq}`; the Settings page lists it with details.
+- **Restore:** `POST /api/kb/restore {version}` brings back the graph as it was at one of the last 30 versions of the session. A
+  restore is a new forward change, so nothing is erased; older entries stay readable but cannot be restored. A reset to the curated
+  baseline starts a new epoch and keeps the earlier history.
+- **Edits go through the health checks.** A deliberate user edit is judged on structure only (the regression against the curated
+  baseline is skipped, because the user is choosing to depart from it) and the link is marked `user_edited`.
+- **Tier rules for edits:** `POST /api/kb/link` adds a link, `/api/kb/link/check` is a dry run, `/api/kb/link/remove` removes one the
+  user added, `/api/kb/move-asset` moves a user-added or learned asset to another sector. A link that skips a tier, stays within one,
+  or goes back up gets a warning; a link pointing up from an asset is refused. Curated links cannot be removed and curated sector
+  memberships cannot be moved; edit a weight or add a link instead.
+- **Export and import:** `GET /api/kb/export` and `POST /api/kb/import`. An import must pass the health checks and the tier rules or
+  nothing changes.
+- **Every analysis records the graph version it ran on** (`kb_version`).
+
+## Asking the graph (KG assistant)
+
+`POST /api/assistant {question, history}` answers a question from the knowledge graph and nothing else, and never changes it (a
+question is not analysed as an article). `impactgraph/assistant.py` finds the graph entities in the question, retrieves tier-aware
+*cards* straight from the graph (an entity card, a link card with its mechanism, basis, data check and evidence quotes, a path card
+with its plausibility, a sector-to-members view, or a note that the graph holds no path between two entities), and asks the LLM to
+answer from those cards only, citing them. A citation that is not a real card is removed, and an answer with no valid citation is
+replaced by a plain answer built from the cards. The response carries the answer, the cited sources and the graph version. With no
+LLM, the cards themselves are the answer. A question that names no entity gets no answer, only suggestions.
+
 ## Live quotes, watchlist and the dynamic knowledge base
 
 **Live numbers.** Asset prices and day changes come from Yahoo Finance through `yfinance` (>= 0.2.66). Yahoo offers no webhooks, so the

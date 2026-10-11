@@ -69,28 +69,22 @@ export default function KgAssistant({ analysis, onNavigateToTab, onSelectEventTe
     setLoading(true);
 
     try {
-      // Internal working placeholder: ready to connect to custom backend handler when user specifies.
-      // Default: synthesizes response using backend analyze/status or graph knowledge.
-      let replyText = '';
-      try {
-        const res = await api.analyze(text);
-        if (res && res.summary) {
-          replyText = `**Analysis from Knowledge Graph:**\n\n${res.summary}\n\n` +
-            (res.paths && res.paths.length > 0
-              ? `**Top Identified Causal Pathways:**\n` +
-                res.paths.slice(0, 3).map((p, idx) => `${idx + 1}. **${p.headline}** (Score: ${Number(p.score).toFixed(2)})`).join('\n')
-              : '');
-        } else {
-          replyText = `Query processed against the Causal Knowledge Graph.\n\n*Entities and transmission weights retrieved.* Ready for custom reasoning logic.`;
-        }
-      } catch (err) {
-        replyText = `I have received your query: "${text}".\n\nThis assistant workspace is connected to the Knowledge Graph. (Working logic will be configured as requested).`;
-      }
-
+      // The assistant answers from the knowledge graph only and never changes it (/api/assistant is read only).
+      const history = messages
+        .filter((m) => m.id !== 'welcome-1')
+        .slice(-6)
+        .map((m) => ({ role: m.sender === 'user' ? 'user' : 'assistant', text: m.text }));
+      const res = await api.askAssistant(text, history);
       const botMsg = {
         id: `bot-${Date.now()}`,
         sender: 'assistant',
-        text: replyText,
+        text: res.answer,
+        sources: res.sources || [],
+        graphVersion: res.graph_version || null,
+        mode: res.mode,
+        note: res.note || null,
+        grounded: !!res.grounded,
+        suggestions: res.suggestions || null,
         time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
       };
       setMessages((prev) => [...prev, botMsg]);
@@ -207,6 +201,41 @@ export default function KgAssistant({ analysis, onNavigateToTab, onSelectEventTe
                   {msg.text}
                 </div>
 
+                {!isUser && msg.sources && msg.sources.length > 0 && (
+                  <div style={{ marginTop: 6, display: 'flex', flexWrap: 'wrap', gap: 5, maxWidth: 640 }}>
+                    <span style={{ fontSize: 11, color: '#71717a', alignSelf: 'center' }}>Sources:</span>
+                    {msg.sources.map((s) => (
+                      <span
+                        key={s.id}
+                        title={s.text}
+                        style={{ fontSize: 11, padding: '2px 8px', borderRadius: 10, border: '1px solid #e4e4e7', background: '#fafafa', color: '#3f3f46' }}
+                      >
+                        {s.kind === 'link' ? 'Link' : s.kind === 'path' ? 'Path' : s.kind === 'node' ? 'Entity' : 'Note'}: {s.title}
+                      </span>
+                    ))}
+                  </div>
+                )}
+                {!isUser && msg.suggestions && (
+                  <div style={{ marginTop: 6, display: 'flex', flexWrap: 'wrap', gap: 5, maxWidth: 640 }}>
+                    {[...(msg.suggestions.variables || []), ...(msg.suggestions.sectors || []), ...(msg.suggestions.assets || [])].map((name) => (
+                      <button
+                        key={name}
+                        type="button"
+                        onClick={() => handleSend(`Tell me about ${name}`)}
+                        style={{ fontSize: 11, padding: '2px 8px', borderRadius: 10, border: '1px solid #e4e4e7', background: '#fff', cursor: 'pointer', color: '#27272a' }}
+                      >
+                        {name}
+                      </button>
+                    ))}
+                  </div>
+                )}
+                {!isUser && (msg.graphVersion || msg.note) && (
+                  <div style={{ marginTop: 4, fontSize: 11, color: '#a1a1aa', maxWidth: 640 }}>
+                    {msg.graphVersion ? `Answered from graph version ${msg.graphVersion.version}. ` : ''}
+                    {msg.note || ''}
+                  </div>
+                )}
+
                 <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 4, padding: '0 4px', fontSize: 11, color: '#a1a1aa' }}>
                   <span>{msg.time}</span>
                   {!isUser && (
@@ -286,7 +315,7 @@ export default function KgAssistant({ analysis, onNavigateToTab, onSelectEventTe
           </button>
         </div>
         <div style={{ textAlign: 'center', fontSize: 11, color: '#a1a1aa', marginTop: 8 }}>
-          Knowledge-grounded assistant. Plausibility scores reflect structural DAG paths & empirical market correlations.
+          Answers come from the knowledge graph only and cite what they use. Scores are plausibility, not probabilities or price forecasts.
         </div>
       </div>
     </div>

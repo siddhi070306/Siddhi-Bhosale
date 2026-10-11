@@ -8,6 +8,7 @@ import re
 import xml.etree.ElementTree as ET
 import ipaddress
 import socket
+import threading
 import time
 from html import unescape
 from urllib import robotparser
@@ -33,14 +34,37 @@ _UA = {"User-Agent": "Mozilla/5.0 (compatible; ApexZenith/1.0)"}
 _CACHE = {}
 
 
+_REFRESHING = set()
+_REFRESH_LOCK = threading.Lock()
+
+
 def _cached(key, ttl, fn):
+    """Cached call. Once a value exists, an expired one is still returned at once while a background thread refreshes it
+    (stale-while-revalidate), so a page never waits on a slow feed after the first load. Only the first call blocks."""
     hit = _CACHE.get(key)
-    if hit and time.time() - hit[0] < ttl:
+    now = time.time()
+    if hit and now - hit[0] < ttl:
         return hit[1]
-    val = fn()
-    if val:                       # never cache a failure
-        _CACHE[key] = (time.time(), val)
-    return val
+
+    def refresh():
+        try:
+            val = fn()
+            if val:                       # never cache a failure
+                _CACHE[key] = (time.time(), val)
+            return val
+        finally:
+            with _REFRESH_LOCK:
+                _REFRESHING.discard(key)
+
+    if hit:
+        with _REFRESH_LOCK:
+            start = key not in _REFRESHING
+            if start:
+                _REFRESHING.add(key)
+        if start:
+            threading.Thread(target=refresh, daemon=True).start()
+        return hit[1]
+    return refresh()
 
 
 def _clean(s):
@@ -188,10 +212,14 @@ def article_snippet(a):
     return " ".join(x for x in (desc, content) if x)
 
 
+_NEWSAPI_BLOCKED_UNTIL = [0.0]     # set when NewsAPI says we are over our quota: do not keep asking (and waiting)
+NEWSAPI_BACKOFF_S = 1800
+
+
 def newsapi_headlines(limit=25):
     """Business headlines from newsapi.org (US + India) when NEWSAPI_KEY is set."""
     key = os.environ.get("NEWSAPI_KEY", "").strip()
-    if not key:
+    if not key or time.time() < _NEWSAPI_BLOCKED_UNTIL[0]:
         return []
     out = []
 
@@ -205,8 +233,13 @@ def newsapi_headlines(limit=25):
 
     def get(path, **params):
         for attempt in range(2):  # NewsAPI is occasionally slow; one retry before giving up on a call
+            if time.time() < _NEWSAPI_BLOCKED_UNTIL[0]:
+                return []
             try:
-                r = requests.get("https://newsapi.org/v2/" + path, timeout=25, headers={"X-Api-Key": key}, params=params)
+                r = requests.get("https://newsapi.org/v2/" + path, timeout=15, headers={"X-Api-Key": key}, params=params)
+                if r.status_code == 429:      # over the daily quota: retrying only makes every page wait
+                    _NEWSAPI_BLOCKED_UNTIL[0] = time.time() + NEWSAPI_BACKOFF_S
+                    return []
                 r.raise_for_status()
                 return r.json().get("articles", [])
             except Exception:

@@ -35,7 +35,7 @@ flowchart TD
     subgraph Propagation["4. Propagation & Scoring (propagate.py)"]
         N[Anchor Event Identification]
         O[Depth-Limited Multi-Path DFS Search]
-        P[Per-Hop Path Decay: 0.92^hop]
+        P[Per-Hop Path Decay: per link 0.82 to 0.97, 0.92 if untested]
         Q[Noisy-OR Aggregator & Agreement Penalizer]
     end
 
@@ -73,7 +73,7 @@ The foundational philosophy of Apex Zenith is that **the system never presents a
 ### 2.2 Heuristic Plausibility vs. Probability
 * Scores represent **heuristic plausibility** ($0.0 \dots 1.0$), **never probabilities or financial price targets**.
 * **Path Score**:
-  $$\text{score}(P) = \prod_{(u,v) \in P} \text{eff\_strength}(u,v) \times 0.92^{\text{hops}-1}$$
+  $$\text{score}(P) = \prod_{(u,v) \in P} \text{eff\_strength}(u,v) \times \text{decay}(u,v) \quad (\text{decay} = 1 \text{ on the first hop; per link } 0.97 / 0.93 / 0.82 \text{ by data support, } 0.92 \text{ if untested})$$
 * **Noisy-OR Aggregation**:
   $$\text{miss} = \prod_{p \in \text{top } 4} (1 - \text{score}_p), \quad \text{conf} = \min(0.92, 1 - \text{miss})$$
 * **Agreement Penalty & Mixed Signals**:

@@ -324,13 +324,15 @@ export default function App() {
       onSelectSession={handleSelectSession}
       onDeleteSession={handleDeleteSession}
       onClearAllSessions={handleClearAllSessions}
+      overlay={(
+        <ProductTour
+          isActive={tourIsActive}
+          onComplete={handleTourComplete}
+          setActiveTab={setActiveTab}
+          setHasAnalyzed={setHasAnalyzed}
+        />
+      )}
     >
-      <ProductTour 
-        isActive={tourIsActive} 
-        onComplete={handleTourComplete} 
-        setActiveTab={setActiveTab} 
-        setHasAnalyzed={setHasAnalyzed} 
-      />
       {notice && (
         <div className="card" style={{ marginBottom: 16, padding: '10px 16px', fontSize: 13, color: notice.startsWith('Analysis failed') ? '#991b1b' : '#27272a' }}>
           {notice}
