@@ -248,7 +248,10 @@ def headlines():
 
 @app.get("/api/sec")
 def sec(ticker: str = Query(..., min_length=1, max_length=10), form: str = "8-K"):
-    return feeds.sec_filings(ticker, form)
+    res = feeds.sec_filings(ticker, form)
+    if not res:
+        raise HTTPException(status_code=404, detail="No SEC record for this ticker (US-listed companies only), or EDGAR could not be reached.")
+    return res
 
 
 app.mount("/vendor", StaticFiles(directory=os.path.join(ROOT, "public", "vendor")), name="vendor")

@@ -251,6 +251,7 @@ export function toGraphView(res) {
       to: l.target,
       sign: l.sign,
       strength: l.strength,
+      baseStrength: l.base_strength,
       lag: l.lag,
       mechanism: l.mechanism,
       isActive: (l.paths || []).includes(0),

@@ -335,10 +335,9 @@ export default function EventAnalysis({
       </div>
 
       {/* Feature 1: Deterministic Step-by-Step Causal Transmission Walkthrough */}
-      {analysis && analysis.paths && analysis.paths.length > 0 && (
+      {analysis && analysis.raw && analysis.raw.paths && analysis.raw.paths.length > 0 && (
         <CausalChainWalkthrough
-          paths={analysis.paths}
-          eventMagnitude={details ? details.magnitude : '10%'}
+          paths={analysis.raw.paths}
           title="Step-by-Step Causal Transmission Walkthrough"
         />
       )}

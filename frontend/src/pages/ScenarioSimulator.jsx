@@ -28,7 +28,7 @@ const CONFLICTING_PRESETS = [
     ],
     target: 'delta',
     horizon: '1 Month',
-    description: 'Crude Oil (+12%) drives jet fuel input costs up, while record airline travel demand (+8%) lifts ticket pricing power. Tests whether margin compression outweighs volume growth.',
+    description: 'Assumes crude oil +12% (higher jet fuel cost) at the same time as an airline sector shock of +8% (stronger demand). Shows which effect the graph says dominates at the chosen asset.',
   },
   {
     key: 'fed_vs_spending',
@@ -40,7 +40,7 @@ const CONFLICTING_PRESETS = [
     ],
     target: 'spx',
     horizon: '3 Months',
-    description: 'Hawkish Fed policy rate expectations (+15%) push discount rates higher, while robust consumer spending (+8%) supports top-line earnings. Tests equity valuation vs. earnings growth.',
+    description: 'Assumes interest-rate expectations +15% together with consumer spending +8%. Shows whether the graph says the rate channel or the spending channel dominates at the chosen asset.',
   },
   {
     key: 'energy_vs_growth',
@@ -52,7 +52,7 @@ const CONFLICTING_PRESETS = [
     ],
     target: 'chemicals',
     horizon: '1 Month',
-    description: 'European/Global natural gas price spike (+25%) inflates petrochemical feedstock costs, while GDP growth (+6%) accelerates cyclical goods demand.',
+    description: 'Assumes natural gas +25% (feedstock cost) together with economic growth +6% (demand). Shows which channel the graph says dominates at the chosen asset.',
   },
   {
     key: 'oil_vs_rupee',
@@ -64,7 +64,7 @@ const CONFLICTING_PRESETS = [
     ],
     target: 'infosys',
     horizon: '1 Month',
-    description: 'Higher crude oil widens India’s trade deficit, while USD/INR rupee weakness (+6%) lifts dollar-denominated export margins for Indian IT firms.',
+    description: 'Assumes crude oil +15% together with USD/INR +6% (a weaker rupee). Shows which channel the graph says dominates at the chosen asset.',
   },
 ];
 
@@ -524,7 +524,7 @@ export default function ScenarioSimulator({ analysis = null, onNavigateToTab, on
                     <div>
                       <div style={{ fontSize: 12.5, fontWeight: 700, color: '#09090b' }}>{p.title}</div>
                       <div style={{ fontSize: 11.5, color: '#2563eb', fontWeight: 600, margin: '2px 0' }}>{p.subtitle}</div>
-                      <div style={{ fontSize: 11, color: '#71717a', lineHeight: 1.4 }}>{p.description}</div>
+                      <div style={{ fontSize: 11, color: '#71717a', lineHeight: 1.4 }}>What-if assumption, not a reported event. {p.description}</div>
                     </div>
                     <span className="badge badge-subtle" style={{ fontSize: 11, padding: '3px 8px', flexShrink: 0 }}>Apply</span>
                   </div>

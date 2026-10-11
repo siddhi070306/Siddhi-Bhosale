@@ -69,7 +69,8 @@ export default function ImpactGraph({ analysis, onNavigateToChat, onSelectEvent,
 
   const handleSelectEdge = (edge) => {
     setSelectedEdge(edge);
-    const w = edge.weight != null ? edge.weight : (edge.sign || 1) * (edge.strength || 0.5);
+    const base = typeof edge.baseStrength === 'number' ? edge.baseStrength : edge.strength;
+    const w = (edge.sign || 1) * base;
     setEdgeWeight(Math.round(w * 100) / 100);
     setEdgeSuccessMsg(null);
     setEdgeErrorMsg(null);
@@ -253,8 +254,8 @@ export default function ImpactGraph({ analysis, onNavigateToChat, onSelectEvent,
               <div style={{ display: 'flex', alignItems: 'center', gap: 8, minWidth: 200, flex: 1 }}>
                 <input
                   type="range"
-                  min="-0.99"
-                  max="0.99"
+                  min="-1"
+                  max="1"
                   step="0.05"
                   value={edgeWeight != null ? edgeWeight : 0}
                   onChange={(e) => {
@@ -444,8 +445,8 @@ export default function ImpactGraph({ analysis, onNavigateToChat, onSelectEvent,
 
                       <input
                         type="range"
-                        min="-0.99"
-                        max="0.99"
+                        min="-1"
+                        max="1"
                         step="0.05"
                         value={edgeWeight != null ? edgeWeight : 0}
                         onChange={(e) => {
@@ -468,12 +469,16 @@ export default function ImpactGraph({ analysis, onNavigateToChat, onSelectEvent,
                         Quick Presets:
                       </div>
                       <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
-                        {[
-                          { label: 'Strong Contraction', val: -0.85 },
-                          { label: 'Baseline', val: (selectedEdge.sign || -1) * (selectedEdge.strength || 0.65) },
-                          { label: 'Moderate', val: -0.35 },
-                          { label: 'Positive', val: 0.65 },
-                        ].map((preset, idx) => (
+                        {(() => {
+                          const base = (selectedEdge.sign || 1) * (typeof selectedEdge.baseStrength === 'number' ? selectedEdge.baseStrength : selectedEdge.strength);
+                          const cap = (v) => Math.max(-0.99, Math.min(0.99, v));
+                          return [
+                            { label: 'Stored', val: base },
+                            { label: 'Weaker (×0.5)', val: base * 0.5 },
+                            { label: 'Stronger (×1.5)', val: cap(base * 1.5) },
+                            { label: 'Reverse sign', val: -base },
+                          ];
+                        })().map((preset, idx) => (
                           <button
                             key={idx}
                             type="button"
@@ -614,11 +619,10 @@ export default function ImpactGraph({ analysis, onNavigateToChat, onSelectEvent,
       </div>
 
       {/* Feature 1: Causal Transmission Walkthrough */}
-      {analysis && analysis.paths && analysis.paths.length > 0 && (
+      {analysis && analysis.raw && analysis.raw.paths && analysis.raw.paths.length > 0 && (
         <div style={{ marginTop: 20 }}>
           <CausalChainWalkthrough
-            paths={analysis.paths}
-            eventMagnitude={analysis.details ? analysis.details.magnitude : '10%'}
+            paths={analysis.raw.paths}
             title="Step-by-Step Causal Transmission Walkthrough"
           />
         </div>

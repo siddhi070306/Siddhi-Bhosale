@@ -266,7 +266,7 @@ export default function EconometricAnalogs({
       </div>
 
       {/* Main Content Layout */}
-      <div style={{ display: 'grid', gridTemplateColumns: viewMode === 'both' ? '1fr 1fr' : '1fr', gap: 20 }}>
+      <div style={{ display: 'grid', gridTemplateColumns: viewMode === 'both' ? 'minmax(0, 1fr) minmax(0, 1fr)' : 'minmax(0, 1fr)', gap: 20 }}>
         {/* Section 1: Historical Analogs */}
         {(viewMode === 'analogs' || viewMode === 'both') && (
           <div className="card" style={{ padding: 22 }}>
@@ -347,10 +347,10 @@ export default function EconometricAnalogs({
                     Rebound Probability
                   </div>
                   <div style={{ fontSize: 18, fontWeight: 800, color: analogStats.winRate >= 50 ? '#166534' : '#991b1b', marginTop: 2 }}>
-                    {analogStats.winRate}% Rebounded
+                    {analogStats.winRate}% Rebounded{analogStats.count < 10 ? ` (n=${analogStats.count})` : ''}
                   </div>
                   <div style={{ fontSize: 11, color: '#a1a1aa', marginTop: 1 }}>
-                    {analogStats.positiveCount} of {analogStats.count} periods positive
+                    {analogStats.positiveCount} of {analogStats.count} periods positive{analogStats.count < 10 ? ' · small sample, not a probability' : ''}
                   </div>
                 </div>
               </div>

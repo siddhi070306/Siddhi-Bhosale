@@ -3,6 +3,7 @@
 Both are best-effort; every function returns [] on any failure so the offline demo is unaffected.
 """
 import os
+from concurrent.futures import ThreadPoolExecutor
 import re
 import xml.etree.ElementTree as ET
 import ipaddress
@@ -227,23 +228,26 @@ def newsapi_headlines(limit=25):
 
 def rss_items():
     """Items from every RSS feed (cached 5 minutes)."""
+    def fetch(feed):
+        name, url = feed
+        out = []
+        try:
+            r = requests.get(url, headers=_UA, timeout=8)
+            r.raise_for_status()
+            root = ET.fromstring(r.content)
+            for it in root.iter("item"):
+                title = _clean(it.findtext("title"))
+                if not title:
+                    continue
+                out.append({"source": name, "title": title, "summary": _clean(it.findtext("description")),
+                            "link": (it.findtext("link") or "").strip(), "published": (it.findtext("pubDate") or "").strip()})
+        except Exception:
+            pass
+        return out
+
     def load():
-        per_feed = []
-        for name, url in RSS_FEEDS:
-            out = []
-            try:
-                r = requests.get(url, headers=_UA, timeout=8)
-                r.raise_for_status()
-                root = ET.fromstring(r.content)
-                for it in root.iter("item"):
-                    title = _clean(it.findtext("title"))
-                    if not title:
-                        continue
-                    out.append({"source": name, "title": title, "summary": _clean(it.findtext("description")),
-                                "link": (it.findtext("link") or "").strip(), "published": (it.findtext("pubDate") or "").strip()})
-            except Exception:
-                pass
-            per_feed.append(out)
+        with ThreadPoolExecutor(max_workers=len(RSS_FEEDS)) as ex:   # feeds are independent: fetch them at the same time
+            per_feed = list(ex.map(fetch, RSS_FEEDS))
         # round-robin across feeds so the first N items span every publisher (and both markets), not just the first feed
         mixed = []
         for i in range(max((len(f) for f in per_feed), default=0)):
@@ -253,8 +257,10 @@ def rss_items():
 
 
 def headlines(limit=25):
-    api = _cached("newsapi:%d" % limit, 120, lambda: newsapi_headlines(limit)) or []
-    rss = rss_items() or []
+    with ThreadPoolExecutor(max_workers=2) as ex:                     # NewsAPI and the RSS feeds do not depend on each other
+        f_api = ex.submit(lambda: _cached("newsapi:%d" % limit, 120, lambda: newsapi_headlines(limit)))
+        f_rss = ex.submit(rss_items)
+        api, rss = f_api.result() or [], f_rss.result() or []
     
     combined = []
     for a, b in zip(api, rss):

@@ -4,7 +4,7 @@ import React from 'react';
 // Bars show direction x sensitivity; this is a heuristic plausibility measure, NOT a price forecast.
 export default function ScenarioChart({ scenarios = [], data = {}, activeScenario, onScenarioChange, assetLabel, loading, error }) {
   const width = 540;
-  const rowH = 44;
+  const rowH = 54;
   const top = 16;
   const height = top + rowH * Math.max(1, scenarios.length) + 24;
   const mid = width / 2 + 40;
@@ -43,16 +43,16 @@ export default function ScenarioChart({ scenarios = [], data = {}, activeScenari
             const active = s.key === activeScenario;
             return (
               <g key={s.key}>
-                <text x={8} y={y + 20} fontSize="11.5" fill="#09090b" fontWeight={active ? 700 : 500}>{s.label}</text>
+                <text x={8} y={y + 12} fontSize="11.5" fill="#09090b" fontWeight={active ? 700 : 500}>{s.label}</text>
                 {d ? (
                   <>
-                    <rect x={val >= 0 ? mid : mid - w} y={y + 6} width={Math.max(2, w)} height={22} rx={3} fill={active ? '#18181b' : '#71717a'} />
-                    <text x={val >= 0 ? mid + w + 6 : mid - w - 6} y={y + 21} textAnchor={val >= 0 ? 'start' : 'end'} fontSize="10.5" fill="#52525b">
+                    <rect x={val >= 0 ? mid : mid - w} y={y + 18} width={Math.max(2, w)} height={22} rx={3} fill={active ? '#18181b' : '#71717a'} />
+                    <text x={val >= 0 ? mid + w + 6 : mid - w - 6} y={y + 33} textAnchor={val >= 0 ? 'start' : 'end'} fontSize="10.5" fill="#52525b">
                       {d.sensitivity_label} · conf {d.confidence.toFixed(2)}
                     </text>
                   </>
                 ) : (
-                  <text x={mid + 8} y={y + 21} fontSize="10.5" fill="#a1a1aa">{loading ? 'computing…' : 'not reached by this shock'}</text>
+                  <text x={mid + 8} y={y + 33} fontSize="10.5" fill="#a1a1aa">{loading ? 'computing…' : 'not reached by this shock'}</text>
                 )}
               </g>
             );

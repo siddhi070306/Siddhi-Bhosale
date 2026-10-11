@@ -168,6 +168,7 @@ def summarise(facts):
     sys_p = ("You are a cautious financial analyst. Using ONLY the facts provided, write 3-4 sentences summarising "
              "the likely transmission of the event. Separate what the article reports (observed) from what the model infers. "
              "Use hedged language (may, plausibly, suggests). No price targets, no advice, no numbers not in the facts. "
+             "Only events listed under observed_events were reported by the article. Everything under top_assets, top_sectors, possible_drivers_hypotheses and model_hypotheses is a model inference: never describe it as observed, reported, happening or trending, and never state it as fact. "
              "Only if the facts contain a key named 'note', open with that caveat; never mention keys that are absent.")
     return _chat(sys_p, json.dumps(facts)[:6000], max_tokens=1500)
 

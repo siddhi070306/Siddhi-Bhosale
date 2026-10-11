@@ -516,7 +516,7 @@ class Analyzer:
                 if k not in links:
                     e = kg.g[u][v]
                     val = e.get("validation") or {}
-                    links[k] = {"source": u, "target": v, "sign": e["sign"], "strength": round(kg.eff_strength(u, v), 3),
+                    links[k] = {"source": u, "target": v, "sign": e["sign"], "strength": round(kg.eff_strength(u, v), 3), "base_strength": round(e["strength"], 3),
                                 "lag": e["lag"], "provenance": e["provenance"], "inferred": e.get("inferred", False),
                                 "verdict": val.get("verdict"), "paths": []}
                 links[k]["paths"].append(ex_["id"])

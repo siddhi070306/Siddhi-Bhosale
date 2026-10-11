@@ -18,13 +18,11 @@ import {
  * shock propagates across intermediate nodes to terminal asset exposures.
  *
  * Props:
- *   paths          - Array of explained path objects from analysis.paths
- *   eventMagnitude - Initial magnitude string or number (e.g. "+10%")
+ *   paths          - Array of explained path objects from the analysis result (raw.paths)
  *   title          - Custom section title (optional)
  */
 export default function CausalChainWalkthrough({
   paths = [],
-  eventMagnitude = '10%',
   title = 'Step-by-Step Causal Transmission Walkthrough',
 }) {
   const [selectedPathIdx, setSelectedPathIdx] = useState(0);
@@ -34,38 +32,28 @@ export default function CausalChainWalkthrough({
     return null;
   }
 
-  // Parse numeric shock magnitude
-  const magMatch = typeof eventMagnitude === 'string' ? eventMagnitude.match(/([\d.]+)/) : null;
-  const rawShockMag = magMatch ? parseFloat(magMatch[1]) : (typeof eventMagnitude === 'number' ? Math.abs(eventMagnitude) : 10.0);
-  const shockSign = typeof eventMagnitude === 'string' && eventMagnitude.includes('-') ? -1 : 1;
-  const initialShockPct = rawShockMag * shockSign;
-
+  // The score of a path is the product of its links' effective strengths with a 0.92 decay for every hop after the first
+  // (impactgraph/propagate.py). It is a 0-1 plausibility score, never a price move, so no % is derived from it here.
+  const DECAY = 0.92;
+  const linkW = (st) => (typeof st.effective === 'number' ? st.effective : st.strength);
   const currentPath = paths[selectedPathIdx] || paths[0];
   const steps = currentPath.steps || [];
+  const pathScore = typeof currentPath.score === 'number' ? currentPath.score : null;
 
-  // Compute cumulative values at each node
-  let runningVal = initialShockPct;
+  let running = 1.0;
   const mathSteps = [{
     nodeLabel: steps[0] ? steps[0].from_label : (currentPath.source || 'Trigger'),
-    value: runningVal,
-    multiplier: 1.0,
-    sign: 1,
-    mechanism: 'Macro trigger shock origin',
-    lag: 0,
+    value: running,
+    mechanism: 'Trigger: where the shock enters the graph',
     evidence: [],
   }];
 
-  steps.forEach((step) => {
-    const mult = (step.effective || step.strength || 0.7) * (step.sign || 1);
-    runningVal = runningVal * mult;
+  steps.forEach((step, i) => {
+    running = running * linkW(step) * (i > 0 ? DECAY : 1);
     mathSteps.push({
       nodeLabel: step.to_label,
-      value: runningVal,
-      multiplier: step.effective || step.strength || 0.7,
-      sign: step.sign,
+      value: running,
       mechanism: step.mechanism,
-      lag: step.lag,
-      provenance: step.provenance,
       evidence: step.evidence || [],
     });
   });
@@ -138,14 +126,14 @@ export default function CausalChainWalkthrough({
           >
             <div>
               <div style={{ fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.04em', color: '#71717a', marginBottom: 4 }}>
-                Causal Transmission Formula
+                Path plausibility = link strengths × 0.92 per extra hop (a 0–1 score, not a price move)
               </div>
               <div style={{ fontFamily: 'var(--font-mono)', fontSize: 13, fontWeight: 600, color: '#18181b', display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
-                <span style={{ color: initialShockPct >= 0 ? '#166534' : '#991b1b' }}>
-                  Shock ({initialShockPct >= 0 ? `+${initialShockPct.toFixed(1)}%` : `${initialShockPct.toFixed(1)}%`})
+                <span style={{ color: '#18181b' }}>
+                  {mathSteps[0].nodeLabel} (start)
                 </span>
                 {steps.map((s, i) => {
-                  const weight = (s.effective || s.strength || 0.7);
+                  const weight = linkW(s);
                   const signStr = s.sign >= 0 ? '+' : '−';
                   return (
                     <React.Fragment key={i}>
@@ -156,9 +144,17 @@ export default function CausalChainWalkthrough({
                     </React.Fragment>
                   );
                 })}
+                {steps.length > 1 && (
+                  <>
+                    <span style={{ color: '#a1a1aa' }}>×</span>
+                    <span style={{ background: '#ffffff', padding: '1px 6px', borderRadius: 4, border: '1px solid #e4e4e7' }}>
+                      {Math.pow(DECAY, steps.length - 1).toFixed(2)} decay
+                    </span>
+                  </>
+                )}
                 <span style={{ color: '#71717a' }}>=</span>
-                <span style={{ color: runningVal >= 0 ? '#166534' : '#991b1b', background: runningVal >= 0 ? '#f0fdf4' : '#fef2f2', padding: '2px 8px', borderRadius: 6, border: runningVal >= 0 ? '1px solid #bbf7d0' : '1px solid #fecaca' }}>
-                  {runningVal >= 0 ? `+${runningVal.toFixed(2)}%` : `${runningVal.toFixed(2)}%`} Net Exposure
+                <span style={{ color: '#18181b', background: '#f4f4f5', padding: '2px 8px', borderRadius: 6, border: '1px solid #e4e4e7' }}>
+                  {(pathScore != null ? pathScore : running).toFixed(2)} Plausibility
                 </span>
               </div>
             </div>
@@ -166,7 +162,7 @@ export default function CausalChainWalkthrough({
             <div style={{ textAlign: 'right' }}>
               <div style={{ fontSize: 11, color: '#71717a' }}>Total Chain Decoupling</div>
               <div style={{ fontSize: 12.5, fontWeight: 700, color: '#18181b' }}>
-                {steps.length} Hop{steps.length === 1 ? '' : 's'} · ~{currentPath.horizon_days || 10}d Est. Lag
+                {steps.length} Hop{steps.length === 1 ? '' : 's'} · ~{currentPath.horizon_days}d typical lag
               </div>
             </div>
           </div>
@@ -225,7 +221,7 @@ export default function CausalChainWalkthrough({
                       <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                         {stepObj && (
                           <span style={{ fontSize: 11, color: '#71717a', fontFamily: 'var(--font-mono)' }}>
-                            Link weight: {stepObj.sign >= 0 ? '+' : '−'}{(stepObj.effective || stepObj.strength || 0.7).toFixed(2)}
+                            Link weight: {stepObj.sign >= 0 ? '+' : '−'}{linkW(stepObj).toFixed(2)}
                           </span>
                         )}
                         <span
@@ -233,10 +229,10 @@ export default function CausalChainWalkthrough({
                             fontFamily: 'var(--font-mono)',
                             fontSize: 13,
                             fontWeight: 700,
-                            color: item.value >= 0 ? '#166534' : '#991b1b',
+                            color: '#18181b',
                           }}
                         >
-                          {item.value >= 0 ? `+${item.value.toFixed(2)}%` : `${item.value.toFixed(2)}%`}
+                          {item.value.toFixed(2)}
                         </span>
                       </div>
                     </div>
@@ -245,6 +241,17 @@ export default function CausalChainWalkthrough({
                     {item.mechanism && (
                       <div style={{ fontSize: 12, color: '#52525b', marginTop: 5, lineHeight: 1.5 }}>
                         {item.mechanism}
+                      </div>
+                    )}
+
+                    {/* Data check on this link (real series; flagged when simulated) */}
+                    {stepObj && stepObj.validation && stepObj.validation.verdict && (
+                      <div style={{ fontSize: 11.5, color: '#71717a', marginTop: 5 }}>
+                        Data check: <strong>{stepObj.validation.verdict}</strong>
+                        {typeof stepObj.validation.corr === 'number' && ` · r = ${stepObj.validation.corr}`}
+                        {stepObj.validation.n ? ` over ${stepObj.validation.n} days` : ''}
+                        {stepObj.validation.simulated ? ' · simulated data (does not change confidence)' : ''}
+                        {stepObj.validation.data ? ` · ${stepObj.validation.data}` : ''}
                       </div>
                     )}
 
