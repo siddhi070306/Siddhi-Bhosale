@@ -41,7 +41,8 @@ _n("rate_exp", "Interest-Rate Expectations", "indicator",
     "interest rate", "borrowing costs", "policy rate", "repo rate", "rates"],
    [("fred", "DGS2", "diff"), ("yf", "^IRX", "diff")])
 _n("us10y", "US 10Y Treasury Yield", "indicator",
-   ["10-year yield", "10-year treasury", "ten-year yield", "treasury yields", "treasury yield",
+   ["10-year treasury yields", "10-year yields", "10-year yield", "10-year treasury", "ten-year yields", "ten-year yield",
+    "treasury yields", "treasury yield",
     "bond yields", "bond yield"],
    [("fred", "DGS10", "diff"), ("yf", "^TNX", "diff")])
 _n("usd", "US Dollar", "indicator", ["us dollar", "dollar index", "!DXY", "greenback", "dollar"],

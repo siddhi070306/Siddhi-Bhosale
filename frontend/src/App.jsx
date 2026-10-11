@@ -10,7 +10,7 @@ import EconometricAnalogs from './pages/EconometricAnalogs';
 import Settings from './pages/Settings';
 import KgAssistant from './pages/KgAssistant';
 import PortfolioHedge from './pages/PortfolioHedge';
-import { api } from './services/api';
+import { api, adaptResult, slimResult } from './services/api';
 import ProductTour from './components/ui/ProductTour';
 import {
   getAllSessions,
@@ -27,6 +27,38 @@ import './styles/pages.css';
 import './styles/chat.css';
 
 const VALID_TABS = ['chat', 'kg-assistant', 'home', 'portfolio-hedge', 'asset-impact', 'econometrics', 'event-analysis', 'impact-graph', 'scenario-simulator', 'settings'];
+const LIB_PREFIX = 'lib:'; // Recent-chats entries that exist only in the backend's analysis library
+
+// server times are "YYYY-MM-DD HH:MM:SS" (local); browser timestamps are milliseconds
+const parseServerTime = (t) => {
+  const ms = Date.parse(String(t || '').replace(' ', 'T'));
+  return Number.isNaN(ms) ? 0 : ms;
+};
+const pad = (n) => String(n).padStart(2, '0');
+const toServerTime = (ms) => {
+  const d = new Date(ms || Date.now());
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`;
+};
+const libraryIdOf = (analysis) => (analysis && analysis.raw && (analysis.raw.library_id || analysis.raw.article_id)) || null;
+
+function buildAiMessage(eventText, res) {
+  return {
+    id: `ai-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+    sender: 'ai',
+    eventText,
+    summary: res.summary,
+    llmNote: res.llmNote,
+    entities: res.view.extractedEntities,
+    details: res.view.details,
+    noEvent: res.noEvent,
+    kbGuard: res.kbGuard,
+    input: res.input,
+    context: res.context,
+    hypothesis: res.hypothesis,
+    emptyReason: res.emptyReason,
+    emptyHint: res.emptyHint,
+  };
+}
 
 function getTabFromHash() {
   const hash = window.location.hash.replace(/^#\/?/, '').split('?')[0].trim();
@@ -45,6 +77,17 @@ export default function App() {
   const [tourIsActive, setTourIsActive] = useState(false);
   const [sessions, setSessions] = useState(() => getAllSessions());
   const [activeSessionId, setActiveSessionIdState] = useState(() => getActiveSessionId());
+  const [library, setLibrary] = useState({ total: 0, items: [] }); // graphs saved on the backend (analysis library)
+
+  const refreshLibrary = () =>
+    api
+      .listAnalyses(200)
+      .then(setLibrary)
+      .catch(() => setLibrary((prev) => prev)); // the sidebar keeps showing browser chats if the backend is down
+
+  useEffect(() => {
+    refreshLibrary();
+  }, []);
 
   const TOUR_STORAGE_KEY = 'apex_zenith_has_seen_tour_v1';
 
@@ -132,7 +175,60 @@ export default function App() {
     setAnalysis({ ...result, at: Date.now() });
     setHasAnalyzed(true);
     setNotice(null);
+    refreshLibrary(); // the backend filed this graph in the library
   };
+
+  // Reopen a graph saved in the backend library as a chat, with every dashboard (the full result is stored there).
+  const handleOpenSaved = async (libraryId) => {
+    setNotice('Opening saved graph…');
+    try {
+      const { record, result } = await api.getAnalysis(libraryId);
+      if (!result) throw new Error('the full result of this analysis is no longer stored');
+      const text = result.text || record.excerpt || record.title;
+      const res = adaptResult(result, text, record.link ? 'Saved analysis' : null, record.link, record.title);
+      setActiveSessionIdState(null); // a new browser chat is created for it by the session sync below
+      setActiveSessionId(null);
+      setCurrentEventText(text);
+      setAnalysis({ ...res, at: Date.now() });
+      setHasAnalyzed(true);
+      setMessages([{ id: `usr-${Date.now()}`, sender: 'user', text: record.title || text }, buildAiMessage(text, res)]);
+      setNotice(`Reopened the saved graph from ${record.t}${record.origin === 'import' ? ' (imported from chat history)' : ''}.`);
+      setActiveTab('chat');
+    } catch (e) {
+      setNotice(`Analysis failed: could not open the saved graph (${e.message})`);
+    }
+  };
+
+  // Send every analysis in this browser's chat history to the backend library, so the KG assistant can use it.
+  const handleImportHistory = async () => {
+    const items = getAllSessions()
+      .filter((s) => s.analysis && s.analysis.raw && Array.isArray(s.analysis.raw.events))
+      .map((s) => ({
+        result: slimResult(s.analysis.raw),
+        title: s.analysis.title || s.title || null,
+        link: s.analysis.link || null,
+        t: toServerTime(s.updatedAt || s.createdAt),
+      }));
+    const totals = { imported: 0, already_in_library: 0, skipped: 0, found: items.length, total: library.total };
+    for (let i = 0; i < items.length; i += 25) {
+      const out = await api.importAnalyses(items.slice(i, i + 25));
+      totals.imported += out.imported;
+      totals.already_in_library += out.already_in_library;
+      totals.skipped += out.skipped;
+      totals.total = out.total;
+    }
+    await refreshLibrary();
+    return totals;
+  };
+
+  // Recent chats = this browser's chats + graphs saved on the backend that this browser does not hold (newest first)
+  const localLibraryIds = new Set(sessions.map((s) => libraryIdOf(s.analysis)).filter(Boolean));
+  const recentChats = [
+    ...sessions,
+    ...(library.items || [])
+      .filter((it) => !localLibraryIds.has(it.id))
+      .map((it) => ({ id: LIB_PREFIX + it.id, title: it.title, updatedAt: parseServerTime(it.t), saved: true, origin: it.origin })),
+  ].sort((a, b) => (b.updatedAt || 0) - (a.updatedAt || 0));
 
   const handleNewChat = () => {
     setActiveTab('chat');
@@ -146,6 +242,10 @@ export default function App() {
   };
 
   const handleSelectSession = (sessionId) => {
+    if (sessionId && sessionId.startsWith(LIB_PREFIX)) {
+      handleOpenSaved(sessionId.slice(LIB_PREFIX.length));
+      return;
+    }
     const sess = getSessionById(sessionId);
     if (!sess) return;
     setActiveSessionIdState(sess.id);
@@ -158,6 +258,13 @@ export default function App() {
   };
 
   const handleDeleteSession = (sessionId) => {
+    if (sessionId && sessionId.startsWith(LIB_PREFIX)) {
+      api
+        .deleteAnalysis(sessionId.slice(LIB_PREFIX.length))
+        .then(refreshLibrary)
+        .catch((e) => setNotice(`Analysis failed: could not delete the saved graph (${e.message})`));
+      return;
+    }
     deleteSession(sessionId);
     setSessions(getAllSessions());
     if (activeSessionId === sessionId) {
@@ -189,26 +296,9 @@ export default function App() {
     try {
       const res = await api.analyze(eventText, undefined, source, link, title);
       handleAnalysisComplete(eventText, res);
-      // Add to messages if on chat
-      const aiMsg = {
-        id: `ai-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
-        sender: 'ai',
-        eventText,
-        summary: res.summary,
-        llmNote: res.llmNote,
-        entities: res.view.extractedEntities,
-        details: res.view.details,
-        noEvent: res.noEvent,
-        kbGuard: res.kbGuard,
-        input: res.input,
-        context: res.context,
-        hypothesis: res.hypothesis,
-        emptyReason: res.emptyReason,
-        emptyHint: res.emptyHint,
-      };
       setMessages([
         { id: `usr-${Date.now()}`, sender: 'user', text: eventText },
-        aiMsg,
+        buildAiMessage(eventText, res),
       ]);
       setActiveTab('chat');
     } catch (e) {
@@ -295,6 +385,9 @@ export default function App() {
             analysis={analysis}
             onNavigateToTab={(tabId, assetId, mode) => setActiveTab(tabId, assetId, mode)}
             onSelectEventText={(text) => setCurrentEventText(text)}
+            libraryTotal={library.total}
+            localAnalyses={sessions.filter((s) => s.analysis && s.analysis.raw).length}
+            onImportHistory={handleImportHistory}
           />
         );
       default:
@@ -319,7 +412,7 @@ export default function App() {
       hasAnalyzed={hasAnalyzed}
       onNewChat={handleNewChat}
       onStartTour={() => setTourIsActive(true)}
-      chatSessions={sessions}
+      chatSessions={recentChats}
       activeSessionId={activeSessionId}
       onSelectSession={handleSelectSession}
       onDeleteSession={handleDeleteSession}

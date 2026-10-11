@@ -11,6 +11,14 @@ How an answer is produced
      replaced by a plain answer built from the cards.
   4. Return the answer, the cards it cites, and the graph version it was answered from.
 
+Saved analyses. Every graph the Knowledge Graph Generator produced is kept in the analysis library (library.py). A question that
+names an entity also retrieves the most recent analyses that touched it, and a question about the news ("what did the last article
+say?") retrieves the latest ones, as analysis cards (a:<id>). An analysis card keeps apart what the article REPORTED, what the model
+INFERRED (at a stated graph version) and the model's HYPOTHESES, and the answer must say which is which.
+
+For a one-entity question the paths retrieved are diversified: one per first link (see cards.find_paths), so "what happens if oil
+rises?" covers producers, inflation and rates, airlines, not three variants of the strongest branch.
+
 Nothing here changes the graph. A question is never ingested as an article.
 """
 from __future__ import annotations
@@ -21,10 +29,15 @@ from . import extract as ex
 from . import cards as cardlib, kb, llm
 from .cards import label as _label
 
-MAX_CARDS = 9
+MAX_CARDS = 9                 # graph cards
+MAX_ANALYSIS_CARDS = 3        # saved-analysis cards, on top of the graph cards
 MAX_CARD_CHARS = 900
+MAX_ANALYSIS_CHARS = 1600
 FOLLOW_UP = re.compile(r"^\s*(and|also|what about|how about|then)\b|\b(it|its|they|them|their|those|these|that one|the same)\b", re.I)
 CITE = re.compile(r"\[([a-z]:[^\]\s]+)\]")
+NEWS = re.compile(r"\b(articles?|news|stor(?:y|ies)|headlines?|analys[ie]s|analysed|analyzed|reported|reports?|generated|"
+                  r"generator|chats?)\b", re.I)
+LATEST = re.compile(r"\b(last|latest|most recent|newest|this|current|just)\b", re.I)
 
 
 def find_entities(question, history=()):
@@ -68,9 +81,9 @@ def build_cards(kg, entities):
                     add(cardlib.path_card(kg, p))
             if not found and not g.has_edge(a, b) and not g.has_edge(b, a):
                 add(cardlib.gap_card(kg, a, b))
-    if len(entities) == 1:                                # one entity: what it drives, and what drives it
+    if len(entities) == 1:                                # one entity: what it drives (one chain per channel), and what drives it
         n = entities[0]
-        for p in cardlib.find_paths(kg, n, None, 3):
+        for p in cardlib.find_paths(kg, n, None, 5, diverse=True):
             add(cardlib.path_card(kg, p))
         for u, v in sorted(g.in_edges(n), key=lambda uv: -kg.eff_strength(*uv))[:2]:
             add(cardlib.link_card(kg, u, v))
@@ -85,8 +98,26 @@ SYSTEM = (
     "or something market data supported; never present a prior as an observation. "
     "4) Scores and strengths are plausibility, not probabilities, elasticities or price moves; never state a percentage price move. "
     "5) Use hedged language (may, plausibly). No advice and no price targets. "
-    "6) Answer in 3-6 plain sentences."
+    "6) Cards whose id starts with a: are records of earlier analyses of specific articles. What they list as REPORTED was stated "
+    "by that article (say so, with its date); what they list as INFERRED was the model's inference at that time; HYPOTHESES are "
+    "hypotheses. Never present an inference or a hypothesis as something an article reported, and prefer the other cards for how "
+    "the graph works now. "
+    "7) Answer in 3-6 plain sentences."
 )
+
+
+def find_analyses(library, question, entities, limit=MAX_ANALYSIS_CARDS):
+    """Saved analyses relevant to the question, newest first: those touching the named entities and, for a question about the
+    news, the latest ones. "The last / latest / this article" means exactly the newest one (matching the named entities, if any)."""
+    if library is None or not library.records:
+        return []
+    news = NEWS.search(question)
+    out = library.mentioning(entities, limit) if entities else []
+    if news and LATEST.search(question):
+        return out[:1] if out else library.latest(1)
+    if news and len(out) < limit:
+        out += [r for r in library.latest(limit) if r not in out][:limit - len(out)]
+    return sorted(out, key=lambda r: r.get("t") or "", reverse=True)
 
 
 def _fallback(question, cards, entities, g):
@@ -104,23 +135,27 @@ def _suggestions(kg):
     return {"variables": pick("variable", 5), "sectors": pick("sector", 5), "assets": pick("asset", 5)}
 
 
-def answer(kg, version, question, history=(), use_llm=True):
+def answer(kg, version, question, history=(), use_llm=True, library=None):
     question = (question or "").strip()
     if not question:
         return {"error": "empty question"}
     ents = find_entities(question, history)
     g = kg.g
     base = {"graph_version": version, "entities": [{"id": n, "label": _label(g, n), "tier": g.nodes[n].get("tier")} for n in ents]}
-    if not ents:
+    saved = [cardlib.analysis_card(r, version) for r in find_analyses(library, question, ents)]
+    if not ents and not saved:
         return dict(base, answer="I could not find any entity from the graph in that question, so I have nothing to ground an "
-                                 "answer in. Try naming a commodity, indicator, sector, company or index.",
-                    grounded=False, mode="none", sources=[], suggestions=_suggestions(kg))
-    cards = build_cards(kg, ents)
+                                 "answer in. Try naming a commodity, indicator, sector, company or index, or ask about an "
+                                 "article you analysed.",
+                    grounded=False, mode="none", sources=[], suggestions=_suggestions(kg), analyses_considered=0)
+    cards = build_cards(kg, ents) + saved
     by_id = {c["id"]: c for c in cards}
     text, mode, note = "", "cards", None
     if use_llm and llm.available():
-        body = "Graph version %s.\n\nQuestion: %s\n\nCards:\n%s" % (
-            version.get("version"), question, "\n\n".join("[%s] %s\n%s" % (c["id"], c["title"], c["text"][:MAX_CARD_CHARS]) for c in cards))
+        body = "Graph version %s.%s\n\nQuestion: %s\n\nCards:\n%s" % (
+            version.get("version"), " Article analyses (a: cards) are listed newest first." if saved else "",
+            question, "\n\n".join("[%s] %s\n%s" % (
+                c["id"], c["title"], c["text"][:MAX_ANALYSIS_CHARS if c["kind"] == "analysis" else MAX_CARD_CHARS]) for c in cards))
         out = llm._chat(SYSTEM, body, max_tokens=900)
         if out:
             cited = [c for c in CITE.findall(out) if c in by_id]
@@ -140,4 +175,5 @@ def answer(kg, version, question, history=(), use_llm=True):
         if cid in by_id and cid not in cited_ids:
             cited_ids.append(cid)
     sources = [{"id": c["id"], "kind": c["kind"], "title": c["title"], "text": c["text"]} for c in cards if c["id"] in cited_ids]
-    return dict(base, answer=text, grounded=bool(sources), mode=mode, sources=sources, note=note, cards_considered=len(cards))
+    return dict(base, answer=text, grounded=bool(sources), mode=mode, sources=sources, note=note, cards_considered=len(cards),
+                analyses_considered=len(saved))

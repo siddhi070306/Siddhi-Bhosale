@@ -6,7 +6,7 @@ from fastapi.responses import FileResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
-from impactgraph import assistant, cards as cardlib, feeds, hedge, hierarchy, llm, market, quotes
+from impactgraph import assistant, cards as cardlib, feeds, hedge, hierarchy, library, llm, market, quotes
 from impactgraph.service import SAMPLES, Analyzer, llm_required
 
 app = FastAPI(title="Apex Zenith")
@@ -20,6 +20,7 @@ def _warm_feeds():
     import threading
     threading.Thread(target=feeds.rss_items, daemon=True).start()     # RSS only: NewsAPI has a small daily quota, so it is never called at startup
 analyzer = Analyzer(persist=not os.environ.get("VERCEL"))
+LIB = library.AnalysisLibrary()      # every graph the generator produces, for the KG assistant and the chat history
 ROOT = os.path.dirname(os.path.abspath(__file__))
 
 
@@ -37,7 +38,42 @@ def analyze(body: AnalyzeBody):
     res = analyzer.analyze(body.text, live=body.live, use_llm=body.use_llm, link=body.link, full_text=body.full_text, title=body.title)
     if res.get("error"):
         raise HTTPException(status_code=503 if "LLM" in res["error"] else 400, detail=res["error"])
+    rec = LIB.record(res, title=body.title, link=body.link)
+    res["library_id"] = rec["id"] if rec else None
     return res
+
+
+# ---- the analysis library: every generated graph, readable by the KG assistant --------------------------
+@app.get("/api/analyses")
+def analyses_list(limit: int = Query(50, ge=1, le=200), offset: int = Query(0, ge=0)):
+    return LIB.summaries(limit, offset)
+
+
+@app.get("/api/analyses/{rid}")
+def analyses_get(rid: str):
+    rec = LIB.get(rid)
+    if rec is None:
+        raise HTTPException(status_code=404, detail="no saved analysis with id %s" % rid)
+    return {"record": rec, "result": LIB.full(rid)}
+
+
+class ImportBody(BaseModel):
+    items: List[Dict[str, Any]]
+
+
+@app.post("/api/analyses/import")
+def analyses_import(body: ImportBody):
+    """Add analyses from the browser's chat history. Each item: {result, title?, link?, t?}. Ids already saved are kept."""
+    if len(body.items) > library.MAX_IMPORT:
+        raise HTTPException(status_code=400, detail="at most %d items per import" % library.MAX_IMPORT)
+    return dict(LIB.import_items(body.items), total=len(LIB.records))
+
+
+@app.delete("/api/analyses/{rid}")
+def analyses_delete(rid: str):
+    if not LIB.delete(rid):
+        raise HTTPException(status_code=404, detail="no saved analysis with id %s" % rid)
+    return {"ok": True, "total": len(LIB.records)}
 
 
 @app.get("/api/samples")
@@ -73,7 +109,7 @@ class AssistantBody(BaseModel):
 def assistant_answer(body: AssistantBody):
     """Answer a question from the knowledge graph. Read only: the question is never analysed as an article."""
     res = assistant.answer(analyzer.kg, {"version": analyzer.guard.version, "epoch": analyzer.guard.epoch}, body.question,
-                           history=body.history or [], use_llm=True)
+                           history=body.history or [], use_llm=True, library=LIB)
     if res.get("error"):
         raise HTTPException(status_code=400, detail=res["error"])
     return res
@@ -81,18 +117,21 @@ def assistant_answer(body: AssistantBody):
 
 @app.get("/api/kg/cards")
 def kg_cards(tier: Optional[str] = None, node: Optional[str] = None, kind: Optional[str] = None,
-             limit: int = Query(200, ge=1, le=2000), offset: int = Query(0, ge=0)):
-    """The whole graph as citable text cards (nodes, links, sectors, tiers), pinned to the graph version. Filter by tier, node or kind."""
+             limit: int = Query(200, ge=1, le=2000), offset: int = Query(0, ge=0), analyses: bool = False):
+    """The whole graph as citable text cards (nodes, links, sectors, tiers), pinned to the graph version. Filter by tier, node or kind.
+    analyses=true (or kind=analysis) adds a card per saved analysis; the fingerprint always covers the graph's own cards only."""
     allc = cardlib.all_cards(analyzer.kg)
-    sel = cardlib.select(allc, tier, node, kind)
-    return {"graph_version": {"version": analyzer.guard.version, "epoch": analyzer.guard.epoch},
-            "fingerprint": cardlib.fingerprint(allc), "total_cards": len(allc), "matched": len(sel),
-            "cards": sel[offset:offset + limit]}
+    gv = {"version": analyzer.guard.version, "epoch": analyzer.guard.epoch}
+    pool = allc + ([cardlib.analysis_card(r, gv) for r in LIB.records] if analyses or kind == "analysis" else [])
+    sel = cardlib.select(pool, tier, node, kind)
+    return {"graph_version": gv, "fingerprint": cardlib.fingerprint(allc), "total_cards": len(allc), "analysis_cards": len(pool) - len(allc),
+            "matched": len(sel), "cards": sel[offset:offset + limit]}
 
 
 @app.get("/api/kg/cards/{card_id:path}")
 def kg_card(card_id: str):
-    c = cardlib.get_card(analyzer.kg, card_id)
+    c = cardlib.get_card(analyzer.kg, card_id, library=LIB,
+                         graph_version={"version": analyzer.guard.version, "epoch": analyzer.guard.epoch})
     if c is None:
         raise HTTPException(status_code=404, detail="no such card: %s" % card_id)
     return {"graph_version": {"version": analyzer.guard.version, "epoch": analyzer.guard.epoch}, "card": c}

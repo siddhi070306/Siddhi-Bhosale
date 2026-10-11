@@ -60,6 +60,35 @@ class ExtractionTests(unittest.TestCase):
         e = find(events("The RBI imposed tighter rules on banks."), "banks")[0]
         self.assertEqual((e["type"], e["direction"], e["market"]), ("regulation", -1, "IN"))
 
+    # failures found by research/evaluate.py, now fixed
+    def test_cut_oil_output_is_supply_restraint_not_oil_falling(self):
+        evs = events("OPEC+ agreed to cut oil output by 1 million barrels a day, sending Brent crude up 6%.")
+        self.assertEqual([(e["direction"], e["magnitude"]) for e in find(evs, "crude_oil")], [(1, "6%")])
+        self.assertEqual([e["direction"] for e in find(evs, "opec_supply_cut", "observed")], [1])
+
+    def test_quantity_words_are_not_price_moves(self):
+        self.assertFalse(find(events("Crude oil exports from Russia rose 10%."), "crude_oil"))
+
+    def test_causative_particle_gives_the_direction(self):
+        evs = events("Oil prices fell 4%, dragging energy stocks lower.")
+        self.assertEqual([e["direction"] for e in find(evs, "oil_gas_producers", "observed")], [-1])
+
+    def test_more_hikes_is_a_noun_and_if_hedges_the_entity(self):
+        evs = events("The Federal Reserve raised interest rates by 25 basis points and signalled more hikes if inflation stays high.")
+        self.assertFalse(find(evs, "inflation_exp"))
+        self.assertTrue(find(evs, "fed", "observed"))
+        self.assertTrue(find(events("Analysts see oil rising if inflation rose further."), "inflation_exp", "expected"))
+
+    def test_plural_ten_year_yields_and_its_own_magnitude(self):
+        evs = events("The dollar index jumped 1.2% and 10-year yields rose as investors priced in tight policy.")
+        e = find(evs, "us10y", "observed")[0]
+        self.assertEqual((e["direction"], e["magnitude"]), (1, None))
+        self.assertEqual(find(evs, "usd")[0]["magnitude"], "1.2%")
+
+    def test_generic_central_banks_do_not_hide_a_rate_claim(self):
+        evs = events("Higher energy costs could push central banks to keep interest rates higher for longer.")
+        self.assertEqual([e["direction"] for e in find(evs, "rate_exp", "expected")], [1])
+
 
 class PropagationTests(unittest.TestCase):
     def setUp(self):

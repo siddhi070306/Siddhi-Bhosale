@@ -1,0 +1,1652 @@
+{
+  "generated": "2026-10-11 16:38:59",
+  "python": "3.9.0",
+  "E1_graph": {
+    "entities": 56,
+    "links": 90,
+    "aliases": 194,
+    "entities_by_tier": {
+      "variable": 13,
+      "event": 6,
+      "sector": 13,
+      "asset": 24
+    },
+    "entities_by_type": {
+      "commodity": 5,
+      "indicator": 8,
+      "event_class": 2,
+      "institution": 4,
+      "sector": 13,
+      "company": 15,
+      "index": 5,
+      "instrument": 4
+    },
+    "entities_by_market": {
+      "GLOBAL": 31,
+      "IN": 15,
+      "US": 10
+    },
+    "entities_with_market_series": 48,
+    "links_by_relation": {
+      "causes": 58,
+      "tracks": 6,
+      "policy_reaction": 4,
+      "member_of": 15,
+      "weight_in": 7
+    },
+    "links_by_tier_crossing": {
+      "lateral": 25,
+      "next": 54,
+      "skip": 9,
+      "feedback": 2
+    },
+    "links_positive": 65,
+    "links_negative": 25,
+    "strength_min": 0.15,
+    "strength_median": 0.5,
+    "strength_max": 0.98,
+    "lag_days_median": 2.0
+  },
+  "E2_ablation": {
+    "articles": 10,
+    "baseline_asset_results": 182,
+    "variants": [
+      {
+        "variant": "flat graph (as built)",
+        "links": 90,
+        "paths": 343,
+        "asset_results": 182,
+        "asset_results_lost": 0,
+        "asset_results_gained": 0,
+        "direction_flips": 0,
+        "top5_overlap": 1.0,
+        "articles_reaching_no_asset": 0
+      },
+      {
+        "variant": "no feedback links",
+        "links": 88,
+        "paths": 328,
+        "asset_results": 180,
+        "asset_results_lost": 2,
+        "asset_results_gained": 0,
+        "direction_flips": 0,
+        "top5_overlap": 1.0,
+        "articles_reaching_no_asset": 0
+      },
+      {
+        "variant": "no tier skips",
+        "links": 81,
+        "paths": 336,
+        "asset_results": 160,
+        "asset_results_lost": 22,
+        "asset_results_gained": 0,
+        "direction_flips": 12,
+        "top5_overlap": 0.622,
+        "articles_reaching_no_asset": 0
+      },
+      {
+        "variant": "no feedback, no skips",
+        "links": 79,
+        "paths": 321,
+        "asset_results": 158,
+        "asset_results_lost": 24,
+        "asset_results_gained": 0,
+        "direction_flips": 12,
+        "top5_overlap": 0.622,
+        "articles_reaching_no_asset": 0
+      },
+      {
+        "variant": "strict layers (next tier only)",
+        "links": 54,
+        "paths": 127,
+        "asset_results": 69,
+        "asset_results_lost": 113,
+        "asset_results_gained": 0,
+        "direction_flips": 4,
+        "top5_overlap": 0.489,
+        "articles_reaching_no_asset": 2
+      }
+    ],
+    "path_composition": {
+      "paths": 343,
+      "paths_with_lateral": 222,
+      "paths_with_skip": 57,
+      "paths_with_feedback": 15,
+      "asset_best_paths": 137,
+      "asset_best_with_lateral": 70,
+      "asset_best_with_skip": 39
+    }
+  },
+  "E3_validation": {
+    "links": 90,
+    "checked_on_simulated_data_only": 6,
+    "verdicts_on_real_data": {
+      "supported": 45,
+      "inconclusive": 15,
+      "no_data": 21,
+      "contradicted": 1,
+      "same_series": 2
+    },
+    "by_link_type": {
+      "causal (causes, policy_reaction)": {
+        "links": 62,
+        "simulated_only": 5,
+        "verdicts": {
+          "supported": 24,
+          "inconclusive": 11,
+          "no_data": 21,
+          "contradicted": 1
+        },
+        "supported_abs_r_median": 0.419
+      },
+      "structural (member_of, tracks, weight_in)": {
+        "links": 28,
+        "simulated_only": 1,
+        "verdicts": {
+          "supported": 21,
+          "same_series": 2,
+          "inconclusive": 4
+        },
+        "supported_abs_r_median": 0.319
+      }
+    },
+    "testable_links": 61,
+    "supported_abs_r_median": 0.417,
+    "supported_abs_r_min": 0.129,
+    "supported_abs_r_max": 0.991,
+    "overlap_days_median": 495,
+    "data_window": [
+      "2024-09-05",
+      "2026-10-09"
+    ],
+    "contradicted": [
+      {
+        "link": "usd -> crude_oil",
+        "sign": -1,
+        "relation": "causes",
+        "verdict": "contradicted",
+        "simulated": false,
+        "r": 0.198,
+        "lag_days": 0,
+        "n": 502,
+        "data": "FRED:DTWEXBGS -> FRED:DCOILBRENTEU"
+      }
+    ],
+    "all": [
+      {
+        "link": "crude_oil -> inflation_exp",
+        "sign": 1,
+        "relation": "causes",
+        "verdict": "supported",
+        "simulated": false,
+        "r": 0.482,
+        "lag_days": 0,
+        "n": 504,
+        "data": "FRED:DCOILBRENTEU -> FRED:T5YIE"
+      },
+      {
+        "link": "crude_oil -> airlines",
+        "sign": -1,
+        "relation": "causes",
+        "verdict": "supported",
+        "simulated": false,
+        "r": -0.327,
+        "lag_days": 0,
+        "n": 489,
+        "data": "FRED:DCOILBRENTEU -> YF:JETS"
+      },
+      {
+        "link": "crude_oil -> oil_gas_producers",
+        "sign": 1,
+        "relation": "causes",
+        "verdict": "supported",
+        "simulated": false,
+        "r": 0.49,
+        "lag_days": 0,
+        "n": 489,
+        "data": "FRED:DCOILBRENTEU -> YF:XLE"
+      },
+      {
+        "link": "crude_oil -> refiners",
+        "sign": 1,
+        "relation": "causes",
+        "verdict": "supported",
+        "simulated": false,
+        "r": 0.417,
+        "lag_days": 0,
+        "n": 489,
+        "data": "FRED:DCOILBRENTEU -> YF:CRAK"
+      },
+      {
+        "link": "crude_oil -> chemicals",
+        "sign": -1,
+        "relation": "causes",
+        "verdict": "inconclusive",
+        "simulated": false,
+        "r": -0.12,
+        "lag_days": 0,
+        "n": 489,
+        "data": "FRED:DCOILBRENTEU -> YF:XLB"
+      },
+      {
+        "link": "crude_oil -> autos",
+        "sign": -1,
+        "relation": "causes",
+        "verdict": "inconclusive",
+        "simulated": false,
+        "r": -0.109,
+        "lag_days": 0,
+        "n": 489,
+        "data": "FRED:DCOILBRENTEU -> YF:CARZ"
+      },
+      {
+        "link": "crude_oil -> consumer_spending",
+        "sign": -1,
+        "relation": "causes",
+        "verdict": "no_data",
+        "simulated": false,
+        "r": null,
+        "lag_days": null,
+        "n": null,
+        "data": null
+      },
+      {
+        "link": "crude_oil -> gdp_growth",
+        "sign": -1,
+        "relation": "causes",
+        "verdict": "no_data",
+        "simulated": false,
+        "r": null,
+        "lag_days": null,
+        "n": null,
+        "data": null
+      },
+      {
+        "link": "crude_oil -> usdinr",
+        "sign": 1,
+        "relation": "causes",
+        "verdict": "supported",
+        "simulated": false,
+        "r": 0.181,
+        "lag_days": 0,
+        "n": 502,
+        "data": "FRED:DCOILBRENTEU -> FRED:DEXINUS"
+      },
+      {
+        "link": "crude_oil -> fmcg",
+        "sign": -1,
+        "relation": "causes",
+        "verdict": "supported",
+        "simulated": false,
+        "r": -0.143,
+        "lag_days": 0,
+        "n": 489,
+        "data": "FRED:DCOILBRENTEU -> YF:XLP"
+      },
+      {
+        "link": "natural_gas -> inflation_exp",
+        "sign": 1,
+        "relation": "causes",
+        "verdict": "inconclusive",
+        "simulated": true,
+        "r": 0.085,
+        "lag_days": 6,
+        "n": 497,
+        "data": "simulated -> FRED:T5YIE"
+      },
+      {
+        "link": "natural_gas -> utilities",
+        "sign": -1,
+        "relation": "causes",
+        "verdict": "inconclusive",
+        "simulated": true,
+        "r": 0.074,
+        "lag_days": 3,
+        "n": 520,
+        "data": "simulated -> simulated"
+      },
+      {
+        "link": "natural_gas -> chemicals",
+        "sign": -1,
+        "relation": "causes",
+        "verdict": "inconclusive",
+        "simulated": true,
+        "r": 0.069,
+        "lag_days": 6,
+        "n": 499,
+        "data": "simulated -> YF:XLB"
+      },
+      {
+        "link": "gold -> gold_miners",
+        "sign": 1,
+        "relation": "causes",
+        "verdict": "supported",
+        "simulated": false,
+        "r": 0.777,
+        "lag_days": 0,
+        "n": 499,
+        "data": "YF:GC=F -> YF:GDX"
+      },
+      {
+        "link": "gold -> gld",
+        "sign": 1,
+        "relation": "tracks",
+        "verdict": "supported",
+        "simulated": false,
+        "r": 0.921,
+        "lag_days": 0,
+        "n": 499,
+        "data": "YF:GC=F -> YF:GLD"
+      },
+      {
+        "link": "wheat -> inflation_exp",
+        "sign": 1,
+        "relation": "causes",
+        "verdict": "inconclusive",
+        "simulated": true,
+        "r": -0.091,
+        "lag_days": 6,
+        "n": 497,
+        "data": "simulated -> FRED:T5YIE"
+      },
+      {
+        "link": "wheat -> fmcg",
+        "sign": -1,
+        "relation": "causes",
+        "verdict": "inconclusive",
+        "simulated": true,
+        "r": -0.035,
+        "lag_days": 0,
+        "n": 499,
+        "data": "simulated -> YF:XLP"
+      },
+      {
+        "link": "copper -> gdp_growth",
+        "sign": 1,
+        "relation": "causes",
+        "verdict": "no_data",
+        "simulated": false,
+        "r": null,
+        "lag_days": null,
+        "n": null,
+        "data": null
+      },
+      {
+        "link": "inflation_exp -> rate_exp",
+        "sign": 1,
+        "relation": "causes",
+        "verdict": "supported",
+        "simulated": false,
+        "r": 0.421,
+        "lag_days": 0,
+        "n": 519,
+        "data": "FRED:T5YIE -> FRED:DGS2"
+      },
+      {
+        "link": "inflation_exp -> gold",
+        "sign": 1,
+        "relation": "causes",
+        "verdict": "inconclusive",
+        "simulated": false,
+        "r": -0.067,
+        "lag_days": 6,
+        "n": 496,
+        "data": "FRED:T5YIE -> YF:GC=F"
+      },
+      {
+        "link": "inflation_exp -> consumer_spending",
+        "sign": -1,
+        "relation": "causes",
+        "verdict": "no_data",
+        "simulated": false,
+        "r": null,
+        "lag_days": null,
+        "n": null,
+        "data": null
+      },
+      {
+        "link": "rate_exp -> us10y",
+        "sign": 1,
+        "relation": "causes",
+        "verdict": "supported",
+        "simulated": false,
+        "r": 0.791,
+        "lag_days": 0,
+        "n": 520,
+        "data": "FRED:DGS2 -> FRED:DGS10"
+      },
+      {
+        "link": "rate_exp -> banks",
+        "sign": 1,
+        "relation": "causes",
+        "verdict": "inconclusive",
+        "simulated": false,
+        "r": 0.082,
+        "lag_days": 0,
+        "n": 495,
+        "data": "FRED:DGS2 -> YF:XLF"
+      },
+      {
+        "link": "rate_exp -> real_estate",
+        "sign": -1,
+        "relation": "causes",
+        "verdict": "supported",
+        "simulated": false,
+        "r": -0.17,
+        "lag_days": 0,
+        "n": 495,
+        "data": "FRED:DGS2 -> YF:XLRE"
+      },
+      {
+        "link": "rate_exp -> spx",
+        "sign": -1,
+        "relation": "causes",
+        "verdict": "inconclusive",
+        "simulated": false,
+        "r": 0.089,
+        "lag_days": 0,
+        "n": 515,
+        "data": "FRED:DGS2 -> FRED:SP500"
+      },
+      {
+        "link": "rate_exp -> nifty50",
+        "sign": -1,
+        "relation": "causes",
+        "verdict": "inconclusive",
+        "simulated": false,
+        "r": -0.107,
+        "lag_days": 1,
+        "n": 473,
+        "data": "FRED:DGS2 -> YF:^NSEI"
+      },
+      {
+        "link": "rate_exp -> usd",
+        "sign": 1,
+        "relation": "causes",
+        "verdict": "supported",
+        "simulated": false,
+        "r": 0.294,
+        "lag_days": 0,
+        "n": 516,
+        "data": "FRED:DGS2 -> FRED:DTWEXBGS"
+      },
+      {
+        "link": "rate_exp -> gold",
+        "sign": -1,
+        "relation": "causes",
+        "verdict": "supported",
+        "simulated": false,
+        "r": -0.171,
+        "lag_days": 0,
+        "n": 495,
+        "data": "FRED:DGS2 -> YF:GC=F"
+      },
+      {
+        "link": "rate_exp -> autos",
+        "sign": -1,
+        "relation": "causes",
+        "verdict": "inconclusive",
+        "simulated": false,
+        "r": -0.065,
+        "lag_days": 3,
+        "n": 495,
+        "data": "FRED:DGS2 -> YF:CARZ"
+      },
+      {
+        "link": "rate_exp -> consumer_disc",
+        "sign": -1,
+        "relation": "causes",
+        "verdict": "inconclusive",
+        "simulated": false,
+        "r": -0.055,
+        "lag_days": 1,
+        "n": 495,
+        "data": "FRED:DGS2 -> YF:XLY"
+      },
+      {
+        "link": "us10y -> tlt",
+        "sign": -1,
+        "relation": "tracks",
+        "verdict": "supported",
+        "simulated": false,
+        "r": -0.897,
+        "lag_days": 0,
+        "n": 495,
+        "data": "FRED:DGS10 -> YF:TLT"
+      },
+      {
+        "link": "us10y -> real_estate",
+        "sign": -1,
+        "relation": "causes",
+        "verdict": "supported",
+        "simulated": false,
+        "r": -0.326,
+        "lag_days": 0,
+        "n": 495,
+        "data": "FRED:DGS10 -> YF:XLRE"
+      },
+      {
+        "link": "usd -> usdinr",
+        "sign": 1,
+        "relation": "causes",
+        "verdict": "supported",
+        "simulated": false,
+        "r": 0.259,
+        "lag_days": 0,
+        "n": 520,
+        "data": "FRED:DTWEXBGS -> FRED:DEXINUS"
+      },
+      {
+        "link": "usd -> gold",
+        "sign": -1,
+        "relation": "causes",
+        "verdict": "supported",
+        "simulated": false,
+        "r": -0.435,
+        "lag_days": 0,
+        "n": 491,
+        "data": "FRED:DTWEXBGS -> YF:GC=F"
+      },
+      {
+        "link": "usd -> crude_oil",
+        "sign": -1,
+        "relation": "causes",
+        "verdict": "contradicted",
+        "simulated": false,
+        "r": 0.198,
+        "lag_days": 0,
+        "n": 502,
+        "data": "FRED:DTWEXBGS -> FRED:DCOILBRENTEU"
+      },
+      {
+        "link": "usdinr -> nifty50",
+        "sign": -1,
+        "relation": "causes",
+        "verdict": "supported",
+        "simulated": false,
+        "r": -0.33,
+        "lag_days": 0,
+        "n": 469,
+        "data": "FRED:DEXINUS -> YF:^NSEI"
+      },
+      {
+        "link": "usdinr -> it_services",
+        "sign": 1,
+        "relation": "causes",
+        "verdict": "inconclusive",
+        "simulated": false,
+        "r": -0.046,
+        "lag_days": 1,
+        "n": 491,
+        "data": "FRED:DEXINUS -> YF:XLK"
+      },
+      {
+        "link": "gdp_growth -> spx",
+        "sign": 1,
+        "relation": "causes",
+        "verdict": "no_data",
+        "simulated": false,
+        "r": null,
+        "lag_days": null,
+        "n": null,
+        "data": null
+      },
+      {
+        "link": "gdp_growth -> banks",
+        "sign": 1,
+        "relation": "causes",
+        "verdict": "no_data",
+        "simulated": false,
+        "r": null,
+        "lag_days": null,
+        "n": null,
+        "data": null
+      },
+      {
+        "link": "gdp_growth -> real_estate",
+        "sign": 1,
+        "relation": "causes",
+        "verdict": "no_data",
+        "simulated": false,
+        "r": null,
+        "lag_days": null,
+        "n": null,
+        "data": null
+      },
+      {
+        "link": "gdp_growth -> consumer_spending",
+        "sign": 1,
+        "relation": "causes",
+        "verdict": "no_data",
+        "simulated": false,
+        "r": null,
+        "lag_days": null,
+        "n": null,
+        "data": null
+      },
+      {
+        "link": "consumer_spending -> consumer_disc",
+        "sign": 1,
+        "relation": "causes",
+        "verdict": "no_data",
+        "simulated": false,
+        "r": null,
+        "lag_days": null,
+        "n": null,
+        "data": null
+      },
+      {
+        "link": "consumer_spending -> fmcg",
+        "sign": 1,
+        "relation": "causes",
+        "verdict": "no_data",
+        "simulated": false,
+        "r": null,
+        "lag_days": null,
+        "n": null,
+        "data": null
+      },
+      {
+        "link": "consumer_spending -> autos",
+        "sign": 1,
+        "relation": "causes",
+        "verdict": "no_data",
+        "simulated": false,
+        "r": null,
+        "lag_days": null,
+        "n": null,
+        "data": null
+      },
+      {
+        "link": "risk_aversion -> spx",
+        "sign": -1,
+        "relation": "causes",
+        "verdict": "supported",
+        "simulated": false,
+        "r": -0.84,
+        "lag_days": 0,
+        "n": 505,
+        "data": "FRED:VIXCLS -> FRED:SP500"
+      },
+      {
+        "link": "risk_aversion -> nifty50",
+        "sign": -1,
+        "relation": "causes",
+        "verdict": "supported",
+        "simulated": false,
+        "r": -0.25,
+        "lag_days": 1,
+        "n": 491,
+        "data": "FRED:VIXCLS -> YF:^NSEI"
+      },
+      {
+        "link": "risk_aversion -> gold",
+        "sign": 1,
+        "relation": "causes",
+        "verdict": "inconclusive",
+        "simulated": false,
+        "r": -0.108,
+        "lag_days": 0,
+        "n": 500,
+        "data": "FRED:VIXCLS -> YF:GC=F"
+      },
+      {
+        "link": "risk_aversion -> usd",
+        "sign": 1,
+        "relation": "causes",
+        "verdict": "supported",
+        "simulated": false,
+        "r": 0.202,
+        "lag_days": 1,
+        "n": 498,
+        "data": "FRED:VIXCLS -> FRED:DTWEXBGS"
+      },
+      {
+        "link": "risk_aversion -> us10y",
+        "sign": -1,
+        "relation": "causes",
+        "verdict": "inconclusive",
+        "simulated": false,
+        "r": 0.026,
+        "lag_days": 0,
+        "n": 502,
+        "data": "FRED:VIXCLS -> FRED:DGS10"
+      },
+      {
+        "link": "risk_aversion -> airlines",
+        "sign": -1,
+        "relation": "causes",
+        "verdict": "supported",
+        "simulated": false,
+        "r": -0.602,
+        "lag_days": 0,
+        "n": 499,
+        "data": "FRED:VIXCLS -> YF:JETS"
+      },
+      {
+        "link": "geopolitical_tension -> crude_oil",
+        "sign": 1,
+        "relation": "causes",
+        "verdict": "no_data",
+        "simulated": false,
+        "r": null,
+        "lag_days": null,
+        "n": null,
+        "data": null
+      },
+      {
+        "link": "geopolitical_tension -> risk_aversion",
+        "sign": 1,
+        "relation": "causes",
+        "verdict": "no_data",
+        "simulated": false,
+        "r": null,
+        "lag_days": null,
+        "n": null,
+        "data": null
+      },
+      {
+        "link": "geopolitical_tension -> shipping",
+        "sign": 1,
+        "relation": "causes",
+        "verdict": "no_data",
+        "simulated": false,
+        "r": null,
+        "lag_days": null,
+        "n": null,
+        "data": null
+      },
+      {
+        "link": "opec_supply_cut -> crude_oil",
+        "sign": 1,
+        "relation": "causes",
+        "verdict": "no_data",
+        "simulated": false,
+        "r": null,
+        "lag_days": null,
+        "n": null,
+        "data": null
+      },
+      {
+        "link": "fed -> rate_exp",
+        "sign": 1,
+        "relation": "policy_reaction",
+        "verdict": "no_data",
+        "simulated": false,
+        "r": null,
+        "lag_days": null,
+        "n": null,
+        "data": null
+      },
+      {
+        "link": "rbi -> rate_exp",
+        "sign": 1,
+        "relation": "policy_reaction",
+        "verdict": "no_data",
+        "simulated": false,
+        "r": null,
+        "lag_days": null,
+        "n": null,
+        "data": null
+      },
+      {
+        "link": "central_banks -> rate_exp",
+        "sign": 1,
+        "relation": "policy_reaction",
+        "verdict": "no_data",
+        "simulated": false,
+        "r": null,
+        "lag_days": null,
+        "n": null,
+        "data": null
+      },
+      {
+        "link": "ecb -> rate_exp",
+        "sign": 1,
+        "relation": "policy_reaction",
+        "verdict": "no_data",
+        "simulated": false,
+        "r": null,
+        "lag_days": null,
+        "n": null,
+        "data": null
+      },
+      {
+        "link": "airlines -> delta",
+        "sign": 1,
+        "relation": "member_of",
+        "verdict": "supported",
+        "simulated": false,
+        "r": 0.912,
+        "lag_days": 0,
+        "n": 500,
+        "data": "YF:JETS -> YF:DAL"
+      },
+      {
+        "link": "airlines -> united",
+        "sign": 1,
+        "relation": "member_of",
+        "verdict": "supported",
+        "simulated": false,
+        "r": 0.914,
+        "lag_days": 0,
+        "n": 500,
+        "data": "YF:JETS -> YF:UAL"
+      },
+      {
+        "link": "airlines -> indigo",
+        "sign": 1,
+        "relation": "member_of",
+        "verdict": "supported",
+        "simulated": false,
+        "r": 0.207,
+        "lag_days": 0,
+        "n": 477,
+        "data": "YF:JETS -> YF:INDIGO.NS"
+      },
+      {
+        "link": "airlines -> jets",
+        "sign": 1,
+        "relation": "tracks",
+        "verdict": "same_series",
+        "simulated": false,
+        "r": null,
+        "lag_days": null,
+        "n": null,
+        "data": null
+      },
+      {
+        "link": "banks -> gdp_growth",
+        "sign": 1,
+        "relation": "causes",
+        "verdict": "no_data",
+        "simulated": false,
+        "r": null,
+        "lag_days": null,
+        "n": null,
+        "data": null
+      },
+      {
+        "link": "banks -> consumer_spending",
+        "sign": 1,
+        "relation": "causes",
+        "verdict": "no_data",
+        "simulated": false,
+        "r": null,
+        "lag_days": null,
+        "n": null,
+        "data": null
+      },
+      {
+        "link": "banks -> real_estate",
+        "sign": 1,
+        "relation": "causes",
+        "verdict": "supported",
+        "simulated": false,
+        "r": 0.539,
+        "lag_days": 0,
+        "n": 500,
+        "data": "YF:XLF -> YF:XLRE"
+      },
+      {
+        "link": "banks -> jpm",
+        "sign": 1,
+        "relation": "member_of",
+        "verdict": "supported",
+        "simulated": false,
+        "r": 0.843,
+        "lag_days": 0,
+        "n": 500,
+        "data": "YF:XLF -> YF:JPM"
+      },
+      {
+        "link": "banks -> hdfcbank",
+        "sign": 1,
+        "relation": "member_of",
+        "verdict": "supported",
+        "simulated": false,
+        "r": 0.157,
+        "lag_days": 1,
+        "n": 477,
+        "data": "YF:XLF -> YF:HDFCBANK.NS"
+      },
+      {
+        "link": "banks -> sbi",
+        "sign": 1,
+        "relation": "member_of",
+        "verdict": "supported",
+        "simulated": false,
+        "r": 0.129,
+        "lag_days": 1,
+        "n": 477,
+        "data": "YF:XLF -> YF:SBIN.NS"
+      },
+      {
+        "link": "banks -> nifty_bank",
+        "sign": 1,
+        "relation": "tracks",
+        "verdict": "supported",
+        "simulated": false,
+        "r": 0.175,
+        "lag_days": 1,
+        "n": 476,
+        "data": "YF:XLF -> YF:^NSEBANK"
+      },
+      {
+        "link": "banks -> spx",
+        "sign": 1,
+        "relation": "weight_in",
+        "verdict": "supported",
+        "simulated": false,
+        "r": 0.738,
+        "lag_days": 0,
+        "n": 500,
+        "data": "YF:XLF -> FRED:SP500"
+      },
+      {
+        "link": "real_estate -> dlf",
+        "sign": 1,
+        "relation": "member_of",
+        "verdict": "inconclusive",
+        "simulated": false,
+        "r": 0.121,
+        "lag_days": 1,
+        "n": 477,
+        "data": "YF:XLRE -> YF:DLF.NS"
+      },
+      {
+        "link": "real_estate -> nifty_realty",
+        "sign": 1,
+        "relation": "tracks",
+        "verdict": "inconclusive",
+        "simulated": true,
+        "r": 0.019,
+        "lag_days": 0,
+        "n": 499,
+        "data": "YF:XLRE -> simulated"
+      },
+      {
+        "link": "oil_gas_producers -> exxon",
+        "sign": 1,
+        "relation": "member_of",
+        "verdict": "supported",
+        "simulated": false,
+        "r": 0.894,
+        "lag_days": 0,
+        "n": 500,
+        "data": "YF:XLE -> YF:XOM"
+      },
+      {
+        "link": "oil_gas_producers -> chevron",
+        "sign": 1,
+        "relation": "member_of",
+        "verdict": "supported",
+        "simulated": false,
+        "r": 0.906,
+        "lag_days": 0,
+        "n": 500,
+        "data": "YF:XLE -> YF:CVX"
+      },
+      {
+        "link": "oil_gas_producers -> ongc",
+        "sign": 1,
+        "relation": "member_of",
+        "verdict": "supported",
+        "simulated": false,
+        "r": 0.296,
+        "lag_days": 1,
+        "n": 477,
+        "data": "YF:XLE -> YF:ONGC.NS"
+      },
+      {
+        "link": "oil_gas_producers -> xle",
+        "sign": 1,
+        "relation": "tracks",
+        "verdict": "same_series",
+        "simulated": false,
+        "r": null,
+        "lag_days": null,
+        "n": null,
+        "data": null
+      },
+      {
+        "link": "oil_gas_producers -> spx",
+        "sign": 1,
+        "relation": "weight_in",
+        "verdict": "supported",
+        "simulated": false,
+        "r": 0.319,
+        "lag_days": 0,
+        "n": 500,
+        "data": "YF:XLE -> FRED:SP500"
+      },
+      {
+        "link": "refiners -> reliance",
+        "sign": 1,
+        "relation": "member_of",
+        "verdict": "supported",
+        "simulated": false,
+        "r": 0.136,
+        "lag_days": 0,
+        "n": 477,
+        "data": "YF:CRAK -> YF:RELIANCE.NS"
+      },
+      {
+        "link": "autos -> tatamotors",
+        "sign": 1,
+        "relation": "member_of",
+        "verdict": "supported",
+        "simulated": false,
+        "r": 0.142,
+        "lag_days": 0,
+        "n": 477,
+        "data": "YF:CARZ -> YF:TMPV.NS"
+      },
+      {
+        "link": "autos -> nifty50",
+        "sign": 1,
+        "relation": "weight_in",
+        "verdict": "supported",
+        "simulated": false,
+        "r": 0.205,
+        "lag_days": 1,
+        "n": 476,
+        "data": "YF:CARZ -> YF:^NSEI"
+      },
+      {
+        "link": "fmcg -> hul",
+        "sign": 1,
+        "relation": "member_of",
+        "verdict": "inconclusive",
+        "simulated": false,
+        "r": 0.061,
+        "lag_days": 0,
+        "n": 477,
+        "data": "YF:XLP -> YF:HINDUNILVR.NS"
+      },
+      {
+        "link": "fmcg -> nifty50",
+        "sign": 1,
+        "relation": "weight_in",
+        "verdict": "supported",
+        "simulated": false,
+        "r": 0.158,
+        "lag_days": 1,
+        "n": 476,
+        "data": "YF:XLP -> YF:^NSEI"
+      },
+      {
+        "link": "consumer_disc -> spx",
+        "sign": 1,
+        "relation": "weight_in",
+        "verdict": "supported",
+        "simulated": false,
+        "r": 0.849,
+        "lag_days": 0,
+        "n": 500,
+        "data": "YF:XLY -> FRED:SP500"
+      },
+      {
+        "link": "it_services -> infosys",
+        "sign": 1,
+        "relation": "member_of",
+        "verdict": "inconclusive",
+        "simulated": false,
+        "r": 0.128,
+        "lag_days": 1,
+        "n": 477,
+        "data": "YF:XLK -> YF:INFY.NS"
+      },
+      {
+        "link": "it_services -> tcs",
+        "sign": 1,
+        "relation": "member_of",
+        "verdict": "inconclusive",
+        "simulated": false,
+        "r": 0.075,
+        "lag_days": 0,
+        "n": 477,
+        "data": "YF:XLK -> YF:TCS.NS"
+      },
+      {
+        "link": "it_services -> nifty50",
+        "sign": 1,
+        "relation": "weight_in",
+        "verdict": "supported",
+        "simulated": false,
+        "r": 0.191,
+        "lag_days": 1,
+        "n": 476,
+        "data": "YF:XLK -> YF:^NSEI"
+      },
+      {
+        "link": "reliance -> nifty50",
+        "sign": 1,
+        "relation": "weight_in",
+        "verdict": "supported",
+        "simulated": false,
+        "r": 0.656,
+        "lag_days": 0,
+        "n": 495,
+        "data": "YF:RELIANCE.NS -> YF:^NSEI"
+      },
+      {
+        "link": "nifty50 -> sensex",
+        "sign": 1,
+        "relation": "causes",
+        "verdict": "supported",
+        "simulated": false,
+        "r": 0.991,
+        "lag_days": 0,
+        "n": 494,
+        "data": "YF:^NSEI -> YF:^BSESN"
+      },
+      {
+        "link": "nifty_bank -> nifty50",
+        "sign": 1,
+        "relation": "causes",
+        "verdict": "supported",
+        "simulated": false,
+        "r": 0.884,
+        "lag_days": 0,
+        "n": 494,
+        "data": "YF:^NSEBANK -> YF:^NSEI"
+      },
+      {
+        "link": "nifty_bank -> sensex",
+        "sign": 1,
+        "relation": "causes",
+        "verdict": "supported",
+        "simulated": false,
+        "r": 0.884,
+        "lag_days": 0,
+        "n": 494,
+        "data": "YF:^NSEBANK -> YF:^BSESN"
+      }
+    ]
+  },
+  "E4_reproducibility": {
+    "paths_checked": 343,
+    "max_abs_difference": 0.0
+  },
+  "E5_model_vs_article": {
+    "per_article": [
+      {
+        "article": "oil",
+        "events": 10,
+        "observed": 8,
+        "expected": 2,
+        "paths": 40,
+        "assets": 24,
+        "sectors": 12,
+        "mixed_assets": 5,
+        "comparison": {
+          "consistent": 8
+        },
+        "extracted": [
+          "Crude Oil up 12% [observed]",
+          "Geopolitical escalation (attack) [observed]",
+          "OPEC+ restrains output [observed]",
+          "Inflation Expectations up [expected]",
+          "Interest-Rate Expectations up [expected]",
+          "Airlines down [observed]",
+          "Delta Air Lines down [observed]",
+          "Exxon Mobil up [observed]",
+          "ONGC up [observed]",
+          "USD/INR (Rupee weakness) up [observed]"
+        ],
+        "disagreements": []
+      },
+      {
+        "article": "fed",
+        "events": 4,
+        "observed": 4,
+        "expected": 0,
+        "paths": 40,
+        "assets": 24,
+        "sectors": 11,
+        "mixed_assets": 2,
+        "comparison": {
+          "consistent": 3
+        },
+        "extracted": [
+          "US Federal Reserve hawkish: raises rates 50 basis points [observed]",
+          "US Dollar up 1.2% [observed]",
+          "US 10Y Treasury Yield up [observed]",
+          "Real Estate down [observed]"
+        ],
+        "disagreements": []
+      },
+      {
+        "article": "rbi",
+        "events": 4,
+        "observed": 4,
+        "expected": 0,
+        "paths": 24,
+        "assets": 9,
+        "sectors": 4,
+        "mixed_assets": 0,
+        "comparison": {
+          "no_upstream_path": 1,
+          "consistent": 2
+        },
+        "extracted": [
+          "Regulatory tightening for Banks [observed]",
+          "Banks down 2.5% [observed]",
+          "HDFC Bank down [observed]",
+          "State Bank of India down [observed]"
+        ],
+        "disagreements": [
+          "Banks: article -1, graph None (no_upstream_path)"
+        ]
+      },
+      {
+        "article": "gold",
+        "events": 6,
+        "observed": 4,
+        "expected": 2,
+        "paths": 40,
+        "assets": 24,
+        "sectors": 12,
+        "mixed_assets": 6,
+        "comparison": {
+          "model_mixed": 1,
+          "consistent": 3,
+          "contradicts": 1
+        },
+        "extracted": [
+          "Gold up 3.4% [observed]",
+          "Geopolitical escalation (escalated) [observed]",
+          "S&P 500 down [observed]",
+          "US 10Y Treasury Yield down [observed]",
+          "Crude Oil up [expected]",
+          "Inflation Expectations up [expected]"
+        ],
+        "disagreements": [
+          "Gold: article 1, graph 1 (model_mixed)",
+          "US 10Y Treasury Yield: article -1, graph 1 (contradicts)"
+        ]
+      },
+      {
+        "article": "gas",
+        "events": 1,
+        "observed": 1,
+        "expected": 0,
+        "paths": 39,
+        "assets": 12,
+        "sectors": 8,
+        "mixed_assets": 1,
+        "comparison": {
+          "no_upstream_path": 1
+        },
+        "extracted": [
+          "Natural Gas up 18% [observed]"
+        ],
+        "disagreements": [
+          "Natural Gas: article 1, graph None (no_upstream_path)"
+        ]
+      },
+      {
+        "article": "fed25",
+        "events": 1,
+        "observed": 1,
+        "expected": 0,
+        "paths": 40,
+        "assets": 22,
+        "sectors": 8,
+        "mixed_assets": 1,
+        "comparison": {},
+        "extracted": [
+          "US Federal Reserve hawkish: raises rates 25 basis points [observed]"
+        ],
+        "disagreements": []
+      },
+      {
+        "article": "opec_cut",
+        "events": 2,
+        "observed": 2,
+        "expected": 0,
+        "paths": 40,
+        "assets": 24,
+        "sectors": 11,
+        "mixed_assets": 5,
+        "comparison": {
+          "consistent": 1
+        },
+        "extracted": [
+          "Crude Oil up 6% [observed]",
+          "OPEC+ restrains output [observed]"
+        ],
+        "disagreements": []
+      },
+      {
+        "article": "rbi_cut",
+        "events": 1,
+        "observed": 1,
+        "expected": 0,
+        "paths": 40,
+        "assets": 22,
+        "sectors": 8,
+        "mixed_assets": 1,
+        "comparison": {},
+        "extracted": [
+          "Reserve Bank of India dovish: cuts rates 25 basis points [observed]"
+        ],
+        "disagreements": []
+      },
+      {
+        "article": "gold_usd",
+        "events": 2,
+        "observed": 2,
+        "expected": 0,
+        "paths": 40,
+        "assets": 21,
+        "sectors": 11,
+        "mixed_assets": 2,
+        "comparison": {
+          "consistent": 1,
+          "no_upstream_path": 1
+        },
+        "extracted": [
+          "Gold up 4% [observed]",
+          "US Dollar down [observed]"
+        ],
+        "disagreements": [
+          "US Dollar: article -1, graph None (no_upstream_path)"
+        ]
+      },
+      {
+        "article": "delta_fuel",
+        "events": 1,
+        "observed": 1,
+        "expected": 0,
+        "paths": 0,
+        "assets": 0,
+        "sectors": 0,
+        "mixed_assets": 0,
+        "comparison": {
+          "no_upstream_path": 1
+        },
+        "extracted": [
+          "Delta Air Lines down 8% [observed]"
+        ],
+        "disagreements": [
+          "Delta Air Lines: article -1, graph None (no_upstream_path)"
+        ]
+      }
+    ],
+    "comparison_totals": {
+      "consistent": 18,
+      "no_upstream_path": 4,
+      "model_mixed": 1,
+      "contradicts": 1
+    }
+  },
+  "E6_guard": {
+    "cases": [
+      {
+        "change": "flip the sign of a curated link",
+        "corrupting": true,
+        "rolled_back": true,
+        "graph_restored_exactly": true,
+        "failed_checks": [
+          "curated links intact (same sign)"
+        ],
+        "correct": true
+      },
+      {
+        "change": "delete a curated entity",
+        "corrupting": true,
+        "rolled_back": true,
+        "graph_restored_exactly": true,
+        "failed_checks": [
+          "curated entities present",
+          "curated links intact (same sign)"
+        ],
+        "correct": true
+      },
+      {
+        "change": "strength out of range",
+        "corrupting": true,
+        "rolled_back": true,
+        "graph_restored_exactly": true,
+        "failed_checks": [
+          "link strengths within (0, 0.99]"
+        ],
+        "correct": true
+      },
+      {
+        "change": "self-loop",
+        "corrupting": true,
+        "rolled_back": true,
+        "graph_restored_exactly": true,
+        "failed_checks": [
+          "no self-loops"
+        ],
+        "correct": true
+      },
+      {
+        "change": "learned link pointing up from an asset",
+        "corrupting": true,
+        "rolled_back": true,
+        "graph_restored_exactly": true,
+        "failed_checks": [
+          "hierarchy: no learned link points up from an asset"
+        ],
+        "correct": true
+      },
+      {
+        "change": "9 new links in one change",
+        "corrupting": true,
+        "rolled_back": true,
+        "graph_restored_exactly": true,
+        "failed_checks": [
+          "growth per change bounded"
+        ],
+        "correct": true
+      },
+      {
+        "change": "hollow out the oil links (signs kept)",
+        "corrupting": true,
+        "rolled_back": true,
+        "graph_restored_exactly": true,
+        "failed_checks": [
+          "regression: same conclusions as static baseline"
+        ],
+        "correct": true
+      },
+      {
+        "change": "reinforce one link (normal learning)",
+        "corrupting": false,
+        "rolled_back": false,
+        "graph_restored_exactly": null,
+        "failed_checks": [],
+        "correct": true
+      },
+      {
+        "change": "one new LLM-proposed link",
+        "corrupting": false,
+        "rolled_back": false,
+        "graph_restored_exactly": null,
+        "failed_checks": [],
+        "correct": true
+      }
+    ],
+    "correct": 9,
+    "total": 9
+  },
+  "E7_latency": {
+    "runs": 30,
+    "median_s": 0.046,
+    "max_s": 0.064,
+    "note": "rules-only, cached data, warm in-memory cache; excludes the LLM call (13-35 s observed with the LLM on)"
+  },
+  "E8_assistant_retrieval": {
+    "two_entity": {
+      "pairs_with_a_chain": 450,
+      "best_chain_retrieved": 450,
+      "best_chain_hops": {
+        "1": 31,
+        "2": 113,
+        "3": 151,
+        "4": 81,
+        "5": 74
+      }
+    },
+    "one_entity": {
+      "entities": 18,
+      "paths_median": 5.0,
+      "all_paths_share_one_first_hop": 8,
+      "uses_every_usable_first_link": 18,
+      "max_hops_median": 3.0,
+      "reach_another_variable": 15,
+      "detail": [
+        {
+          "entity": "central_banks",
+          "paths": 5,
+          "max_hops": 3,
+          "usable_first_links": 1,
+          "distinct_first_hops": 1,
+          "reaches_a_variable": true
+        },
+        {
+          "entity": "consumer_spending",
+          "paths": 5,
+          "max_hops": 3,
+          "usable_first_links": 3,
+          "distinct_first_hops": 3,
+          "reaches_a_variable": false
+        },
+        {
+          "entity": "copper",
+          "paths": 5,
+          "max_hops": 3,
+          "usable_first_links": 1,
+          "distinct_first_hops": 1,
+          "reaches_a_variable": true
+        },
+        {
+          "entity": "crude_oil",
+          "paths": 5,
+          "max_hops": 3,
+          "usable_first_links": 9,
+          "distinct_first_hops": 5,
+          "reaches_a_variable": true
+        },
+        {
+          "entity": "ecb",
+          "paths": 5,
+          "max_hops": 3,
+          "usable_first_links": 1,
+          "distinct_first_hops": 1,
+          "reaches_a_variable": true
+        },
+        {
+          "entity": "fed",
+          "paths": 5,
+          "max_hops": 3,
+          "usable_first_links": 1,
+          "distinct_first_hops": 1,
+          "reaches_a_variable": true
+        },
+        {
+          "entity": "gdp_growth",
+          "paths": 5,
+          "max_hops": 2,
+          "usable_first_links": 3,
+          "distinct_first_hops": 3,
+          "reaches_a_variable": true
+        },
+        {
+          "entity": "geopolitical_tension",
+          "paths": 5,
+          "max_hops": 2,
+          "usable_first_links": 2,
+          "distinct_first_hops": 2,
+          "reaches_a_variable": true
+        },
+        {
+          "entity": "inflation_exp",
+          "paths": 5,
+          "max_hops": 3,
+          "usable_first_links": 3,
+          "distinct_first_hops": 3,
+          "reaches_a_variable": true
+        },
+        {
+          "entity": "natural_gas",
+          "paths": 5,
+          "max_hops": 4,
+          "usable_first_links": 1,
+          "distinct_first_hops": 1,
+          "reaches_a_variable": true
+        },
+        {
+          "entity": "opec_supply_cut",
+          "paths": 5,
+          "max_hops": 4,
+          "usable_first_links": 1,
+          "distinct_first_hops": 1,
+          "reaches_a_variable": true
+        },
+        {
+          "entity": "rate_exp",
+          "paths": 5,
+          "max_hops": 2,
+          "usable_first_links": 8,
+          "distinct_first_hops": 5,
+          "reaches_a_variable": true
+        },
+        {
+          "entity": "rbi",
+          "paths": 5,
+          "max_hops": 3,
+          "usable_first_links": 1,
+          "distinct_first_hops": 1,
+          "reaches_a_variable": true
+        },
+        {
+          "entity": "risk_aversion",
+          "paths": 5,
+          "max_hops": 3,
+          "usable_first_links": 5,
+          "distinct_first_hops": 5,
+          "reaches_a_variable": true
+        },
+        {
+          "entity": "us10y",
+          "paths": 2,
+          "max_hops": 2,
+          "usable_first_links": 1,
+          "distinct_first_hops": 1,
+          "reaches_a_variable": false
+        },
+        {
+          "entity": "usd",
+          "paths": 5,
+          "max_hops": 2,
+          "usable_first_links": 3,
+          "distinct_first_hops": 3,
+          "reaches_a_variable": true
+        },
+        {
+          "entity": "usdinr",
+          "paths": 4,
+          "max_hops": 2,
+          "usable_first_links": 2,
+          "distinct_first_hops": 2,
+          "reaches_a_variable": false
+        },
+        {
+          "entity": "wheat",
+          "paths": 5,
+          "max_hops": 4,
+          "usable_first_links": 2,
+          "distinct_first_hops": 2,
+          "reaches_a_variable": true
+        }
+      ]
+    }
+  },
+  "runtime_s": 5.8
+}

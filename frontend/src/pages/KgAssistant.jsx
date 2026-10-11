@@ -11,22 +11,47 @@ import {
   HelpCircle,
   Copy,
   Check,
+  Database,
+  Upload,
 } from 'lucide-react';
 import { api } from '../services/api';
 import { useUi } from '../context/UiContext';
 
-export default function KgAssistant({ analysis, onNavigateToTab, onSelectEventText }) {
+const SOURCE_LABEL = { link: 'Link', path: 'Path', node: 'Entity', analysis: 'Article', sector: 'Sector', tier: 'Tier' };
+
+export default function KgAssistant({ analysis, onNavigateToTab, onSelectEventText, libraryTotal = 0, localAnalyses = 0, onImportHistory }) {
   const [messages, setMessages] = useState([
     {
       id: 'welcome-1',
       sender: 'assistant',
-      text: 'Hello! I am your **KG-Powered AI Assistant**.\n\nYou can ask me questions about macroeconomic transmission paths, sector dependencies, contagion channels, and causal graph dynamics.',
+      text: 'Hello! I am your KG-Powered AI Assistant.\n\nAsk me about transmission paths, sector dependencies and contagion channels in the knowledge graph, or about any article you analysed with the Knowledge Graph Generator: every graph it drew is kept in the analysis library, and I say which facts the article reported and which the model inferred.',
       time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
     },
   ]);
   const [inputText, setInputText] = useState('');
   const [loading, setLoading] = useState(false);
   const [copiedId, setCopiedId] = useState(null);
+  const [importing, setImporting] = useState(false);
+  const [importNote, setImportNote] = useState(null);
+
+  const handleImport = async () => {
+    if (!onImportHistory || importing) return;
+    setImporting(true);
+    setImportNote(null);
+    try {
+      const r = await onImportHistory();
+      setImportNote(
+        r.found === 0
+          ? 'No analysed graphs were found in this browser’s chat history.'
+          : `Imported ${r.imported} graph(s) from ${r.found} chat(s); ${r.already_in_library} were already in the library` +
+              (r.skipped ? `, ${r.skipped} had no graph to keep` : '') + `. The library now holds ${r.total}.`
+      );
+    } catch (e) {
+      setImportNote(`Import failed: ${e.message}`);
+    } finally {
+      setImporting(false);
+    }
+  };
   const messagesEndRef = useRef(null);
   const textareaRef = useRef(null);
   const { status } = useUi();
@@ -130,7 +155,26 @@ export default function KgAssistant({ analysis, onNavigateToTab, onSelectEventTe
         </div>
 
         {onNavigateToTab && (
-          <div style={{ display: 'flex', gap: 8 }}>
+          <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>
+            <span
+              style={{ fontSize: 12, color: '#52525b', display: 'inline-flex', alignItems: 'center', gap: 5 }}
+              title="Every graph the Knowledge Graph Generator drew is saved here, and the assistant can answer from it"
+            >
+              <Database size={13} color="#6366f1" />
+              Library: {libraryTotal} graph{libraryTotal === 1 ? '' : 's'}
+            </span>
+            {onImportHistory && (
+              <button
+                className="btn btn-outline"
+                style={{ fontSize: 12, padding: '4px 10px' }}
+                onClick={handleImport}
+                disabled={importing}
+                title={`Send the graphs saved in this browser's chat history (${localAnalyses}) to the library, so the assistant can use them`}
+              >
+                <Upload size={13} style={{ marginRight: 5 }} />
+                {importing ? 'Importing…' : 'Import my chat history'}
+              </button>
+            )}
             <button
               className="btn btn-outline"
               style={{ fontSize: 12, padding: '4px 10px' }}
@@ -150,6 +194,15 @@ export default function KgAssistant({ analysis, onNavigateToTab, onSelectEventTe
           </div>
         )}
       </div>
+
+      {importNote && (
+        <div
+          role="status"
+          style={{ padding: '8px 24px', fontSize: 12, borderBottom: '1px solid #e4e4e7', background: importNote.startsWith('Import failed') ? '#fef2f2' : '#f5f3ff', color: importNote.startsWith('Import failed') ? '#991b1b' : '#3730a3' }}
+        >
+          {importNote}
+        </div>
+      )}
 
       {/* Messages Scroll Area */}
       <div style={{ flex: 1, overflowY: 'auto', padding: '20px 24px', display: 'flex', flexDirection: 'column', gap: 18 }}>
@@ -210,7 +263,7 @@ export default function KgAssistant({ analysis, onNavigateToTab, onSelectEventTe
                         title={s.text}
                         style={{ fontSize: 11, padding: '2px 8px', borderRadius: 10, border: '1px solid #e4e4e7', background: '#fafafa', color: '#3f3f46' }}
                       >
-                        {s.kind === 'link' ? 'Link' : s.kind === 'path' ? 'Path' : s.kind === 'node' ? 'Entity' : 'Note'}: {s.title}
+                        {SOURCE_LABEL[s.kind] || 'Note'}: {s.kind === 'analysis' ? s.title.replace(/^Article analysis: /, '') : s.title}
                       </span>
                     ))}
                   </div>
@@ -225,6 +278,20 @@ export default function KgAssistant({ analysis, onNavigateToTab, onSelectEventTe
                         style={{ fontSize: 11, padding: '2px 8px', borderRadius: 10, border: '1px solid #e4e4e7', background: '#fff', cursor: 'pointer', color: '#27272a' }}
                       >
                         {name}
+                      </button>
+                    ))}
+                  </div>
+                )}
+                {msg.id === 'welcome-1' && libraryTotal > 0 && (
+                  <div style={{ marginTop: 6, display: 'flex', flexWrap: 'wrap', gap: 5, maxWidth: 640 }}>
+                    {['What did the last article report?', 'What happens if crude oil rises?'].map((q) => (
+                      <button
+                        key={q}
+                        type="button"
+                        onClick={() => handleSend(q)}
+                        style={{ fontSize: 11, padding: '2px 8px', borderRadius: 10, border: '1px solid #e4e4e7', background: '#fff', cursor: 'pointer', color: '#27272a' }}
+                      >
+                        {q}
                       </button>
                     ))}
                   </div>

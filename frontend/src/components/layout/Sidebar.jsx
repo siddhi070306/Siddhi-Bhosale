@@ -16,6 +16,7 @@ import {
   Trash2,
   Bot,
   ShieldCheck,
+  Database,
 } from 'lucide-react';
 
 export default function Sidebar({
@@ -216,7 +217,7 @@ export default function Sidebar({
                   className="sidebar-history-clear-btn"
                   onClick={(e) => {
                     e.stopPropagation();
-                    if (window.confirm('Clear all saved chat history?')) {
+                    if (window.confirm('Clear the chat history saved in this browser? Graphs saved in the analysis library (marked with the library icon) stay, and the KG assistant keeps using them.')) {
                       onClearAllSessions();
                     }
                   }}
@@ -237,18 +238,27 @@ export default function Sidebar({
                       if (onSelectSession) onSelectSession(session.id);
                       if (onCloseMobileMenu) onCloseMobileMenu();
                     }}
-                    title={session.title}
+                    title={
+                      session.saved
+                        ? `${session.title}\nSaved in the analysis library${session.origin === 'import' ? ' (imported)' : ''}: click to reopen the graph`
+                        : session.title
+                    }
                   >
+                    {session.saved && (
+                      <Database size={11} color="#6366f1" style={{ flexShrink: 0, marginRight: 5 }} aria-label="Saved in the analysis library" />
+                    )}
                     <span className="sidebar-history-title">{session.title}</span>
                     {onDeleteSession && (
                       <button
                         className="sidebar-history-delete-btn"
                         onClick={(e) => {
                           e.stopPropagation();
-                          onDeleteSession(session.id);
+                          if (!session.saved || window.confirm('Delete this graph from the analysis library? The KG assistant will no longer use it.')) {
+                            onDeleteSession(session.id);
+                          }
                         }}
-                        title="Delete chat"
-                        aria-label="Delete chat"
+                        title={session.saved ? 'Delete from the analysis library' : 'Delete chat'}
+                        aria-label={session.saved ? 'Delete from the analysis library' : 'Delete chat'}
                       >
                         <Trash2 size={12} />
                       </button>

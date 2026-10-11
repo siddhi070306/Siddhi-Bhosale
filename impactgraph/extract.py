@@ -32,7 +32,7 @@ _GEO_STRONG = re.compile(r"\b(attack(?:s|ed)?|missile|drone strikes?|invasion|bl
 _GEO_WEAK = re.compile(r"\b(war|conflict|tensions?|military)\b", re.I)
 _GEO_EASE = re.compile(r"\b(ceasefire|de-escalat\w+|truce|peace deal|tensions? ease[sd]?)\b", re.I)
 _OPEC_RESTRAIN = re.compile(
-    r"((output|production|supply|quota)s?\s+cuts?|cuts?\s+(?:to\s+|in\s+)?(?:its\s+|their\s+)?(output|production|supply)|"
+    r"((output|production|supply|quota)s?\s+cuts?|cuts?\s+(?:to\s+|in\s+)?(?:its\s+|their\s+)?(?:oil\s+|crude\s+)?(output|production|supply)|"
     r"\bcurb\w*|\brestrain\w*|\bwithhold\w*|\bextend\w*\s+(?:the\s+)?cuts?|\bkeep\w*\s+(?:its\s+)?(?:output|production)\s+cuts?)", re.I)
 _OPEC_BOOST = re.compile(r"(boost|raise|increase|ramp up|pump more|hike)\w*\s+(?:its\s+)?(output|production|supply)", re.I)
 _REG_CORE = re.compile(r"\b(regulator\w*|regulation\w*|rules?|bans?|banned|tariffs?|tax(?:es)?|levy|curbs?|"
@@ -96,7 +96,14 @@ def find_mentions(sentence):
 
 _CLAUSE_RE = re.compile(r";|,\s*(?:while|but|whereas|and)\b|\b(?:while|but|whereas|as|after|amid)\b", re.I)
 _DETERMINERS = {"the", "a", "an", "this", "that", "its", "their", "any", "further", "sharp", "steep", "big",
-                "small", "modest", "another", "such", "of"}
+                "small", "modest", "another", "such", "of", "more", "fewer", "additional", "no"}   # "more hikes" is a noun
+# "oil output", "crude exports": the entity names a quantity, not a price, so a verb next to it is not a price move
+_QUANTITY_NEXT = re.compile(r"\s+(output|production|supply|supplies|exports?|imports?|inventor(?:y|ies)|stockpiles?|"
+                            r"reserves|demand|consumption)\b", re.I)
+# "sending Brent crude up 6%": a causative verb, then the entity, then a direction particle
+_PARTICLE_RE = re.compile(r"\s+(up|down|higher|lower)\b", re.I)
+_CAUSATIVE_RE = re.compile(r"\b(send|sends|sent|sending|push|pushes|pushed|pushing|drive|drives|drove|driving|knock|knocks|"
+                           r"knocked|knocking|drag|drags|dragged|dragging)\s+$", re.I)
 _ADJ_OK_NEXT = {"", "than", "on", "for", "after", "as", "in", "amid", "at", "by", "while", "to", "with", "and",
                 "but", "from", "this", "last", "today", "monday", "tuesday", "wednesday", "thursday", "friday"}
 
@@ -141,9 +148,19 @@ def _nearest_verb(verbs, ms, me, max_dist=70, bounds=None):
     return best[1] if best else None
 
 
-def _pct_near(sentence, verb):
+def _particle(sent, m):
+    """The 'up'/'down' in 'sending Brent crude up 6%', as a match object, or None."""
+    p = _PARTICLE_RE.match(sent, m["end"])
+    return p if p and _CAUSATIVE_RE.search(sent[:m["start"]]) else None
+
+
+def _pct_near(sentence, verb, not_before=0):
+    """The nearest figure to the verb. A figure before the verb must not lie before `not_before` (the entity's own mention),
+    or 'the dollar jumped 1.2% and yields rose' would give the yields the dollar's 1.2%."""
     best = None
     for p in _PCT_RE.finditer(sentence):
+        if p.start() < verb.end() and p.start() < not_before:
+            continue
         d = p.start() - verb.end() if p.start() >= verb.end() else verb.start() - p.end() + 15
         if d < 0 or d > 40:
             continue
@@ -193,18 +210,21 @@ def extract(text):
             node = kb.NODES[m["node"]]
             if node["type"] not in kb.TYPES_FOR_PRICE_MOVES:
                 continue
-            if m["node"] == "rate_exp" and any(kb.NODES[x["node"]]["type"] == "institution" for x in mentions):
-                continue  # the central-bank rule below owns this statement
-            v = _nearest_verb(verbs, m["start"], m["end"], bounds=bounds)
+            if m["node"] == "rate_exp" and any(kb.NODES[x["node"]]["type"] == "institution" and x["node"] != "central_banks"
+                                               for x in mentions):
+                continue  # a named central bank's decision is owned by the central-bank rule below
+            if _QUANTITY_NEXT.match(sent, m["end"]):
+                continue
+            v = _particle(sent, m) or _nearest_verb(verbs, m["start"], m["end"], bounds=bounds)
             if not v:
                 continue
             word = v.group(1).lower()
-            direction = 1 if word in _UPSET else -1
+            direction = 1 if word in _UPSET or word == "up" else -1
             if m["node"] == "usdinr" and m["text"].lower() in ("rupee", "indian rupee", "inr"):
                 direction = -direction  # "rupee weakened" means USD/INR rose
-            p = _pct_near(sent, v)
+            p = _pct_near(sent, v, not_before=m["start"])
             pct_val = float(p.group(1)) if p and p.group(2).startswith(("%", "per", "perc")) else None
-            expected = _hedged(sent, v.start())
+            expected = _hedged(sent, max(v.start(), m["start"]))   # "... if inflation stays high": the hedge governs the entity
             mag = None
             if p:
                 mag = p.group(0)

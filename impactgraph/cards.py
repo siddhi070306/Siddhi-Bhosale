@@ -165,19 +165,80 @@ def gap_card(kg, a, b):
             "brief": "no path between %s and %s" % (label(g, a), label(g, b))}
 
 
-def find_paths(kg, src, dst=None, limit=3):
-    """The strongest paths out of `src` (to `dst` if given; otherwise to distinct sectors and assets, at least 2 links long)."""
+def find_paths(kg, src, dst=None, limit=3, diverse=False):
+    """The strongest paths out of `src` (to `dst` if given; otherwise to distinct sectors and assets, at least 2 links long).
+
+    diverse=True (used for one-topic questions) picks the strongest path through each different first link, then (if slots
+    remain, e.g. for a central bank whose only link is to rate expectations) through each different second link, then the next
+    strongest, so the answer covers several channels instead of variants of the strongest branch. It also makes sure one path
+    runs through another economic variable when the graph has such a path (oil -> inflation -> rates -> real estate)."""
     paths = pg._dfs(kg, src, 1, set(), 5, 0.03, 300)
     if dst:
         return [p for p in paths if p["nodes"][-1] == dst][:limit]
+    g = kg.g
+    cands = [p for p in paths if g.nodes[p["nodes"][-1]].get("tier") in ("asset", "sector") and len(p["edges"]) >= 2]
     seen, keep = set(), []
-    for p in paths:
-        end = p["nodes"][-1]
-        if end in seen or kg.g.nodes[end].get("tier") not in ("asset", "sector") or len(p["edges"]) < 2:
-            continue
-        seen.add(end)
-        keep.append(p)
-    return keep[:limit]
+    keys = ((lambda p: p["nodes"][1]), (lambda p: tuple(p["nodes"][1:3])), (lambda p: id(p))) if diverse else ((lambda p: id(p)),)
+    for key in keys:                          # each pass only adds paths whose key is new
+        used = {key(p) for p in keep}
+        for p in cands:
+            if len(keep) == limit:
+                break
+            end = p["nodes"][-1]
+            if end in seen or key(p) in used:
+                continue
+            seen.add(end)
+            used.add(key(p))
+            keep.append(p)
+    keep.sort(key=lambda p: -p["score"])
+    if diverse and keep:
+        via_var = lambda p: any(_tier(g, n) == "variable" for n in p["nodes"][1:-1])
+        if not any(via_var(p) for p in keep):
+            extra = next((p for p in cands if via_var(p) and p["nodes"][-1] not in seen), None)
+            if extra:
+                keep = keep[:limit - 1] + [extra]
+    return keep
+
+
+def analysis_card(rec, graph_version=None):
+    """A card for one saved analysis (see library.py): what the article reported, what the model inferred, and the hypotheses,
+    kept apart so an answer can say which is which."""
+    arrow = lambda d: ARROW.get(d, "")
+    obs = [e for e in rec["events"] if e["status"] == "observed"]
+    exp = [e for e in rec["events"] if e["status"] == "expected"]
+    hyp = [e for e in rec["events"] if e["status"] == "hypothesis"]
+    v = (rec.get("kb_version") or {}).get("version")
+    parts = ['Analysis of the article "%s" (%s, analysed on graph version %s).' % (rec["title"], rec["t"][:16], v if v is not None else "?")]
+    if graph_version and v is not None and (v != graph_version.get("version") or
+                                            (rec.get("kb_version") or {}).get("epoch") != graph_version.get("epoch")):
+        parts.append("The graph has changed since (now version %s), so these inferences may differ today." % graph_version.get("version"))
+    if obs:
+        parts.append("REPORTED by the article (observed): " + "; ".join(
+            '%s ("%s")' % (e["label"], e["quote"][:140]) if e.get("quote") else e["label"] for e in obs) + ".")
+    if exp:
+        parts.append("Stated as expected or hedged (not reported as happened): " + "; ".join(e["label"] for e in exp) + ".")
+    if rec.get("paths"):
+        parts.append("INFERRED by the model (chains it traced): " + " | ".join(
+            "%s (plausibility %.2f)" % (p["text"], p["score"] or 0) for p in rec["paths"][:4]) + ".")
+    rows = [r for r in rec.get("assets", [])[:5] + rec.get("sectors", [])[:3] if r.get("node")]
+    if rows:
+        parts.append("INFERRED effects: " + "; ".join("%s %s (%s%s)" % (r["label"], arrow(r["direction"]), r["confidence_label"],
+                                                                       ", mixed signals" if r["mixed"] else "") for r in rows) + ".")
+    if rec.get("comparison"):
+        parts.append("Model vs article: " + "; ".join("%s: %s" % (c["label"], (c["verdict"] or "").replace("_", " "))
+                                                      for c in rec["comparison"][:6]) + ".")
+    hy = [e["label"] for e in hyp] + [h["text"] for h in rec.get("hypotheses", [])[:3]]
+    if hy:
+        parts.append("Model HYPOTHESES (not stated in the article): " + "; ".join(hy) + ".")
+    brief = "Article of %s \"%s\": reported %s" % (rec["t"][:10], _clip(rec["title"], 70),
+                                                   ", ".join(e["label"] for e in obs[:3]) or "no observed event")
+    return {"id": "a:%s" % rec["id"], "kind": "analysis", "tiers": [], "refs": list(rec.get("nodes") or []),
+            "title": "Article analysis: %s" % _clip(rec["title"], 80), "text": " ".join(parts), "brief": brief, "t": rec["t"]}
+
+
+def _clip(s, n):
+    s = s or ""
+    return s if len(s) <= n else s[:n - 1] + "…"
 
 
 def path_from_nodes(kg, nodes):
@@ -228,8 +289,8 @@ def fingerprint(cards):
     return h.hexdigest()[:16]
 
 
-def get_card(kg, card_id):
-    """One card by id, or None."""
+def get_card(kg, card_id, library=None, graph_version=None):
+    """One card by id, or None. Analysis cards (a:<id>) need the analysis library."""
     g = kg.g
     kind, _, rest = card_id.partition(":")
     if kind == "n" and rest in g:
@@ -244,4 +305,7 @@ def get_card(kg, card_id):
     if kind == "p":
         p = path_from_nodes(kg, rest.split(">"))
         return path_card(kg, p) if p else None
+    if kind == "a" and library is not None:
+        rec = library.get(rest)
+        return analysis_card(rec, graph_version) if rec else None
     return None

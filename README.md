@@ -11,8 +11,11 @@ economic variables, sectors and assets - and explains every link, the evidence b
 ```bash
 pip install -r requirements.txt
 python run.py                      # http://127.0.0.1:8000
-python -m unittest discover tests  # 22 tests
+python -m unittest discover tests  # 228 tests
+ZENITH_REQUIRE_LLM=0 python research/evaluate.py   # the paper's experiments (offline, ~5 s; needs data/cache)
 ```
+
+A research-paper write-up of the method and its evaluation is in `research/PAPER.md`; the full technical reference is `DOCUMENTATION.md`.
 
 Open the page, pick a sample event (or paste text), press **Analyse event**.
 Open `http://127.0.0.1:8000/#demo0` (or `#demo1` ... `#demo4`) to auto-run a sample.
@@ -122,6 +125,15 @@ with its plausibility, a sector-to-members view, or a note that the graph holds 
 answer from those cards only, citing them. A citation that is not a real card is removed, and an answer with no valid citation is
 replaced by a plain answer built from the cards. The response carries the answer, the cited sources and the graph version. With no
 LLM, the cards themselves are the answer. A question that names no entity gets no answer, only suggestions.
+
+**Every generated graph is in the RAG.** `impactgraph/library.py` files each graph the Knowledge Graph Generator produces
+(`data/analyses/`: a compact index plus one compressed full result per article, newest 200). The assistant retrieves the analyses that
+touched the entities a question names, or the latest ones for a question about the news ("what did the last article report?"), as
+`a:<id>` cards that keep apart what the article **reported**, what the model **inferred** (at a stated graph version) and its
+**hypotheses**. *Import my chat history* on the assistant page sends the graphs already in the browser's history to the library, and the
+sidebar's Recent chats list library graphs too (library icon) and reopen them with every dashboard. API: `GET /api/analyses`,
+`GET /api/analyses/{id}`, `POST /api/analyses/import`, `DELETE /api/analyses/{id}`. For a one-topic question ("what happens if oil rises?")
+the retrieved chains are diversified, one per channel, instead of three variants of the strongest branch.
 
 ## Reading the graph tier by tier, and exporting it as cards
 

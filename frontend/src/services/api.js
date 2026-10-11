@@ -305,6 +305,41 @@ export function toMarketSectors(res) {
   }));
 }
 
+// The raw backend result plus the views every page reads (used for fresh analyses and for graphs reopened from the library).
+export function adaptResult(res, text, source = null, link = null, title = null) {
+  return {
+    raw: res,
+    text,
+    source,
+    link,
+    title,
+    sources: res.sources || [],
+    summary: res.summary,
+    llmNote: res.llm_note,
+    view: toEventView(res, text, source, link),
+    assetView: toAssetView(res),
+    graphView: toGraphView(res),
+    marketSectors: toMarketSectors(res),
+    kbGuard: res.kb_guard || null,
+    context: res.context || null,
+    hypothesis: res.hypothesis || null,
+    emptyReason: res.empty_reason || null,
+    emptyHint: res.empty_hint || null,
+    input: res.input || null,
+    noEvent: !(res.paths && res.paths.length),
+  };
+}
+
+// A raw result without sparklines (large, and not needed by the library), for importing browser history.
+export function slimResult(raw) {
+  const out = { ...raw };
+  delete out.sparks;
+  ['assets', 'sectors', 'variables'].forEach((k) => {
+    if (Array.isArray(out[k])) out[k] = out[k].map(({ spark, ...rest }) => rest);
+  });
+  return out;
+}
+
 // ---- API ---------------------------------------------------------------------------------------------
 export const api = {
   getStatus: () => request('/api/status'),
@@ -372,28 +407,19 @@ export const api = {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ text, live, use_llm: true, link: link || null, title: title || null, full_text: !!link && prefs.getFullText() }),
     });
-    return {
-      raw: res,
-      text,
-      source,
-      link,
-      title,
-      sources: res.sources || [],
-      summary: res.summary,
-      llmNote: res.llm_note,
-      view: toEventView(res, text, source, link),
-      assetView: toAssetView(res),
-      graphView: toGraphView(res),
-      marketSectors: toMarketSectors(res),
-      kbGuard: res.kb_guard || null,
-      context: res.context || null,
-      hypothesis: res.hypothesis || null,
-      emptyReason: res.empty_reason || null,
-      emptyHint: res.empty_hint || null,
-      input: res.input || null,
-      noEvent: !(res.paths && res.paths.length),
-    };
+    return adaptResult(res, text, source, link, title);
   },
+
+  // the analysis library: every graph the generator produced, kept on the backend for the KG assistant and the chat history
+  listAnalyses: (limit = 100) => request(`/api/analyses?limit=${limit}`),
+  getAnalysis: (id) => request(`/api/analyses/${encodeURIComponent(id)}`),
+  deleteAnalysis: (id) => request(`/api/analyses/${encodeURIComponent(id)}`, { method: 'DELETE' }),
+  importAnalyses: (items) =>
+    request('/api/analyses/import', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ items }),
+    }),
 
   whatIf: (trigger, magnitudePct, horizonDays, live = prefs.getLive(), shocks = null) =>
     request('/api/whatif', {
