@@ -117,10 +117,14 @@ for _id, _label, _al, _tk, _t in [
     ("sensex", "BSE Sensex", ["bse sensex", "sensex"], "^BSESN", "index"),
     ("nifty_bank", "Nifty Bank", ["bank nifty", "nifty bank"], "^NSEBANK", "index"),
     ("nifty_realty", "Nifty Realty", ["nifty realty"], "^CNXREALTY", "index"),
-    ("xle", "XLE (Energy ETF)", ["xle"], "XLE", "instrument"),
-    ("jets", "JETS (Airlines ETF)", ["jets etf", "!JETS"], "JETS", "instrument"),
-    ("gld", "GLD (Gold ETF)", ["gld", "spdr gold"], "GLD", "instrument"),
-    ("tlt", "TLT (Long Treasuries ETF)", ["tlt"], "TLT", "instrument"),
+    # everyday names for the funds, so "long-term bond ETF" or "gold ETF" in a question finds them
+    ("xle", "XLE (Energy ETF)", ["xle", "energy etf", "energy etfs"], "XLE", "instrument"),
+    ("jets", "JETS (Airlines ETF)", ["jets etf", "!JETS", "airline etf", "airlines etf", "airline etfs"], "JETS", "instrument"),
+    ("gld", "GLD (Gold ETF)", ["gld", "spdr gold", "gold etf", "gold etfs", "gold fund"], "GLD", "instrument"),
+    ("tlt", "TLT (Long Treasuries ETF)", ["tlt", "long-term treasury etf", "long term treasury etf", "long-term treasuries",
+                                          "long term treasuries", "long-term bond etf", "long term bond etf", "long-term bonds",
+                                          "long term bonds", "long-term etf", "long term etf", "long bonds", "treasury etf",
+                                          "bond etf"], "TLT", "instrument"),
 ]:
     _n(_id, _label, _t, _al, ([("fred", "SP500", "ret")] if _id == "spx" else []) + [("yf", _tk, "ret")])
 

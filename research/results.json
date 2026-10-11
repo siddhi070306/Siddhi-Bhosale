@@ -1,10 +1,10 @@
 {
-  "generated": "2026-10-11 16:38:59",
+  "generated": "2026-10-11 18:30:12",
   "python": "3.9.0",
   "E1_graph": {
     "entities": 56,
     "links": 90,
-    "aliases": 194,
+    "aliases": 215,
     "entities_by_tier": {
       "variable": 13,
       "event": 6,
@@ -1477,8 +1477,8 @@
   },
   "E7_latency": {
     "runs": 30,
-    "median_s": 0.046,
-    "max_s": 0.064,
+    "median_s": 0.079,
+    "max_s": 0.113,
     "note": "rules-only, cached data, warm in-memory cache; excludes the LLM call (13-35 s observed with the LLM on)"
   },
   "E8_assistant_retrieval": {
@@ -1648,5 +1648,5 @@
       ]
     }
   },
-  "runtime_s": 5.8
+  "runtime_s": 8.7
 }

@@ -285,6 +285,11 @@ def rss_items():
         mixed = []
         for i in range(max((len(f) for f in per_feed), default=0)):
             mixed.extend(f[i] for f in per_feed if i < len(f))
+        try:        # do the duplicate-story comparisons here (startup or background refresh), so /api/events stays fast
+            from .priority import cluster_articles
+            cluster_articles(mixed)
+        except Exception:
+            pass
         return mixed
     return _cached("rss", 300, load)
 

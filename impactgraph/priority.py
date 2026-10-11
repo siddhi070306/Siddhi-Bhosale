@@ -17,6 +17,7 @@ Factors:
 from __future__ import annotations
 
 import difflib
+import functools
 import math
 import re
 from dataclasses import dataclass
@@ -395,6 +396,12 @@ def title_similarity(t1: str, t2: str) -> float:
     return round(combined, 4)
 
 
+# Clustering compares every new headline with every earlier one (a few hundred feed items make ~45,000 pairs, each a
+# difflib alignment: about 25 s). Feeds refresh every few minutes but most titles persist, so each pair is computed once
+# and remembered. Same function, same results.
+_similarity_memo = functools.lru_cache(maxsize=300000)(lambda t1, t2: title_similarity(t1, t2))
+
+
 def cluster_articles(
     articles: Sequence[Union[Article, Dict[str, Any]]],
     similarity_threshold: float = 0.60,
@@ -416,7 +423,7 @@ def cluster_articles(
         matched_cluster = None
         best_sim = 0.0
         for cluster in clusters:
-            sim = max(title_similarity(art.title, c_art.title) for c_art in cluster)
+            sim = max(_similarity_memo(art.title or "", c_art.title or "") for c_art in cluster)
             if sim >= similarity_threshold and sim > best_sim:
                 best_sim = sim
                 matched_cluster = cluster

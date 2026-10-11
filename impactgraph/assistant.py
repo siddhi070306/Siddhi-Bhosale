@@ -81,6 +81,9 @@ def build_cards(kg, entities):
                     add(cardlib.path_card(kg, p))
             if not found and not g.has_edge(a, b) and not g.has_edge(b, a):
                 add(cardlib.gap_card(kg, a, b))
+                shared = cardlib.shared_drivers_card(kg, a, b)   # no effect either way, but what moves both?
+                if shared:
+                    add(shared)
     if len(entities) == 1:                                # one entity: what it drives (one chain per channel), and what drives it
         n = entities[0]
         for p in cardlib.find_paths(kg, n, None, 5, diverse=True):
@@ -102,7 +105,10 @@ SYSTEM = (
     "by that article (say so, with its date); what they list as INFERRED was the model's inference at that time; HYPOTHESES are "
     "hypotheses. Never present an inference or a hypothesis as something an article reported, and prefer the other cards for how "
     "the graph works now. "
-    "7) Answer in 3-6 plain sentences."
+    "7) A card whose id starts with d: lists drivers shared by two entities: say that they can move together (or opposite) "
+    "because of these common causes, and never call it an effect of one on the other. "
+    "8) Never name an entity, fund or market that does not appear in the cards. "
+    "9) Answer in 3-6 plain sentences."
 )
 
 
@@ -157,13 +163,20 @@ def answer(kg, version, question, history=(), use_llm=True, library=None):
             question, "\n\n".join("[%s] %s\n%s" % (
                 c["id"], c["title"], c["text"][:MAX_ANALYSIS_CHARS if c["kind"] == "analysis" else MAX_CARD_CHARS]) for c in cards))
         out = llm._chat(SYSTEM, body, max_tokens=900)
+        if out and not any(c in by_id for c in CITE.findall(out)):
+            # one retry: the model is shown its own uncited answer and asked to cite the cards (an uncited answer is never shown)
+            retry = llm._chat(SYSTEM, body + "\n\nYour previous answer, below, cited no card id. Rewrite it using only facts from the "
+                                      "cards, and end every factual sentence with the id of the card that supports it in square "
+                                      "brackets, exactly as given (for example [%s]).\n\nPrevious answer:\n%s" % (cards[0]["id"], out),
+                              max_tokens=900)
+            out = retry or out
         if out:
             cited = [c for c in CITE.findall(out) if c in by_id]
             if cited:
                 text = CITE.sub(lambda m: m.group(0) if m.group(1) in by_id else "", out).strip()
                 mode = "llm"
             else:
-                note = "The language model's answer cited no card, so it was replaced by the graph's own facts."
+                note = "The language model's answer cited no card, even when asked again, so it was replaced by the graph's own facts."
         else:
             note = "The language model was unavailable (%s), so this is answered from the graph directly." % (llm.last_error() or "no reason given")
     elif use_llm:

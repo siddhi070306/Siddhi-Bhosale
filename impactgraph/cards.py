@@ -165,6 +165,51 @@ def gap_card(kg, a, b):
             "brief": "no path between %s and %s" % (label(g, a), label(g, b))}
 
 
+def shared_drivers(kg, a, b, limit=3):
+    """Drivers that reach both a and b (walking the graph backwards), with the direction each pushes them when it rises and
+    the strongest chain to each. Ranked by the weaker of the two chains. Common causes, not an effect of a on b."""
+    def best(target):
+        out = {}
+        for p in pg.upstream_paths(kg, target, 1, max_depth=4, min_score=0.05):
+            drv = p["nodes"][0]
+            if drv not in (a, b) and (drv not in out or p["score"] > out[drv]["score"]):
+                out[drv] = p
+        return out
+    pa, pb = best(a), best(b)
+    common = sorted(set(pa) & set(pb), key=lambda d: (-min(pa[d]["score"], pb[d]["score"]), d))
+    chosen = []
+    for d in common:                    # a driver that only acts through one already listed adds nothing (the Fed via rates)
+        if any(c in pa[d]["nodes"][1:] for c in chosen) and any(c in pb[d]["nodes"][1:] for c in chosen):
+            continue
+        chosen.append(d)
+        if len(chosen) == limit:
+            break
+    return [{"driver": d, "a": pa[d], "b": pb[d]} for d in chosen]
+
+
+def shared_drivers_card(kg, a, b, limit=3):
+    """A card for two entities the graph does not connect: what moves both of them. None if nothing does."""
+    g = kg.g
+    sd = shared_drivers(kg, a, b, limit)
+    if not sd:
+        return None
+    word = lambda s: "UP" if s > 0 else "DOWN"
+    chain = lambda p: " → ".join(label(g, n) for n in p["nodes"])
+    parts, briefs = [], []
+    for x in sd:
+        d, sa, sb = x["driver"], x["a"]["sign"], x["b"]["sign"]
+        verb = "turns hawkish" if g.nodes[d]["type"] == "institution" else "rises"
+        parts.append("When %s %s it pushes %s %s (%s, plausibility %.2f) and %s %s (%s, plausibility %.2f), so here they move %s." % (
+            label(g, d), verb, label(g, a), word(sa), chain(x["a"]), x["a"]["score"], label(g, b), word(sb), chain(x["b"]),
+            x["b"]["score"], "together" if sa == sb else "in opposite directions"))
+        briefs.append("%s (%s %s, %s %s)" % (label(g, d), label(g, a), ARROW[sa], label(g, b), ARROW[sb]))
+    text = ("Neither %s nor %s affects the other in the graph, but they share drivers, so they can move at the same time: this is "
+            "co-movement through common causes, not an effect of one on the other. %s") % (label(g, a), label(g, b), " ".join(parts))
+    return {"id": "d:%s&%s" % (a, b), "kind": "shared", "tiers": sorted({_tier(g, n) for n in (a, b)} - {None}),
+            "refs": [a, b] + [x["driver"] for x in sd], "title": "Shared drivers of %s and %s" % (label(g, a), label(g, b)),
+            "text": text, "brief": "shared drivers of %s and %s: %s" % (label(g, a), label(g, b), "; ".join(briefs))}
+
+
 def find_paths(kg, src, dst=None, limit=3, diverse=False):
     """The strongest paths out of `src` (to `dst` if given; otherwise to distinct sectors and assets, at least 2 links long).
 
@@ -305,6 +350,9 @@ def get_card(kg, card_id, library=None, graph_version=None):
     if kind == "p":
         p = path_from_nodes(kg, rest.split(">"))
         return path_card(kg, p) if p else None
+    if kind == "d":
+        a, _, b = rest.partition("&")
+        return shared_drivers_card(kg, a, b) if a in g and b in g else None
     if kind == "a" and library is not None:
         rec = library.get(rest)
         return analysis_card(rec, graph_version) if rec else None
