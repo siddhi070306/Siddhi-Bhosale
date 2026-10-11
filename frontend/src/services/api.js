@@ -1,13 +1,16 @@
 // API layer for Apex Zenith. Talks to the FastAPI backend only: no mock data, no silent fallbacks.
 // Every call either returns real backend data or throws an Error whose message says what went wrong.
 
+export const API_URL = (import.meta.env.VITE_API_URL || '').replace(/\/+$/, '');
+
 const ARROW = (d) => (d > 0 ? '↑' : d < 0 ? '↓' : '•');
 const fmt = (x, n = 2) => (typeof x === 'number' ? x.toFixed(n) : '–');
 
 async function request(path, options) {
   let res;
   try {
-    res = await fetch(path, options);
+    const url = path.startsWith('http') ? path : `${API_URL}${path}`;
+    res = await fetch(url, options);
   } catch (_) {
     throw new Error('Backend unreachable. Start it with `python run.py` (port 8000).');
   }

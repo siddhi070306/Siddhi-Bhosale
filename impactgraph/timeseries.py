@@ -33,11 +33,44 @@ _FINGERPRINTS = {}          # ticker -> tail of its closes, to catch any cross-c
 
 
 # ---------------------------------------------------------------------------------------------
+UPSTASH_URL = os.environ.get("UPSTASH_REDIS_REST_URL", "").rstrip("/")
+UPSTASH_TOKEN = os.environ.get("UPSTASH_REDIS_REST_TOKEN", "")
+
+
+def _upstash_get(key):
+    if not (UPSTASH_URL and UPSTASH_TOKEN):
+        return None
+    try:
+        r = requests.get(f"{UPSTASH_URL}/get/{key}", headers={"Authorization": f"Bearer {UPSTASH_TOKEN}"}, timeout=2.5)
+        if r.status_code == 200:
+            val = r.json().get("result")
+            if val:
+                return json.loads(val) if isinstance(val, str) else val
+    except Exception:
+        pass
+    return None
+
+
+def _upstash_set(key, data, ex=CACHE_TTL):
+    if not (UPSTASH_URL and UPSTASH_TOKEN):
+        return False
+    try:
+        requests.post(f"{UPSTASH_URL}/set/{key}?ex={ex}", headers={"Authorization": f"Bearer {UPSTASH_TOKEN}"},
+                      data=json.dumps(data), timeout=2.5)
+        return True
+    except Exception:
+        pass
+    return False
+
+
 def _cache_path(key):
     return os.path.join(CACHE_DIR, key.replace("/", "_").replace("^", "_").replace("=", "_") + ".json")
 
 
 def _cache_read(key, ignore_ttl=False):
+    up = _upstash_get(key)
+    if up and (ignore_ttl or time.time() - up.get("t", 0) < CACHE_TTL):
+        return up
     try:
         with open(_cache_path(key), "r", encoding="utf-8") as f:
             d = json.load(f)
@@ -49,10 +82,12 @@ def _cache_read(key, ignore_ttl=False):
 
 
 def _cache_write(key, dates, vals):
+    payload = {"t": time.time(), "dates": dates, "vals": vals}
+    _upstash_set(key, payload)
     try:
         os.makedirs(CACHE_DIR, exist_ok=True)
         with open(_cache_path(key), "w", encoding="utf-8") as f:
-            json.dump({"t": time.time(), "dates": dates, "vals": vals}, f)
+            json.dump(payload, f)
     except Exception:
         pass
 
