@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { ArrowUpRight, ArrowDownRight, ChevronRight, Zap, Plus, X, ExternalLink } from 'lucide-react';
+import { ArrowUpRight, ArrowDownRight, ChevronRight, Zap, Plus, X, ExternalLink, RefreshCw } from 'lucide-react';
 import SourceTag, { StreamChip } from '../components/common/SourceTag';
 import { useLiveQuotes, fmtPrice, fmtPct } from '../context/useLiveQuotes';
 import Sparkline from '../components/common/Sparkline';
@@ -16,9 +16,12 @@ export default function MarketIntelligence({
   analysis,
   onSelectEvent,
   onNavigateToTab,
+  isAnalyzingEvent = false,
+  analyzingEventInfo = null,
 }) {
   const [market, setMarket] = useState({ loading: true, tickers: [], error: null });
   const [events, setEvents] = useState({ loading: true, items: [], error: null });
+  const [clickedEventId, setClickedEventId] = useState(null);
   const { search, refreshTick } = useUi();
   const [limit, setLimit] = useState(8);
   // refreshTick > 0 means the header refresh button was pressed: bypass the server-side cache
@@ -234,60 +237,100 @@ export default function MarketIntelligence({
           </div>
 
           <div className="events-list">
-            {events.loading && <p style={{ fontSize: 12.5, color: '#71717a' }}>Loading headlines…</p>}
-            {events.error && <p style={{ fontSize: 12.5, color: '#991b1b' }}>{events.error}</p>}
-            {events.items.length > 0 && visibleEvents.length === 0 && <p style={{ fontSize: 12.5, color: '#71717a' }}>No headline matches “{search}”.</p>}
-            {visibleEvents.map((ev) => (
-              <div
-                key={ev.id}
-                className="event-item-row"
-                onClick={() => onSelectEvent && onSelectEvent(ev.text, ev.category, ev.link, ev.title)}
-                title="Click to analyze event"
-              >
-                <div className="event-item-left">
-                  <span className="event-time">{fmtTime(ev.time)}</span>
-                  <span className="event-title">{ev.title}</span>
+            {events.loading && (
+              <div className="news-loading-container">
+                <div className="news-loading-header">
+                  <RefreshCw size={13} className="spinning" />
+                  <span style={{ fontSize: 12.5, fontWeight: 500, color: '#52525b' }}>
+                    Fetching financial headlines across feeds…
+                  </span>
                 </div>
-                <div className="event-item-right">
-                  {ev.priority_score != null && (
-                    <span
-                      className="badge"
-                      style={{
-                        backgroundColor: '#e4e4e7',
-                        color: '#18181b',
-                        border: '1px solid #d4d4d8',
-                        fontWeight: 600,
-                      }}
-                      title={`Priority Score: ${(ev.priority_score * 100).toFixed(0)}`}
-                    >
-                      P:{(ev.priority_score * 100).toFixed(0)}
-                    </span>
-                  )}
-                  {ev.cluster_size > 1 && (
-                    <span
-                      className="badge badge-subtle"
-                      title={`Clustered ${ev.cluster_size} sources: ${(ev.sources || []).join(', ')}`}
-                    >
-                      {ev.cluster_size} sources
-                    </span>
-                  )}
-                  <span className="badge badge-subtle">{ev.category}</span>
-                  {ev.link && (
-                    <a
-                      href={ev.link}
-                      target="_blank"
-                      rel="noreferrer"
-                      title="Read original article"
-                      style={{ display: 'flex', alignItems: 'center', marginLeft: 8, color: '#71717a' }}
-                      onClick={(e) => e.stopPropagation()}
-                    >
-                      <ExternalLink size={15} />
-                    </a>
-                  )}
-                  <ChevronRight size={15} color="#71717a" style={{ marginLeft: 4 }} />
+                <div className="news-skeleton-list">
+                  {[1, 2, 3, 4, 5, 6].map((i) => (
+                    <div key={i} className="news-skeleton-row">
+                      <div className="news-skeleton-left">
+                        <div className="news-skeleton-pill skeleton-shimmer" style={{ width: 48, height: 16 }} />
+                        <div className="news-skeleton-line skeleton-shimmer" style={{ width: i % 2 === 0 ? '78%' : '60%', height: 16 }} />
+                      </div>
+                      <div className="news-skeleton-right">
+                        <div className="news-skeleton-pill skeleton-shimmer" style={{ width: 64, height: 20 }} />
+                      </div>
+                    </div>
+                  ))}
                 </div>
               </div>
-            ))}
+            )}
+            {events.error && <p style={{ fontSize: 12.5, color: '#991b1b' }}>{events.error}</p>}
+            {!events.loading && events.items.length > 0 && visibleEvents.length === 0 && (
+              <p style={{ fontSize: 12.5, color: '#71717a' }}>No headline matches “{search}”.</p>
+            )}
+            {!events.loading && visibleEvents.map((ev) => {
+              const isThisAnalyzing = isAnalyzingEvent && (clickedEventId === ev.id || (analyzingEventInfo && analyzingEventInfo.text === ev.text));
+              return (
+                <div
+                  key={ev.id}
+                  className={`event-item-row ${isThisAnalyzing ? 'is-analyzing' : ''}`}
+                  onClick={() => {
+                    if (isAnalyzingEvent) return;
+                    setClickedEventId(ev.id);
+                    onSelectEvent && onSelectEvent(ev.text, ev.category, ev.link, ev.title);
+                  }}
+                  title="Click to analyze event"
+                >
+                  <div className="event-item-left">
+                    <span className="event-time">{fmtTime(ev.time)}</span>
+                    <span className="event-title">{ev.title}</span>
+                  </div>
+                  <div className="event-item-right">
+                    {isThisAnalyzing ? (
+                      <span className="event-analyzing-indicator">
+                        <RefreshCw size={12} className="spinning" />
+                        <span>Analyzing & generating graph…</span>
+                      </span>
+                    ) : (
+                      <>
+                        {ev.priority_score != null && (
+                          <span
+                            className="badge"
+                            style={{
+                              backgroundColor: '#e4e4e7',
+                              color: '#18181b',
+                              border: '1px solid #d4d4d8',
+                              fontWeight: 600,
+                            }}
+                            title={`Priority Score: ${(ev.priority_score * 100).toFixed(0)}`}
+                          >
+                            P:{(ev.priority_score * 100).toFixed(0)}
+                          </span>
+                        )}
+                        {ev.cluster_size > 1 && (
+                          <span
+                            className="badge badge-subtle"
+                            title={`Clustered ${ev.cluster_size} sources: ${(ev.sources || []).join(', ')}`}
+                          >
+                            {ev.cluster_size} sources
+                          </span>
+                        )}
+                        <span className="badge badge-subtle">{ev.category}</span>
+                        {ev.link && (
+                          <a
+                            href={ev.link}
+                            target="_blank"
+                            rel="noreferrer"
+                            title="Read original article"
+                            style={{ display: 'flex', alignItems: 'center', marginLeft: 8, color: '#71717a' }}
+                            onClick={(e) => e.stopPropagation()}
+                          >
+                            <ExternalLink size={15} />
+                          </a>
+                        )}
+                        <ChevronRight size={15} color="#71717a" style={{ marginLeft: 4 }} />
+                      </>
+                    )}
+                  </div>
+                </div>
+              );
+            })}
           </div>
         </div>
 

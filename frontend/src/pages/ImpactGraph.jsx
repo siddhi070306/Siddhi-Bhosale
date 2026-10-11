@@ -58,7 +58,7 @@ function EmptyState({ onNavigateToChat, onSelectEvent }) {
   );
 }
 
-export default function ImpactGraph({ analysis, onNavigateToChat, onSelectEvent, onReanalyze, onNavigateToTab }) {
+export default function ImpactGraph({ analysis, onNavigateToChat, onSelectEvent, onReanalyze, onNavigateToTab, isAnalyzing = false }) {
   const graphData = (analysis && analysis.graphView) || null;
   const [activeTab, setActiveTab] = useState('pathways');
   const [selectedNode, setSelectedNode] = useState(graphData ? graphData.centerNode : null);
@@ -161,6 +161,24 @@ export default function ImpactGraph({ analysis, onNavigateToChat, onSelectEvent,
       </div>
     );
   }
+  if (!graphData && isAnalyzing) {
+    return (
+      <div className="card" style={{ padding: '48px 28px', maxWidth: 680, margin: '32px auto', textAlign: 'center' }}>
+        <div style={{ display: 'inline-flex', padding: 12, borderRadius: '50%', background: '#f4f4f5', marginBottom: 14 }}>
+          <RefreshCw size={22} className="spinning" color="#18181b" />
+        </div>
+        <div style={{ fontSize: 18, fontWeight: 700, color: '#09090b', marginBottom: 6 }}>
+          Constructing Knowledge Graph…
+        </div>
+        <p style={{ fontSize: 13.5, color: '#71717a', maxWidth: 460, margin: '0 auto 16px', lineHeight: 1.5 }}>
+          Extracting entities, checking quotes against article text, and tracing multi-hop causal transmission paths.
+        </p>
+        <div className="minimal-progress-bar">
+          <div className="minimal-progress-fill" />
+        </div>
+      </div>
+    );
+  }
   if (!graphData) return <EmptyState onNavigateToChat={onNavigateToChat} onSelectEvent={onSelectEvent} />;
 
   const filteredNodes = searchQuery
@@ -196,6 +214,14 @@ export default function ImpactGraph({ analysis, onNavigateToChat, onSelectEvent,
 
   return (
     <div>
+      {isAnalyzing && (
+        <div style={{ display: 'flex', justifyContent: 'center', marginBottom: 12 }}>
+          <div className="graph-analyzing-pill">
+            <RefreshCw size={13} className="spinning" />
+            <span>Updating Knowledge Graph for new event…</span>
+          </div>
+        </div>
+      )}
       {/* Page Header */}
       <div className="page-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: 16 }}>
         <div>
