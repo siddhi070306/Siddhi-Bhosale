@@ -24,7 +24,7 @@ from email.utils import parsedate_to_datetime
 from typing import Any, Dict, List, Optional, Sequence, Union
 
 
-@dataclass(slots=True)
+@dataclass   # no slots=True: it needs Python 3.10 and this project runs on 3.9
 class Article:
     """Represents a news article in a duplicate/event cluster."""
     id: str
@@ -63,6 +63,28 @@ def parse_timestamp(ts: Optional[Union[datetime, str, int, float]]) -> datetime:
         except Exception:
             pass
     return datetime.now(timezone.utc)
+
+
+def _parse_or_none(ts):
+    """Like parse_timestamp, but None when the timestamp is missing or cannot be read (instead of pretending it is 'now')."""
+    if ts is None or (isinstance(ts, str) and not ts.strip()):
+        return None
+    if isinstance(ts, (datetime, int, float)):
+        return parse_timestamp(ts)
+    s = ts.strip()
+    try:
+        dt = parsedate_to_datetime(s)
+        return dt if dt.tzinfo is not None else dt.replace(tzinfo=timezone.utc)
+    except Exception:
+        pass
+    try:
+        dt = datetime.fromisoformat(s.replace("Z", "+00:00"))
+        return dt if dt.tzinfo is not None else dt.replace(tzinfo=timezone.utc)
+    except Exception:
+        return None
+
+
+UNKNOWN_SPEED = 0.5     # an article with no readable timestamp is neither fresh nor stale: score it neutral
 
 
 class ArticlePriorityScorer:
@@ -136,11 +158,14 @@ class ArticlePriorityScorer:
             return self.default_trust_score
         if clean_name in self.source_authority:
             return self.source_authority[clean_name]
-        # Partial match fallback (e.g. 'Moneycontrol News' -> 'moneycontrol')
+        # Partial match fallback (e.g. 'Moneycontrol News' -> 'moneycontrol', 'NewsAPI/The Washington Post' -> 'newsapi'):
+        # a known source name must appear as whole words inside the given name; the longest (most specific) one wins.
+        # The reverse direction is not allowed, or a source called just 'Times' would borrow 'Financial Times' authority.
+        best = None
         for key, score in self.source_authority.items():
-            if key in clean_name or clean_name in key:
-                return score
-        return self.default_trust_score
+            if re.search(r"(?<![a-z0-9])" + re.escape(key) + r"(?![a-z0-9])", clean_name) and (best is None or len(key) > len(best[0])):
+                best = (key, score)
+        return best[1] if best else self.default_trust_score
 
     def compute_speed_score(
         self, published_at: Optional[Union[datetime, str]], reference_time: datetime
@@ -150,7 +175,9 @@ class ArticlePriorityScorer:
             speed_score = exp(-lambda * delta_seconds)
         Bounded in [0.0, 1.0].
         """
-        dt = parse_timestamp(published_at)
+        dt = _parse_or_none(published_at)
+        if dt is None:
+            return UNKNOWN_SPEED
         ref = reference_time if reference_time.tzinfo is not None else reference_time.replace(tzinfo=timezone.utc)
         age_seconds = max(0.0, (ref - dt).total_seconds())
         return math.exp(-self.decay_constant * age_seconds)
