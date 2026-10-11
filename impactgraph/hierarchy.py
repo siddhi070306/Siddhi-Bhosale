@@ -144,6 +144,69 @@ def annotate_nodes(kg, nodes):
     return nodes
 
 
+TIER_SHORT = {"event": "Event", "variable": "Variable", "sector": "Sector", "asset": "Asset"}
+_ARROW = {1: "↑", -1: "↓"}
+
+
+def build_chain(kg, nodes, dirs):
+    """The nodes of a path with their tier and direction, in order."""
+    g, out = kg.g, []
+    for n, d in zip(nodes, dirs):
+        lay = layer_of(g.nodes[n]["type"]) or {"id": "?", "name": "?"}
+        out.append({"node": n, "label": g.nodes[n]["label"], "tier": lay["id"], "tier_name": lay["name"], "direction": d})
+    return out
+
+
+def tier_sentence(chain, event_label=None):
+    """One plain line that reads a path tier by tier, e.g.
+    'Event: Crude Oil up 12% → Variable: Crude Oil ↑ → Sector: Airlines ↓ → Asset: Delta Air Lines ↓'."""
+    parts = []
+    if event_label and not (chain and chain[0]["tier"] == "event"):
+        parts.append("Event: %s" % event_label)
+    for c in chain:
+        parts.append("%s: %s %s" % (TIER_SHORT.get(c["tier"], c["tier"]), c["label"], _ARROW.get(c["direction"], "")))
+    return " → ".join(parts)
+
+
+# How a link is supported, strongest claim first. Each link counts once, under the first that applies.
+BASIS_ORDER = ("user", "contradicted", "observed", "validated", "llm", "prior_only")
+
+
+def link_basis(provenance, validation):
+    prov = set(provenance or [])
+    v = validation or {}
+    real = v.get("verdict") and not v.get("simulated")
+    if "user_added" in prov or "user_edited" in prov:
+        return "user"
+    if real and v.get("verdict") == "contradicted":
+        return "contradicted"
+    if "observed" in prov:
+        return "observed"
+    if "validated" in prov or (real and v.get("verdict") == "supported"):
+        return "validated"
+    if "llm_extracted" in prov or "llm_proposed" in prov:
+        return "llm"
+    return "prior_only"
+
+
+def evidence_mix(paths):
+    """For each tier, how the links ARRIVING at it are supported, over the distinct links on the given explained paths.
+
+    This only re-groups what the graph already records about each link; it adds no probability."""
+    seen, mix = set(), {t["id"]: {b: 0 for b in BASIS_ORDER} for t in LAYERS}
+    for p in paths:
+        for st in p.get("steps", []):
+            key = (st["from"], st["to"])
+            if key in seen or st.get("to_layer") not in mix:
+                continue
+            seen.add(key)
+            mix[st["to_layer"]][link_basis(st.get("provenance"), st.get("validation"))] += 1
+    out = {}
+    for tier, counts in mix.items():
+        out[tier] = dict(counts, kind="links", total=sum(counts.values()))
+    return out
+
+
 def annotate_links(kg, links):
     """Add the tier-crossing kind to graph links in place (links to non-graph nodes such as article events are skipped)."""
     g = kg.g
@@ -166,7 +229,7 @@ def annotate_path(kg, p):
     return p
 
 
-def rollup(kg, assets, sectors, variables, events=()):
+def rollup(kg, assets, sectors, variables, events=(), paths=()):
     """One summary per tier plus a drill-down from each affected sector to its member assets.
 
     The inputs are the impact rows the analysis already produced; nothing is recomputed or estimated here.
@@ -199,7 +262,17 @@ def rollup(kg, assets, sectors, variables, events=()):
           "observed": sum(1 for e in events if e["status"] == "observed"),
           "top": [{"node": e["trigger"], "label": e["label"], "direction": e["direction"], "status": e["status"]}
                   for e in events[:5]]}
-    return {"layers": [ev, summarise("variable", list(variables)), summarise("sector", sectors), summarise("asset", assets)],
+    layers = [ev, summarise("variable", list(variables)), summarise("sector", sectors), summarise("asset", assets)]
+    mix = evidence_mix(paths)
+    for l in layers:
+        if l["id"] == "event":
+            l["evidence"] = {"kind": "events", "total": len(events),
+                             "observed": sum(1 for e in events if e["status"] == "observed"),
+                             "expected": sum(1 for e in events if e["status"] == "expected"),
+                             "hypothetical": sum(1 for e in events if e["status"] not in ("observed", "expected"))}
+        else:
+            l["evidence"] = mix[l["id"]]
+    return {"layers": layers,
             "sector_members": drill}
 
 

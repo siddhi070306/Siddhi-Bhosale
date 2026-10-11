@@ -110,6 +110,12 @@ export default function CausalChainWalkthrough({
             </div>
           )}
 
+          {currentPath.tier_sentence && (
+            <div style={{ marginBottom: 10, fontSize: 12.5, color: '#27272a' }} data-testid="walkthrough-tiers">
+              <strong>Read tier by tier:</strong> {currentPath.tier_sentence}
+            </div>
+          )}
+
           {/* Mathematical Formula Banner */}
           <div
             style={{

@@ -142,6 +142,7 @@ function rowToAsset(r) {
     confidence: fmt(r.confidence),
     horizonDays: r.horizon_days,
     headline: r.headline,
+    tierSentence: r.tier_sentence || null,
     why: r.why,
     spark: r.spark || null,
     posMass: r.pos_mass,
@@ -228,6 +229,7 @@ export function toGraphView(res) {
         hasMixedSignals: !!n.mixed,
         observed: n.observed,
         provenance: provenanceOf(n),
+        layer: n.layer || null,
         layerName: n.layer_name || null,
         layerLevel: typeof n.level === 'number' ? n.level : null,
         parent: n.parent || null,
@@ -343,6 +345,7 @@ export const api = {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ question, history: history || [] }),
     }),
+  getNode: (id) => request(`/api/node/${encodeURIComponent(id)}`),
   getKbHistory: (limit = 50, offset = 0) => request(`/api/kb/history?limit=${limit}&offset=${offset}`),
   getKbHistoryEntry: (seq) => request(`/api/kb/history/${seq}`),
   restoreKbVersion: (version, reason) =>

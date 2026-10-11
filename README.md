@@ -123,6 +123,28 @@ answer from those cards only, citing them. A citation that is not a real card is
 replaced by a plain answer built from the cards. The response carries the answer, the cited sources and the graph version. With no
 LLM, the cards themselves are the answer. A question that names no entity gets no answer, only suggestions.
 
+## Reading the graph tier by tier, and exporting it as cards
+
+- **Node Details** shows what the graph knows about the selected node, from `GET /api/node/{id}`: the properties that belong to its
+  tier (a variable's measure and whether it has market data, a sector's members, an asset's ticker, parent sector and what it
+  tracks), where the node came from, and how many analysed articles mention it.
+- **A sentence per tier** for every affected asset and every path (`tier_sentence`), for example *Event: Crude Oil up 12% →
+  Variable: Crude Oil ↑ → Sector: Oil & Gas Producers ↑ → Asset: Exxon Mobil ↑*. It is built from the strongest path, not by the LLM,
+  and is shown on Asset Impact and in the causal walkthrough.
+- **Tier view:** the Impact Graph can hide whole tiers or fold each sector's member assets into the sector. It is a view only; the
+  graph, the paths and every number stay the same.
+- **Evidence mix** (Hierarchy tab, `evidence` in `hierarchy.layers`): for each tier, how the links that arrive at it are supported
+  over the distinct links on the analysed paths. Each link counts once under the strongest claim that applies: added or edited by a
+  user, contradicted by market data, observed in the article, supported by market data, proposed by the LLM, or analyst prior only.
+  This re-groups what the graph records; it is not a probability. With live data off, little can be marked as data-supported.
+- **Cards export** (`impactgraph/cards.py`): `GET /api/kg/cards` returns the graph as citable text cards (tier, sector, node and link
+  cards) with stable ids (`n:<node>`, `l:<from>><to>`, `s:<sector>`, `t:<tier>`), each listing its tiers and the nodes it mentions.
+  Filter with `tier`, `node` or `kind`, and page with `limit` and `offset`. The response is pinned to the graph version and carries a
+  `fingerprint` that changes exactly when the graph's facts change, so a retrieval system can tell its copy has gone stale.
+  `GET /api/kg/cards/{id}` returns one card (path cards, `p:a>b>c`, are rebuilt from their id) and `GET /api/kg/paths?src=&dst=`
+  returns the strongest path cards. The chatbot builds its context from the same card builders, so both read the same text.
+  Embeddings and vector search are not part of this.
+
 ## Live quotes, watchlist and the dynamic knowledge base
 
 **Live numbers.** Asset prices and day changes come from Yahoo Finance through `yfinance` (>= 0.2.66). Yahoo offers no webhooks, so the

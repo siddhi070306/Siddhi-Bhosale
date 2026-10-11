@@ -453,6 +453,18 @@ export default function AssetImpact({ analysis, onNavigateToChat, onReanalyze, o
             </div>
           </div>
 
+          {selectedAsset && selectedAsset.tierSentence && (
+            <div
+              data-testid="tier-sentence"
+              style={{ margin: '0 0 10px', padding: '8px 12px', background: '#fafafa', border: '1px solid #f4f4f5', borderRadius: 8, fontSize: 12.5, lineHeight: 1.5, color: '#27272a' }}
+            >
+              <span style={{ fontWeight: 700, color: '#18181b' }}>Why {selectedAsset.name}: </span>
+              {selectedAsset.tierSentence}
+              <span style={{ display: 'block', fontSize: 11, color: '#71717a', marginTop: 2 }}>
+                The strongest chain the graph found, read tier by tier (event, variable, sector, asset).
+              </span>
+            </div>
+          )}
           <TrendChart name={selectedAsset?.name} spark={selectedAsset?.spark} />
           <ExposureHeatmap sectors={sectorRows} />
         </div>

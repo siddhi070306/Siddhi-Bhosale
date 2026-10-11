@@ -1,8 +1,10 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Search, ShieldCheck, Sparkles, ArrowRight, Sliders, RefreshCw, Check, RotateCcw } from 'lucide-react';
 import InteractiveGraph from '../components/graph/InteractiveGraph';
 import CausalChainWalkthrough from '../components/common/CausalChainWalkthrough';
 import HierarchyPanel from '../components/graph/HierarchyPanel';
+import NodeFacts from '../components/graph/NodeFacts';
+import TierFilterBar from '../components/graph/TierFilterBar';
 import { useUi } from '../context/UiContext';
 import { api } from '../services/api';
 
@@ -69,6 +71,23 @@ export default function ImpactGraph({ analysis, onNavigateToChat, onSelectEvent,
   const [resetSuccessMsg, setResetSuccessMsg] = useState(null);
   const { search: searchQuery, setSearch: setSearchQuery } = useUi(); // shared with the header search box
   const [showEvidenceModal, setShowEvidenceModal] = useState(false);
+  const [nodeProps, setNodeProps] = useState(null);
+  const [nodePropsError, setNodePropsError] = useState(null);
+  const [hiddenTiers, setHiddenTiers] = useState({});
+  const [foldMembers, setFoldMembers] = useState(false);
+
+  // what the graph knows about the selected node, from the backend (tier-specific properties)
+  const selectedNodeId = selectedNode ? selectedNode.id : null;
+  useEffect(() => {
+    setNodeProps(null);
+    setNodePropsError(null);
+    if (!selectedNodeId) return undefined;
+    let off = false;
+    api.getNode(selectedNodeId).then((p) => !off && setNodeProps(p)).catch((e) => !off && setNodePropsError(e.message));
+    return () => {
+      off = true;
+    };
+  }, [selectedNodeId]);
 
   const handleSelectEdge = (edge) => {
     setSelectedEdge(edge);
@@ -150,9 +169,29 @@ export default function ImpactGraph({ analysis, onNavigateToChat, onSelectEvent,
     )
     : graphData.nodes;
 
+  // tier view: hide whole tiers, or fold each sector's members into it. A view only: nothing in the graph changes.
+  const tierCounts = {};
+  graphData.nodes.forEach((n) => {
+    tierCounts[n.layer] = (tierCounts[n.layer] || 0) + 1;
+  });
+  let shownNodes = filteredNodes.filter((n) => !hiddenTiers[n.layer]);
+  if (foldMembers) {
+    const present = new Set(shownNodes.map((n) => n.id));
+    const folded = {};
+    shownNodes = shownNodes.filter((n) => {
+      if (n.layer === 'asset' && n.parent && present.has(n.parent.id)) {
+        folded[n.parent.id] = (folded[n.parent.id] || 0) + 1;
+        return false;
+      }
+      return true;
+    });
+    shownNodes = shownNodes.map((n) => (folded[n.id] ? { ...n, label: `${n.label} (+${folded[n.id]})` } : n));
+  }
+  const shownIds = new Set(shownNodes.map((n) => n.id));
   const currentGraphData = {
     ...graphData,
-    nodes: filteredNodes,
+    nodes: shownNodes,
+    edges: (graphData.edges || []).filter((e) => shownIds.has(e.from) && shownIds.has(e.to)),
   };
 
   return (
@@ -279,6 +318,14 @@ export default function ImpactGraph({ analysis, onNavigateToChat, onSelectEvent,
           )}
         </div>
       )}
+
+      <TierFilterBar
+        hidden={hiddenTiers}
+        onToggle={(t) => setHiddenTiers((h) => ({ ...h, [t]: !h[t] }))}
+        fold={foldMembers}
+        onFold={() => setFoldMembers((f) => !f)}
+        counts={tierCounts}
+      />
 
       {/* Main Graph Explorer Split Layout */}
       <div className="graph-explorer-container">
@@ -746,6 +793,8 @@ export default function ImpactGraph({ analysis, onNavigateToChat, onSelectEvent,
                     {selectedNode.provenance ? selectedNode.provenance.label : 'Analyst prior (not data-checked)'}
                   </span>
                 </div>
+
+                <NodeFacts props={nodeProps} error={nodePropsError} />
 
                 <div style={{ marginTop: 20 }}>
                   <button

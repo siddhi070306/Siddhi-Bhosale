@@ -18,118 +18,13 @@ from __future__ import annotations
 import re
 
 from . import extract as ex
-from . import hierarchy, kb, llm, propagate as pg
+from . import cards as cardlib, kb, llm
+from .cards import label as _label
 
 MAX_CARDS = 9
 MAX_CARD_CHARS = 900
-ARROW = {1: "↑", -1: "↓"}
-BASIS = {
-    "prior": "analyst prior (curated, not statistically estimated)",
-    "observed": "observed in an article",
-    "llm_extracted": "read from an article by the LLM (quote-verified)",
-    "llm_proposed": "proposed by the LLM (quote-verified, low confidence)",
-    "validated": "supported by market data",
-    "user_added": "added by a user",
-    "user_edited": "weight edited by a user",
-    "inferred": "inferred by the system (unverified)",
-}
 FOLLOW_UP = re.compile(r"^\s*(and|also|what about|how about|then)\b|\b(it|its|they|them|their|those|these|that one|the same)\b", re.I)
 CITE = re.compile(r"\[([a-z]:[^\]\s]+)\]")
-
-
-def _label(g, n):
-    return g.nodes[n]["label"]
-
-
-def _basis(e):
-    return "; ".join(BASIS.get(p, p) for p in (e.get("provenance") or [])) or "unknown"
-
-
-def _check(e):
-    v = e.get("validation") or {}
-    if not v.get("verdict"):
-        return "no data check yet"
-    if v.get("simulated"):
-        return "data check used simulated data and is ignored"
-    r = "" if v.get("corr") is None else ", r = %s over %s days" % (v["corr"], v.get("n"))
-    return "data check: %s%s (%s)" % (v["verdict"], r, v.get("data", "real series"))
-
-
-def _link_card(kg, u, v):
-    g = kg.g
-    e = g[u][v]
-    eff = kg.eff_strength(u, v)
-    rel = hierarchy.rel(g, u, v)
-    kind = hierarchy.edge_kind(g.nodes[u]["type"], g.nodes[v]["type"])
-    strength = "stored strength %.2f" % e["strength"] + (", %.2f after the data check" % eff if abs(eff - e["strength"]) > 0.005 else "")
-    quotes = [ev["sentence"] for ev in (e.get("evidence") or [])[-2:]]
-    text = ("%s → %s (%s link, %s to %s tier). When %s rises it pushes %s %s. %s; typical lag %s days. Mechanism: %s. "
-            "Basis: %s. %s.") % (_label(g, u), _label(g, v), rel, kind["from_layer"], kind["to_layer"], _label(g, u), _label(g, v),
-                                "UP" if e["sign"] > 0 else "DOWN", strength.capitalize(), e["lag"], e["mechanism"].rstrip("."),
-                                _basis(e), _check(e).capitalize())
-    if quotes:
-        text += " Article evidence: " + " | ".join('"%s"' % q[:160] for q in quotes)
-    brief = "%s → %s: %s (%s, %s)" % (_label(g, u), _label(g, v), "pushes it UP" if e["sign"] > 0 else "pushes it DOWN",
-                                      strength, "basis: " + _basis(e))
-    return {"id": "l:%s>%s" % (u, v), "kind": "link", "title": "%s → %s" % (_label(g, u), _label(g, v)), "text": text, "brief": brief}
-
-
-def _node_card(kg, n):
-    g = kg.g
-    p = hierarchy.node_properties(kg, n)
-    bits = ["%s: %s, tier %s (%s). Market: %s. Origin: %s." % (p["label"], p["type"], p["level"], p["tier_name"], p["market"],
-                                                                p["origin"])]
-    if p["tier"] == "variable":
-        bits.append("Measured as the %s; %s." % (p["measure"], "has real market data" if p["has_market_data"] else "no market data"))
-    if p["tier"] == "sector" and p.get("members"):
-        bits.append("Contains: " + ", ".join(m["label"] for m in p["members"]) + ".")
-    if p["tier"] == "asset":
-        if p.get("parent_sector"):
-            bits.append("Member of the %s sector." % p["parent_sector"]["label"])
-        if p.get("ticker"):
-            bits.append("Ticker %s." % p["ticker"])
-    outs = sorted(g.out_edges(n), key=lambda uv: -kg.eff_strength(*uv))[:4]
-    ins = sorted(g.in_edges(n), key=lambda uv: -kg.eff_strength(*uv))[:4]
-    if outs:
-        bits.append("Strongest outgoing links: " + ", ".join("%s (%s%.2f)" % (_label(g, v), "+" if g[u][v]["sign"] > 0 else "-",
-                                                                            kg.eff_strength(u, v)) for u, v in outs) + ".")
-    if ins:
-        bits.append("Strongest incoming links: " + ", ".join("%s (%s%.2f)" % (_label(g, u), "+" if g[u][v]["sign"] > 0 else "-",
-                                                                            kg.eff_strength(u, v)) for u, v in ins) + ".")
-    brief = "%s is a %s in tier %d (%s)" % (p["label"], p["type"], p["level"], p["tier_name"])
-    return {"id": "n:%s" % n, "kind": "node", "title": p["label"], "text": " ".join(bits), "brief": brief}
-
-
-def _path_card(kg, p, start_dir=1):
-    g = kg.g
-    cur = start_dir
-    parts, mech = [_label(g, p["nodes"][0]) + " " + ARROW[cur]], []
-    for (u, v) in p["edges"]:
-        cur *= g[u][v]["sign"]
-        parts.append(_label(g, v) + " " + ARROW[cur])
-        mech.append("%s → %s: %s" % (_label(g, u), _label(g, v), g[u][v]["mechanism"].rstrip(".")))
-    layers = " → ".join((hierarchy.layer_of(g.nodes[n]["type"]) or {"id": "?"})["id"] for n in p["nodes"])
-    text = ("If %s rises: %s. Path plausibility %.2f (a 0-1 score, not a probability or a price move), %d hops, typical lag %d "
-            "days, tiers %s. Steps: %s.") % (_label(g, p["nodes"][0]), " → ".join(parts), p["score"], len(p["edges"]), p["lag"],
-                                              layers, " | ".join(mech))
-    return {"id": "p:" + ">".join(p["nodes"]), "kind": "path", "title": " → ".join(_label(g, n) for n in p["nodes"]),
-            "text": text, "brief": "%s (plausibility %.2f, %d hops)" % (" → ".join(parts), p["score"], len(p["edges"]))}
-
-
-def _paths(kg, src, dst=None, limit=3):
-    paths = pg._dfs(kg, src, 1, set(), 5, 0.03, 300)
-    if dst:
-        paths = [p for p in paths if p["nodes"][-1] == dst]
-    else:
-        seen, keep = set(), []
-        for p in paths:
-            end = p["nodes"][-1]
-            if end in seen or kg.g.nodes[end].get("tier") not in ("asset", "sector") or len(p["edges"]) < 2:
-                continue
-            seen.add(end)
-            keep.append(p)
-        paths = keep
-    return paths[:limit]
 
 
 def find_entities(question, history=()):
@@ -160,28 +55,25 @@ def build_cards(kg, entities):
             cards.append(c)
 
     for n in entities:
-        add(_node_card(kg, n))
+        add(cardlib.node_card(kg, n))
     for i, a in enumerate(entities):                      # direct links and paths between the named entities
         for b in entities[i + 1:]:
             for u, v in ((a, b), (b, a)):
                 if g.has_edge(u, v):
-                    add(_link_card(kg, u, v))
+                    add(cardlib.link_card(kg, u, v))
             found = False
             for u, v in ((a, b), (b, a)):
-                for p in _paths(kg, u, v, 2):
+                for p in cardlib.find_paths(kg, u, v, 2):
                     found = True
-                    add(_path_card(kg, p))
+                    add(cardlib.path_card(kg, p))
             if not found and not g.has_edge(a, b) and not g.has_edge(b, a):
-                add({"id": "x:%s>%s" % (a, b), "kind": "gap", "title": "No path between %s and %s" % (_label(g, a), _label(g, b)),
-                     "text": "The graph holds no path of up to 5 links between %s and %s in either direction, so it does not say "
-                             "how one affects the other." % (_label(g, a), _label(g, b)),
-                     "brief": "no path between %s and %s" % (_label(g, a), _label(g, b))})
+                add(cardlib.gap_card(kg, a, b))
     if len(entities) == 1:                                # one entity: what it drives, and what drives it
         n = entities[0]
-        for p in _paths(kg, n, None, 3):
-            add(_path_card(kg, p))
+        for p in cardlib.find_paths(kg, n, None, 3):
+            add(cardlib.path_card(kg, p))
         for u, v in sorted(g.in_edges(n), key=lambda uv: -kg.eff_strength(*uv))[:2]:
-            add(_link_card(kg, u, v))
+            add(cardlib.link_card(kg, u, v))
     return cards
 
 

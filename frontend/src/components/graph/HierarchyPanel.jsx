@@ -3,6 +3,41 @@ import React from 'react';
 const ARROW = (d) => (d > 0 ? '↑' : d < 0 ? '↓' : '·');
 const COLOR = (d) => (d > 0 ? '#166534' : d < 0 ? '#991b1b' : '#52525b');
 
+// How the links arriving at a tier are supported. Each link counts once, under the strongest claim that applies.
+const BASIS = [
+  ['user', 'added or edited by a user', '#7c3aed'],
+  ['contradicted', 'contradicted by market data', '#dc2626'],
+  ['observed', 'observed in the article', '#2563eb'],
+  ['validated', 'supported by market data', '#16a34a'],
+  ['llm', 'proposed by the LLM', '#d97706'],
+  ['prior_only', 'analyst prior only', '#a1a1aa'],
+];
+
+function EvidenceBar({ ev }) {
+  if (!ev) return null;
+  if (ev.kind === 'events') {
+    return (
+      <div style={{ marginTop: 6, fontSize: 11, color: '#52525b' }} data-testid="evidence-event">
+        Evidence: {ev.observed} observed in the article{ev.expected ? `, ${ev.expected} expected` : ''}{ev.hypothetical ? `, ${ev.hypothetical} hypothetical` : ''}
+      </div>
+    );
+  }
+  if (!ev.total) {
+    return <div style={{ marginTop: 6, fontSize: 11, color: '#a1a1aa' }} data-testid="evidence-links">No links arrive at this tier in this analysis.</div>;
+  }
+  const parts = BASIS.filter(([k]) => ev[k] > 0);
+  return (
+    <div style={{ marginTop: 6 }} data-testid="evidence-links">
+      <div style={{ display: 'flex', height: 6, borderRadius: 3, overflow: 'hidden', background: '#f4f4f5' }}>
+        {parts.map(([k, , c]) => <div key={k} title={`${ev[k]} link(s)`} style={{ width: `${(100 * ev[k]) / ev.total}%`, background: c }} />)}
+      </div>
+      <div style={{ fontSize: 11, color: '#52525b', marginTop: 3 }}>
+        {ev.total} link{ev.total === 1 ? '' : 's'} arrive here: {parts.map(([k, name]) => `${ev[k]} ${name}`).join(' · ')}
+      </div>
+    </div>
+  );
+}
+
 /**
  * Hierarchy tab: the analysis read tier by tier (events & policy, economic variables, sectors, assets), and each affected
  * sector drilled down to its member assets. Everything shown is the backend's own roll-up of the impact rows it already
@@ -17,7 +52,8 @@ export default function HierarchyPanel({ hierarchy, onSelectNode }) {
       <div style={{ fontSize: 13, fontWeight: 700, color: '#09090b', marginBottom: 6 }}>Hierarchy</div>
       <p style={{ fontSize: 11.5, color: '#71717a', lineHeight: 1.5, marginBottom: 12 }}>
         The graph reads in four tiers, from the cause of a move down to what an investor can hold. Directions and scores are
-        the model&apos;s plausibility output for this event, not forecasts.
+        the model&apos;s plausibility output for this event, not forecasts. The bar under each tier shows how the links that
+        arrive there are supported: it re-groups what the graph records and is not a probability.
       </p>
 
       {hierarchy.layers.map((l) => (
@@ -30,6 +66,7 @@ export default function HierarchyPanel({ hierarchy, onSelectNode }) {
               {typeof l.observed === 'number' ? ` · ${l.observed} observed` : ''}
             </span>
           </div>
+          <EvidenceBar ev={l.evidence} />
           <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4, marginTop: 6 }}>
             {(l.top || []).map((t) => (
               <button

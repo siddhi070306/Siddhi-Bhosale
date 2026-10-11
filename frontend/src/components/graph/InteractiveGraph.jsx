@@ -1002,8 +1002,8 @@ export default function InteractiveGraph({
               [4, 850, 'Tier 3', 'ASSETS'],
             ].filter(([c]) => rawNodes.some((n) => n.col === c)).map(([c, x, tier, name]) => (
               <g key={`tier-${c}`}>
-                <text x={x} y={30} textAnchor="middle" fontSize="9.5" fill="#a1a1aa" letterSpacing="0.6px">{tier}</text>
-                <text x={x} y={45} textAnchor="middle" fontSize="10.5" fontWeight="700" fill="#52525b" letterSpacing="0.4px">{name}</text>
+                <text x={x} y={14} textAnchor="middle" fontSize="9.5" fill="#a1a1aa" letterSpacing="0.6px">{tier}</text>
+                <text x={x} y={28} textAnchor="middle" fontSize="10.5" fontWeight="700" fill="#52525b" letterSpacing="0.4px">{name}</text>
               </g>
             ))}
           </g>

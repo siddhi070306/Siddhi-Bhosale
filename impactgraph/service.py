@@ -262,9 +262,12 @@ class Analyzer:
                           "provenance": e["provenance"], "validation": e.get("validation"),
                           "evidence": [ev["sentence"] for ev in e["evidence"][-2:]]})
             head.append(_fmt(kg.g.nodes[v]["label"], cur))
-        return hierarchy.annotate_path(kg, {"id": pid, "source": src_label, "score": round(p["score"], 3), "horizon_days": p["lag"],
+        out = hierarchy.annotate_path(kg, {"id": pid, "source": src_label, "score": round(p["score"], 3), "horizon_days": p["lag"],
                 "nodes": p["nodes"], "edges": p["edges"], "end": p["nodes"][-1], "end_label": kg.g.nodes[p["nodes"][-1]]["label"], "end_dir": cur,
                 "headline": " → ".join(head), "steps": steps, "hops": len(p["edges"])})
+        out["chain"] = hierarchy.build_chain(kg, p["nodes"], [src_dir] + [s["to_dir"] for s in steps])
+        out["tier_sentence"] = hierarchy.tier_sentence(out["chain"], src_label)
+        return out
 
     # ------------------------------------------------------------------------------------------
     def analyze(self, text, live=False, use_llm=False, link=None, full_text=False, title=None):
@@ -407,6 +410,7 @@ class Analyzer:
                    "confidence": a["confidence"], "confidence_label": a["confidence_label"], "mixed": a["mixed"],
                    "agreement": a["agreement"], "horizon_days": a["horizon_days"], "sensitivity": a["sensitivity_label"],
                    "n_paths": a["n_paths"], "best_path_id": pid_of.get(tuple(bp["nodes"])), "headline": exp["headline"],
+                   "tier_sentence": exp["tier_sentence"],
                    "why": last["mechanism"] if last else "", "observed": n in anchors,
                    "inferred_node": bool(self.kg.g.nodes[n].get("inferred")),
                    "pos_mass": a["pos_mass"], "neg_mass": a["neg_mass"], "best_score": round(bp["score"], 3),
@@ -453,7 +457,7 @@ class Analyzer:
                        "hierarchy": hierarchy.rollup(self.kg, assets, sectors, variables,
                                                      [{"trigger": s["trigger"], "label": s["event"]["label"],
                                                        "direction": s["event"]["direction"], "status": s["event"]["status"]}
-                                                      for s in sources]),
+                                                      for s in sources], explained),
                        "data_modes": sorted({(ts.get_returns(n, live) or (0, 0, {"mode": "none"}))[2]["mode"] for n in nodes}),
                        "macro": ts.macro_snapshot(live) if live else [],
                        "caveats": self._caveats(live, nodes)})
@@ -548,7 +552,7 @@ class Analyzer:
                          "horizon_days": a["horizon_days"], "sensitivity": a["sensitivity"],
                          "sensitivity_label": a["sensitivity_label"], "n_paths": a["n_paths"],
                          "headline": exp["headline"], "why": last["mechanism"] if last else "",
-                         "ticker": kb.yf_symbol(n),
+                         "tier_sentence": exp["tier_sentence"], "ticker": kb.yf_symbol(n),
                          "beyond_horizon": bool(horizon_days is not None and a["horizon_days"] > horizon_days)})
         rank = lambda r: -(r["confidence"] * {"strong": 1.0, "moderate": 0.75, "mild": 0.5}[r["sensitivity_label"]])
         rows.sort(key=rank)
@@ -584,7 +588,7 @@ class Analyzer:
                                               [r for r in rows if r["type"] == "sector"],
                                               [r for r in rows if r["type"] in ("indicator", "commodity")],
                                               [{"trigger": s["trigger"], "label": s["label"], "direction": s["direction"],
-                                                "status": "hypothetical"} for s in sources]),
+                                                "status": "hypothetical"} for s in sources], top),
                 "caveats": ["Hypothetical scenario: nothing here was reported in an article.",
                             "Path plausibility depends on the chain of links, not on shock size; shock size changes "
                             "sensitivity and ranking only, and the mapping from size to sensitivity is a heuristic.",

@@ -6,7 +6,7 @@ from fastapi.responses import FileResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
-from impactgraph import assistant, feeds, hedge, hierarchy, llm, market, quotes
+from impactgraph import assistant, cards as cardlib, feeds, hedge, hierarchy, llm, market, quotes
 from impactgraph.service import SAMPLES, Analyzer, llm_required
 
 app = FastAPI(title="Apex Zenith")
@@ -77,6 +77,37 @@ def assistant_answer(body: AssistantBody):
     if res.get("error"):
         raise HTTPException(status_code=400, detail=res["error"])
     return res
+
+
+@app.get("/api/kg/cards")
+def kg_cards(tier: Optional[str] = None, node: Optional[str] = None, kind: Optional[str] = None,
+             limit: int = Query(200, ge=1, le=2000), offset: int = Query(0, ge=0)):
+    """The whole graph as citable text cards (nodes, links, sectors, tiers), pinned to the graph version. Filter by tier, node or kind."""
+    allc = cardlib.all_cards(analyzer.kg)
+    sel = cardlib.select(allc, tier, node, kind)
+    return {"graph_version": {"version": analyzer.guard.version, "epoch": analyzer.guard.epoch},
+            "fingerprint": cardlib.fingerprint(allc), "total_cards": len(allc), "matched": len(sel),
+            "cards": sel[offset:offset + limit]}
+
+
+@app.get("/api/kg/cards/{card_id:path}")
+def kg_card(card_id: str):
+    c = cardlib.get_card(analyzer.kg, card_id)
+    if c is None:
+        raise HTTPException(status_code=404, detail="no such card: %s" % card_id)
+    return {"graph_version": {"version": analyzer.guard.version, "epoch": analyzer.guard.epoch}, "card": c}
+
+
+@app.get("/api/kg/paths")
+def kg_paths(src: str, dst: Optional[str] = None, limit: int = Query(3, ge=1, le=10)):
+    """Path cards out of one node (to dst, if given): the strongest chains the graph holds."""
+    g = analyzer.kg.g
+    if src not in g or (dst and dst not in g):
+        raise HTTPException(status_code=404, detail="unknown node")
+    cards = [cardlib.path_card(analyzer.kg, p) for p in cardlib.find_paths(analyzer.kg, src, dst, limit)]
+    if dst and not cards:
+        cards = [cardlib.gap_card(analyzer.kg, src, dst)]
+    return {"graph_version": {"version": analyzer.guard.version, "epoch": analyzer.guard.epoch}, "cards": cards}
 
 
 @app.get("/api/node/{node_id}")
