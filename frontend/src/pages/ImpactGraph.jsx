@@ -436,31 +436,45 @@ export default function ImpactGraph({ analysis, onNavigateToChat, onSelectEvent,
                   Top Propagation Paths
                 </div>
 
-                {graphData.pathways.map((p) => (
-                  <div
-                    key={p.id}
-                    className="pathway-card"
-                    style={{ cursor: 'pointer' }}
-                    onClick={() => {
-                      const target = graphData.nodes.find((n) => n.id === p.endId);
-                      if (target) {
-                        setSelectedNode(target);
-                        setActiveTab('details');
-                      }
-                    }}
-                  >
-                    <div style={{ display: 'flex', alignItems: 'flex-start' }}>
-                      <span className="pathway-num">{p.id}</span>
-                      <div className="pathway-chain">{p.path}</div>
+                {graphData.pathways.map((p) => {
+                  const chainSteps = p.path ? p.path.split(/\s*->\s*|\s*→\s*/) : [];
+                  return (
+                    <div
+                      key={p.id}
+                      className="pathway-card"
+                      style={{ cursor: 'pointer' }}
+                      onClick={() => {
+                        const target = graphData.nodes.find((n) => n.id === p.endId);
+                        if (target) {
+                          setSelectedNode(target);
+                          setActiveTab('details');
+                        }
+                      }}
+                    >
+                      <div style={{ display: 'flex', alignItems: 'flex-start', gap: 8 }}>
+                        <span className="pathway-num">{p.id}</span>
+                        <div className="pathway-chain" style={{ display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: 4 }}>
+                          {chainSteps.map((step, sIdx) => (
+                            <React.Fragment key={sIdx}>
+                              <span className="pathway-step-pill">{step}</span>
+                              {sIdx < chainSteps.length - 1 && (
+                                <span className="pathway-step-arrow">
+                                  <ArrowRight size={11} />
+                                </span>
+                              )}
+                            </React.Fragment>
+                          ))}
+                        </div>
+                      </div>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: 10 }}>
+                        <span className="pathway-score">
+                          Impact Score: <strong style={{ color: '#09090b' }}>{p.score}</strong>
+                        </span>
+                        <span className="badge badge-subtle">{p.impact}</span>
+                      </div>
                     </div>
-                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: 8 }}>
-                      <span className="pathway-score">
-                        Impact Score: <strong style={{ color: '#09090b' }}>{p.score}</strong>
-                      </span>
-                      <span className="badge badge-subtle">{p.impact}</span>
-                    </div>
-                  </div>
-                ))}
+                  );
+                })}
 
                 <div className="stitched-divider"></div>
 
