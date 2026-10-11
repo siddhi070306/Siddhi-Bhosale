@@ -14,6 +14,11 @@ export default function Layout({
   hasAnalyzed,
   onNewChat,
   onStartTour,
+  chatSessions = [],
+  activeSessionId = null,
+  onSelectSession,
+  onDeleteSession,
+  onClearAllSessions,
   children,
 }) {
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
@@ -74,6 +79,11 @@ export default function Layout({
           isCollapsed={isSidebarCollapsed}
           onToggleCollapse={() => setIsSidebarCollapsed(!isSidebarCollapsed)}
           onNewChat={onNewChat}
+          chatSessions={chatSessions}
+          activeSessionId={activeSessionId}
+          onSelectSession={onSelectSession}
+          onDeleteSession={onDeleteSession}
+          onClearAllSessions={onClearAllSessions}
         />
         <div className="main-wrapper">
           <Header

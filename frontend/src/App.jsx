@@ -10,6 +10,15 @@ import EconometricAnalogs from './pages/EconometricAnalogs';
 import Settings from './pages/Settings';
 import { api } from './services/api';
 import ProductTour from './components/ui/ProductTour';
+import {
+  getAllSessions,
+  getSessionById,
+  saveSession,
+  deleteSession,
+  clearAllSessions,
+  getActiveSessionId,
+  setActiveSessionId,
+} from './storage/chatStorage';
 import './styles/index.css';
 import './styles/layout.css';
 import './styles/pages.css';
@@ -32,6 +41,41 @@ export default function App() {
   const [notice, setNotice] = useState(null);
   const [messages, setMessages] = useState([]);
   const [tourIsActive, setTourIsActive] = useState(false);
+  const [sessions, setSessions] = useState(() => getAllSessions());
+  const [activeSessionId, setActiveSessionIdState] = useState(() => getActiveSessionId());
+
+  // Restore active session on initial mount
+  useEffect(() => {
+    const activeId = getActiveSessionId();
+    if (activeId) {
+      const sess = getSessionById(activeId);
+      if (sess) {
+        if (sess.messages && sess.messages.length) setMessages(sess.messages);
+        if (sess.analysis) {
+          setAnalysis(sess.analysis);
+          setHasAnalyzed(true);
+        }
+        if (sess.currentEventText) setCurrentEventText(sess.currentEventText);
+      }
+    }
+  }, []);
+
+  // Sync session changes to localStorage
+  useEffect(() => {
+    if (messages.length > 0 || analysis) {
+      const saved = saveSession({
+        id: activeSessionId,
+        currentEventText,
+        analysis,
+        messages,
+      });
+      if (saved && saved.id !== activeSessionId) {
+        setActiveSessionIdState(saved.id);
+        setActiveSessionId(saved.id);
+      }
+      setSessions(getAllSessions());
+    }
+  }, [messages, analysis, currentEventText]);
 
   const setActiveTab = (tab, assetId = null, mode = 'analogs') => {
     if (assetId) setEconometricAssetId(assetId);
@@ -63,11 +107,39 @@ export default function App() {
 
   const handleNewChat = () => {
     setActiveTab('chat');
+    setActiveSessionIdState(null);
+    setActiveSessionId(null);
     setHasAnalyzed(false);
     setCurrentEventText('');
     setAnalysis(null);
     setNotice(null);
     setMessages([]);
+  };
+
+  const handleSelectSession = (sessionId) => {
+    const sess = getSessionById(sessionId);
+    if (!sess) return;
+    setActiveSessionIdState(sess.id);
+    setActiveSessionId(sess.id);
+    setMessages(sess.messages || []);
+    setAnalysis(sess.analysis || null);
+    setCurrentEventText(sess.currentEventText || '');
+    setHasAnalyzed(!!sess.analysis);
+    setActiveTab('chat');
+  };
+
+  const handleDeleteSession = (sessionId) => {
+    deleteSession(sessionId);
+    setSessions(getAllSessions());
+    if (activeSessionId === sessionId) {
+      handleNewChat();
+    }
+  };
+
+  const handleClearAllSessions = () => {
+    clearAllSessions();
+    setSessions([]);
+    handleNewChat();
   };
 
   // Re-run the current analysis (e.g. after an asset was added to the graph) without leaving the page
@@ -202,6 +274,11 @@ export default function App() {
       hasAnalyzed={hasAnalyzed}
       onNewChat={handleNewChat}
       onStartTour={() => setTourIsActive(true)}
+      chatSessions={sessions}
+      activeSessionId={activeSessionId}
+      onSelectSession={handleSelectSession}
+      onDeleteSession={handleDeleteSession}
+      onClearAllSessions={handleClearAllSessions}
     >
       <ProductTour 
         isActive={tourIsActive} 

@@ -199,6 +199,122 @@
   border-color: #18181b;
 }
 
+/* Sidebar History Section (Recent Chats) */
+.sidebar-history-section {
+  display: flex;
+  flex-direction: column;
+  margin-top: 6px;
+  border-top: 1px solid var(--sidebar-border);
+  padding-top: 8px;
+}
+
+.sidebar-history-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 4px 12px 6px;
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: #71717a;
+}
+
+.sidebar-history-clear-btn {
+  background: none;
+  border: none;
+  color: #a1a1aa;
+  font-size: 10px;
+  cursor: pointer;
+  padding: 2px 4px;
+  border-radius: 4px;
+  transition: all 0.15s ease;
+}
+
+.sidebar-history-clear-btn:hover {
+  color: #ef4444;
+  background: rgba(239, 68, 68, 0.08);
+}
+
+.sidebar-history-list {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 2px 8px;
+  overflow-y: auto;
+  max-height: 180px;
+}
+
+.sidebar-history-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 7px 10px;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  border: 1px solid transparent;
+  color: #3f3f46;
+  font-size: 12px;
+  cursor: pointer;
+  text-align: left;
+  transition: all 0.15s ease;
+  position: relative;
+}
+
+.sidebar-history-item:hover {
+  background: #f4f4f5;
+  color: #09090b;
+}
+
+.sidebar-history-item.active {
+  background: #f4f4f5;
+  color: #09090b;
+  font-weight: 600;
+  border-color: #e4e4e7;
+}
+
+.sidebar-history-item.active::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 4px;
+  bottom: 4px;
+  width: 3px;
+  border-radius: 2px;
+  background: #6366f1;
+}
+
+.sidebar-history-title {
+  flex: 1;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  margin-right: 6px;
+}
+
+.sidebar-history-delete-btn {
+  opacity: 0;
+  background: none;
+  border: none;
+  color: #a1a1aa;
+  padding: 2px;
+  border-radius: 4px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.15s ease;
+}
+
+.sidebar-history-item:hover .sidebar-history-delete-btn {
+  opacity: 1;
+}
+
+.sidebar-history-delete-btn:hover {
+  color: #ef4444;
+  background: rgba(239, 68, 68, 0.1);
+}
+
 .sidebar-footer {
   padding: 10px 12px;
   border-top: 1px solid var(--sidebar-border);

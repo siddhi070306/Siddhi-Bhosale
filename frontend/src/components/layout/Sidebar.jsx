@@ -13,6 +13,7 @@ import {
   Sparkles,
   SquarePen,
   PanelLeftClose,
+  Trash2,
 } from 'lucide-react';
 
 export default function Sidebar({
@@ -24,6 +25,11 @@ export default function Sidebar({
   isCollapsed = false,
   onToggleCollapse,
   onNewChat,
+  chatSessions = [],
+  activeSessionId = null,
+  onSelectSession,
+  onDeleteSession,
+  onClearAllSessions,
 }) {
   const [kg, setKg] = useState(null);
 
@@ -178,6 +184,63 @@ export default function Sidebar({
                 </button>
               );
             })}
+          </div>
+        )}
+
+        {/* Recent Chats Section */}
+        {!isCollapsed && chatSessions.length > 0 && (
+          <div className="sidebar-history-section">
+            <div className="sidebar-history-header">
+              <div style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
+                <History size={12} color="#71717a" />
+                <span>Recent Chats</span>
+              </div>
+              {onClearAllSessions && (
+                <button
+                  className="sidebar-history-clear-btn"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    if (window.confirm('Clear all saved chat history?')) {
+                      onClearAllSessions();
+                    }
+                  }}
+                  title="Clear all chat history"
+                >
+                  Clear
+                </button>
+              )}
+            </div>
+            <div className="sidebar-history-list">
+              {chatSessions.map((session) => {
+                const isSelected = activeSessionId === session.id;
+                return (
+                  <div
+                    key={session.id}
+                    className={`sidebar-history-item ${isSelected ? 'active' : ''}`}
+                    onClick={() => {
+                      if (onSelectSession) onSelectSession(session.id);
+                      if (onCloseMobileMenu) onCloseMobileMenu();
+                    }}
+                    title={session.title}
+                  >
+                    <span className="sidebar-history-title">{session.title}</span>
+                    {onDeleteSession && (
+                      <button
+                        className="sidebar-history-delete-btn"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          onDeleteSession(session.id);
+                        }}
+                        title="Delete chat"
+                        aria-label="Delete chat"
+                      >
+                        <Trash2 size={12} />
+                      </button>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
           </div>
         )}
 
