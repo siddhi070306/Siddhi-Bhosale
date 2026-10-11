@@ -527,8 +527,18 @@
   display: grid;
   grid-template-columns: 1fr 340px;
   gap: 20px;
-  height: calc(100vh - 170px);
-  min-height: 580px;
+  height: 640px;
+  min-height: 520px;
+  margin-bottom: 56px;
+  position: relative;
+  clear: both;
+}
+
+.graph-explorer-container > div:first-child {
+  min-height: 0;
+  height: 100%;
+  max-height: 100%;
+  overflow: hidden;
 }
 
 @media (max-width: 1024px) {
@@ -574,6 +584,17 @@
   box-shadow: var(--glass-shadow);
   display: flex;
   flex-direction: column;
+}
+
+.graph-canvas-wrapper.canvas-dark-mode {
+  background: radial-gradient(ellipse at 50% 35%, #242938 0%, #191c26 55%, #11141b 100%) !important;
+  border-color: #2d3444 !important;
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.40) !important;
+}
+
+.graph-canvas-wrapper.canvas-light-mode {
+  background: #ffffff !important;
+  border-color: #e2e8f0 !important;
 }
 
 .graph-canvas-svg {
@@ -655,6 +676,9 @@
   display: flex;
   flex-direction: column;
   overflow: hidden;
+  min-height: 0;
+  height: 100%;
+  max-height: 640px;
 }
 
 .panel-tabs {
@@ -688,7 +712,8 @@
 
 .panel-body {
   padding: 16px;
-  flex: 1;
+  flex: 1 1 auto;
+  min-height: 0;
   overflow-y: auto;
 }
 

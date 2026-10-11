@@ -431,14 +431,6 @@ export default function ImpactGraph({ analysis, onNavigateToChat, onSelectEvent,
         </div>
       )}
 
-      {/* Hypothesis / thin-graph notices */}
-      {analysis.hypothesis && analysis.hypothesis.themes.length > 0 && (
-        <div className="card" style={{ marginBottom: 12, padding: '10px 16px', fontSize: 12.5, color: '#92400e', background: '#fffbeb' }}>
-          <strong>Hypothesis, not from the article:</strong> no stated event matched the graph, so the model suggested{' '}
-          {analysis.hypothesis.themes.map((t) => `${t.node.replace(/_/g, ' ')} ${t.direction > 0 ? '↑' : '↓'}`).join(', ')} as themes this story could touch.
-          Everything below is built from those guesses (dashed) and the graph did not learn from them.
-        </div>
-      )}
       {analysis.context && (
         <div className="card" style={{ marginBottom: 12, padding: '10px 16px', fontSize: 12.5, color: '#27272a' }}>
           <div style={{ fontWeight: 700, marginBottom: 4 }}>The text stated little downstream, so context was added (dashed)</div>
@@ -471,7 +463,7 @@ export default function ImpactGraph({ analysis, onNavigateToChat, onSelectEvent,
       {/* Main Graph Explorer Split Layout */}
       <div className="graph-explorer-container">
         {/* Left: Interactive Canvas with On-Canvas Floating Sensitivity Drawer */}
-        <div style={{ position: 'relative', width: '100%', height: '100%', minWidth: 0 }}>
+        <div style={{ position: 'relative', width: '100%', height: '100%', minWidth: 0, minHeight: 0, overflow: 'hidden' }}>
           <InteractiveGraph
             data={currentGraphData}
             selectedNode={selectedNode}
@@ -494,12 +486,12 @@ export default function ImpactGraph({ analysis, onNavigateToChat, onSelectEvent,
                 bottom: 20,
                 left: '50%',
                 transform: 'translateX(-50%)',
-                background: 'rgba(255, 255, 255, 0.94)',
-                backdropFilter: 'blur(12px)',
-                WebkitBackdropFilter: 'blur(12px)',
-                border: '1px solid #bfdbfe',
+                background: 'rgba(25, 29, 39, 0.95)',
+                backdropFilter: 'blur(16px)',
+                WebkitBackdropFilter: 'blur(16px)',
+                border: '1px solid rgba(60, 67, 85, 0.8)',
                 borderRadius: 12,
-                boxShadow: '0 10px 30px rgba(0, 0, 0, 0.12)',
+                boxShadow: '0 12px 32px rgba(0, 0, 0, 0.35)',
                 padding: '10px 16px',
                 zIndex: 35,
                 display: 'flex',
@@ -510,8 +502,8 @@ export default function ImpactGraph({ analysis, onNavigateToChat, onSelectEvent,
               }}
             >
               <div style={{ display: 'flex', alignItems: 'center', gap: 6, minWidth: 140 }}>
-                <Sliders size={15} color="#2563eb" />
-                <span style={{ fontSize: 12, fontWeight: 700, color: '#0f172a' }}>
+                <Sliders size={15} color="#60a5fa" />
+                <span style={{ fontSize: 12, fontWeight: 700, color: '#f8fafc' }}>
                   {selectedEdge.from?.replace(/_/g, ' ').toUpperCase()} → {selectedEdge.to?.replace(/_/g, ' ').toUpperCase()}
                 </span>
               </div>
@@ -978,7 +970,7 @@ export default function ImpactGraph({ analysis, onNavigateToChat, onSelectEvent,
 
       {/* Feature 1: Causal Transmission Walkthrough */}
       {analysis && analysis.raw && analysis.raw.paths && analysis.raw.paths.length > 0 && (
-        <div style={{ marginTop: 20 }}>
+        <div style={{ marginTop: 64, marginBottom: 40, clear: 'both', position: 'relative', zIndex: 1 }}>
           <CausalChainWalkthrough
             paths={analysis.raw.paths}
             title="Step-by-Step Causal Transmission Walkthrough"
