@@ -364,6 +364,15 @@ class EdgeWeightBody(BaseModel):
     strength: Optional[float] = None
     sign: Optional[int] = None
     reason: Optional[str] = None
+    linked: Optional[List[Dict[str, Any]]] = None    # links sharing the same reason, adjusted in the same change
+
+
+class EdgePreviewBody(BaseModel):
+    source: str
+    target: str
+    weight: float
+    accepted: Optional[List[str]] = None             # "source>target" keys of the linked links to include (None = defaults)
+    analysis_id: Optional[str] = None                # measure the ripple with this analysis's events
 
 
 def _edit_result(res):
@@ -375,7 +384,37 @@ def _edit_result(res):
 @app.post("/api/kb/edge")
 def kb_update_edge(body: EdgeWeightBody):
     return _edit_result(analyzer.update_edge(body.source, body.target, weight=body.weight, strength=body.strength,
-                                             sign=body.sign, reason=body.reason))
+                                             sign=body.sign, reason=body.reason, linked=body.linked))
+
+
+@app.post("/api/kb/edge/preview")
+def kb_edge_preview(body: EdgePreviewBody):
+    """What a link edit would change, before it is saved: the links that share its reason (proposed for the same proportional
+    change) and the ripple on every chain, sector and company. Read only."""
+    from impactgraph import ripple
+    if not analyzer.kg.g.has_edge(body.source, body.target):
+        raise HTTPException(status_code=400, detail="Edge (%s -> %s) does not exist in graph." % (body.source, body.target))
+    full = LIB.full(body.analysis_id) if body.analysis_id else None
+    return ripple.preview(analyzer.kg, body.source, body.target, body.weight, body.accepted, full)
+
+
+class RescoreBody(BaseModel):
+    analysis_id: Optional[str] = None
+    result: Optional[Dict[str, Any]] = None          # the analysis itself, when it is not in the library
+
+
+@app.post("/api/analysis/rescore")
+def analysis_rescore(body: RescoreBody):
+    """Re-run a saved analysis on the current graph from its saved events (no language model, nothing learned)."""
+    prev = (LIB.full(body.analysis_id) if body.analysis_id else None) or body.result
+    if not prev:
+        raise HTTPException(status_code=404, detail="That analysis is not in the library.")
+    res = analyzer.rescore(prev)
+    if res.get("error"):
+        raise HTTPException(status_code=400, detail=res["error"])
+    rec = LIB.record(res, title=(LIB.get(body.analysis_id) or {}).get("title") if body.analysis_id else None)
+    res["library_id"] = rec["id"] if rec else None
+    return res
 
 
 class LinkBody(BaseModel):

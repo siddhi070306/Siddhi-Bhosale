@@ -281,6 +281,29 @@ Every change produces one **history entry** (`changelog.py`): an id, the version
 
 * **Restore:** `POST /api/kb/restore {version}` brings back the graph as it was at one of the last 30 versions of the session. A restore is a **new forward version**, so nothing is erased. Older entries stay readable but cannot be restored. A reset to the curated baseline starts a new epoch and keeps the earlier history.
 * **Undo** removes the last change (marked `undone` in the history); `revert static` returns to the baseline.
+* **Editing a link's weight adjusts the links that share its reason** (`channels.py`, `ripple.py`). Every link is read for the
+  economic reason it works through, from its relation and its mechanism sentence with fixed keyword rules (no model call): fuel and
+  energy costs, feedstock and input costs, borrowing costs and interest rates, central-bank policy, prices feeding inflation,
+  currency/trade/capital flows, risk appetite and safe havens, supply and disruption risk, producers' revenue and margins, demand
+  and the business cycle; sector membership, index weight and ETF tracking are *structural*. Every curated link gets a reason.
+  When the user changes a link's strength, the other links with the same reason are **proposed** for the same proportional change
+  (Crude Oil → Airlines −0.80 → −0.40 is ×0.5, so Crude Oil → Autos −0.30 → −0.15, Crude Oil → Consumer Spending −0.40 → −0.20,
+  Natural Gas → Utilities −0.40 → −0.20); signs are kept, a sign flip alone is not spread, structural links are never grouped
+  (each is checked against its own price data), and a link the user edited before is listed but not ticked. Links with a different
+  reason keep their own evidence. This is deliberate: scaling every link downstream of the edit would count the edit twice (a
+  chain's score already multiplies its links) and would change unrelated stories.
+  **Preview before saving** (`POST /api/kb/edge/preview`, read only, on a copy of the graph): the proposal and its ripple, measured
+  on the open analysis's own events (or, without one, on a rise in the edited link's source): every chain through an edited link
+  re-scored before → after, and every sector, company and variable whose direction or confidence changes, with direction flips
+  flagged. The Edge Sensitivity tab shows it live while the slider moves, with a tick box per linked link; the floating editor
+  shows a one-line summary (*+3 linked (same reason) · 11 chains · 6 changes*).
+  **Saving** (`POST /api/kb/edge` with `linked`) applies the edit and the ticked links as **one guarded change** (one history entry:
+  *edited link Crude Oil -> Airlines to -0.40; adjusted with it (same reason: fuel and energy costs): ...*), re-checks each against
+  market data, and one undo reverts them all. The open analysis is then **re-scored from its saved events** (`POST
+  /api/analysis/rescore`, `Analyzer.rescore`): no language-model call, no re-extraction, nothing learned, so every difference comes
+  from the edit alone; the preview's numbers equal the re-scored result (tested). The page then shows **What changed because of this
+  edit** (the edit, the linked links, the sectors and companies before → after, the re-scored chains, Undo and Dismiss) and
+  highlights the edited links and everything downstream of them on the graph, dimming the rest.
 * **Tier-aware edits:** add a link, dry-run a link, remove a link you added, move a user-added asset to another sector, edit a link's weight. Tiers give *warnings* (a link that skips a tier, stays within one, or goes back up) and one *block* (nothing may point up from an asset). Curated links cannot be removed and curated sector memberships cannot be moved: edit a weight or add a link instead.
 * **Export and import** the whole graph as JSON; an import must pass the health checks and the tier rules or nothing changes.
 * **Every analysis records the graph version it ran on** (`kb_version`), so a result can be reproduced.
@@ -555,6 +578,8 @@ User-adjustable assumptions (a shock size in the forecast, a link weight, a scen
 | `analogs.py` | 189 | Past-move analogs |
 | `cards.py` | 311 | Citable text cards (graph and saved analyses) and their export; diverse path retrieval |
 | `assistant.py` | 348 | Question answering: graph cards, then the specific article as backup, then the graph without AI |
+| `channels.py` | 58 | The economic reason behind each link, and the links that share it |
+| `ripple.py` | 156 | What a link edit changes: the linked edits it implies and the before/after on chains, sectors and companies |
 | `retrieval.py` | 358 | Whole-graph entity matching with typo tolerance, keyword search over every card, the overview card, which story a question is about |
 | `library.py` | 250 | The analysis library: every generated graph, compact records, full results, import |
 | `hedge.py` | 227 | Portfolio contagion and counter-hedges (contributed) |
@@ -598,7 +623,9 @@ All paths are under the backend origin (`http://127.0.0.1:8000`); the frontend p
 | `GET /api/kb` | KB status: mode, version, undo availability, last health check, recent changes |
 | `POST /api/kb/mode` | `dynamic` or `static` |
 | `POST /api/kb/revert` | `to: "static"` or `"previous"` |
-| `POST /api/kb/edge` | Change a link's weight `{source, target, weight, reason?}` |
+| `POST /api/kb/edge` | Change a link's weight `{source, target, weight, reason?, linked?}`; `linked` = links sharing its reason, saved in the same change |
+| `POST /api/kb/edge/preview` | What a weight edit would change, read only `{source, target, weight, accepted?, analysis_id?}`: the links sharing its reason and the ripple |
+| `POST /api/analysis/rescore` | Re-run a saved analysis on the current graph from its saved events, without the language model `{analysis_id}` |
 | `POST /api/kb/link`, `/api/kb/link/check`, `/api/kb/link/remove` | Add, dry-run, remove a user link |
 | `POST /api/kb/move-asset` | Move a user-added asset to another sector |
 | `POST /api/kb/asset`, `DELETE /api/kb/asset/{id}` | Add (ticker verified with a real quote; sector matched or LLM-suggested) or remove an asset |
@@ -639,7 +666,7 @@ A React 19 single-page app (`frontend/src`), served by Vite on port 5173 in deve
 | **Asset Impact** (`#/asset-impact`) | Ranked affected assets next to live prices; the *Why* sentence per asset; trend chart; links to analogs and forecast; sector heatmap; add an asset to the graph; executive memo. Shows baseline assets before any analysis. |
 | **Analogs & Forecast** (`#/econometrics`) | Past-move analogs and the volatility fan, side by side or separately, for any of 38 assets; the shock is a stated assumption; refusals show their reason. |
 | **Event Diagnostics** (`#/event-analysis`) | Entities, event details, the source quote, model-vs-article checks, the step-by-step causal walkthrough, the executive memo. |
-| **Impact Graph** (`#/impact-graph`) | The interactive graph with tier headers, a **Relationships** tab that explains every relationship in plain English (strongest first), a full-width **Identify and score relationships between entities** table and an **Explain each impact chain and the evidence behind it** section below the graph (every chain told step by step with the evidence per step, the score arithmetic, the weakest step and the conclusion; the 5 strongest first, then show all; the table also shows its 5 strongest relationships first; filter by where a chain ends) (one row per relationship: the sentence, how it was identified, what market data says, the score with its arithmetic, the delay; filter by strength; click a row for the full explanation and to highlight the link), a tier bar (hide a tier or fold sector members), a pipeline cascade animation, and a side panel: **Pathways**, **Node Details** (including what the graph knows), **Edge Sensitivity** (edit a link's weight), **Hierarchy** (roll-up, evidence mix, sector to members). |
+| **Impact Graph** (`#/impact-graph`) | The interactive graph with tier headers, a **Relationships** tab that explains every relationship in plain English (strongest first), a full-width **Identify and score relationships between entities** table and an **Explain each impact chain and the evidence behind it** section below the graph (every chain told step by step with the evidence per step, the score arithmetic, the weakest step and the conclusion; the 5 strongest first, then show all; the table also shows its 5 strongest relationships first; filter by where a chain ends) (one row per relationship: the sentence, how it was identified, what market data says, the score with its arithmetic, the delay; filter by strength; click a row for the full explanation and to highlight the link), a tier bar (hide a tier or fold sector members), a pipeline cascade animation, and a side panel: **Pathways**, **Node Details** (including what the graph knows), **Edge Sensitivity** (edit a link's weight, with a live preview of the links that share its reason and of what changes), **Hierarchy** (roll-up, evidence mix, sector to members). |
 | **Scenario Simulator** (`#/scenario-simulator`) | Single and multi-shock what-ifs, presets (labelled as assumptions), scenario comparison, net force balance at a chosen asset. |
 | **Engine & Settings** (`#/settings`) | Backend and key status; live-data and full-article toggles; knowledge-base mode, undo and revert; the last health check; recent changes; the **change history** with details, restore and JSON export. |
 
@@ -695,7 +722,7 @@ The system is **local-first**. A `vercel.json` exists, but it serves only `serve
 
 ## 9. Testing and verification
 
-### 9.1 Automated tests: 280 passing
+### 9.1 Automated tests: 293 passing
 
 | Suite | Tests | Covers |
 | --- | --- | --- |
@@ -708,6 +735,7 @@ The system is **local-first**. A `vercel.json` exists, but it serves only `serve
 | `test_enrich.py` | 16 | Headline text fallback chain |
 | `test_tiered_properties.py` | 15 | Stored tier properties, relations, back-fill of old states, node properties |
 | `test_assistant.py` | 12 | Retrieval, citations, read-only guarantee, endpoint |
+| `test_linked_edits.py` | 13 | Every link's reason; same reason, same proportion, signs kept; sign flips and structural links not spread; links edited before not ticked; the preview is read only and re-scores the chains; one change and one undo for all; re-scoring calls no model, learns nothing and matches the preview; the endpoints |
 | `test_rag.py` | 23 | Events and their direction (hike, cut, recession, war, crash, rupee), a rate cut told as a cut, follow-ups, mapping names the graph does not contain (checked and cached), well-known people, typos, common words, learned entities, a card for every node and link, the overview, the open story, headline matching, a story missing from the library, the article backup (only that story is sent, quotes checked, retry), every model call failing still answers |
 | `test_explain.py` | 15 | Plain-English relationship and chain explanations: wording and grammar, data agreeing or disagreeing, article and LLM evidence, user edits, score arithmetic, every analysis link explained, the endpoint |
 | `test_library.py` | 16 | Analysis records (reported vs inferred vs hypotheses), persistence, limits, import, delete, analysis cards, "the last article", diverse one-topic paths, endpoints |
@@ -871,7 +899,7 @@ server.py            FastAPI application (endpoints, SSE, warm-up)
 run.py               Starts the backend on 127.0.0.1:8000
 requirements.txt     Python dependencies
 impactgraph/         The engine (modules in section 6.1)
-tests/               The 280 automated tests
+tests/               The 293 automated tests
 research/            PAPER.md (research write-up), evaluate.py (reproducible experiments), results.json (their output)
 frontend/            React 19 + Vite application (pages, components, services, context, storage)
 public/              Legacy offline cockpit served at "/" by the backend

@@ -4,7 +4,7 @@
 [![FastAPI](https://img.shields.io/badge/FastAPI-0.110%2B-009688.svg)](https://fastapi.tiangolo.com/)
 [![React](https://img.shields.io/badge/React-19.0-61DAFB.svg)](https://react.dev/)
 [![Vite](https://img.shields.io/badge/Vite-6.0-646CFF.svg)](https://vitejs.dev/)
-[![Tests](https://img.shields.io/badge/Tests-280%20Passed-brightgreen.svg)](tests/)
+[![Tests](https://img.shields.io/badge/Tests-293%20Passed-brightgreen.svg)](tests/)
 [![Architecture](https://img.shields.io/badge/Architecture-4--Tier%20Causal%20DAG-orange.svg)](#4-tier-hierarchical-knowledge-graph)
 
 **Apex Zenith** transforms raw financial news, central bank statements, regulatory filings, and commodity shocks into a **grounded, transparent causal dependency graph**. It traces how macro shocks propagate through economic variables, industry sectors, and tradable assets—validating every causal link against empirical market data, quantifying risk with Monte Carlo simulations and historical analogs, and discovering algorithmic hedges for investor portfolios.
@@ -155,6 +155,11 @@ Every link is characterized by:
 - It also gets **conditional chains** with their evidence (*if interest-rate expectations rise → banks → HDFC Bank*), clearly labelled: the article states no move, so no impact is claimed.
 - No direction or impact is claimed; the page and the chat card say so. Non-financial stories (sports, celebrity) still get an honest explanation, not an invented graph.
 
+### 12. Editing a Link Adjusts the Links That Share Its Reason (`impactgraph/channels.py`, `ripple.py`)
+- Every link is tagged with the economic reason it works through (fuel costs, borrowing costs, feedstock, policy, safe havens, ...).
+- Changing one link's strength proposes the same proportional change for the links with the same reason (weaken *oil → airlines* and *oil → autos* and *oil → consumer spending* weaken too); the user ticks which to apply. Links with a different reason, and structural links, keep their own evidence.
+- A live preview shows what the edit changes before it is saved: every chain re-scored and every sector and company before → after. Saving is one undoable change, and the open analysis is re-scored from its saved events without re-running the AI; the page shows *What changed because of this edit* and highlights everything downstream.
+
 ---
 
 ## Quickstart & Installation
@@ -217,7 +222,7 @@ Visit **`http://localhost:5173`** for the full interactive glassmorphic applicat
 ### 4. Running the Test Suite
 
 ```bash
-# Execute all 280 automated unit and integration tests
+# Execute all 293 automated unit and integration tests
 python -m unittest discover tests
 ```
 

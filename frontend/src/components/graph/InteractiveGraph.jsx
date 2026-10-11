@@ -189,6 +189,7 @@ function extractCausalPipeline(nodes, edges, pathways = [], selectedNode = null,
 }
 
 export default function InteractiveGraph({
+  rippleHighlight = null, // {nodes, edges: ["a>b"]}: a link edit's downstream, highlighted
   data,
   selectedNode,
   onSelectNode,
@@ -345,7 +346,12 @@ export default function InteractiveGraph({
   // a context graph has no chain to follow from its start node: show the whole picture until a node is picked
   const activeNodeId = selectedNode?.id || (data?.contextOnly ? null : data?.centerNode?.id) || null;
 
+  const rippleEdges = rippleHighlight ? new Set(rippleHighlight.edges || []) : null;
+  const rippleNodes = rippleHighlight ? new Set(rippleHighlight.nodes || []) : null;
+  // while a link edit's ripple is shown, it alone is lit (hovering still explores as usual)
+  const rippleOn = !!(rippleEdges && rippleEdges.size && !hoveredNode && !hoveredEdge);
   const isEdgeHighlighted = (edge) => {
+    if (rippleOn) return rippleEdges.has(`${edge.from}>${edge.to}`);
     if (causalPath.pathEdges.some((pe) => pe.from === edge.from && pe.to === edge.to)) return true;
     if (edge.isActive) return true;
     if (hoveredEdge === edge) return true;
@@ -355,6 +361,7 @@ export default function InteractiveGraph({
   };
 
   const isNodeHighlighted = (nodeId) => {
+    if (rippleOn) return rippleNodes.has(nodeId);
     if (causalPath.pathNodes.includes(nodeId)) return true;
     if (nodeId === activeNodeId || rawNodes.find((n) => n.id === nodeId)?.isAnchor) return true;
     if (hoveredNode === nodeId) return true;
@@ -1398,7 +1405,8 @@ export default function InteractiveGraph({
               const colors = getNodeColor(node);
 
               // Fix: Only dim non-connected nodes during active hover focus. In normal view and during simulation, keep 1.0 opacity so node colors and labels never look dull
-              const opacity = hoveredNode ? (isHighlighted ? 1.0 : 0.35) : 1.0;
+              // ...except while a link edit's ripple is shown: then what it reaches stays lit and the rest dims
+              const opacity = hoveredNode || rippleOn ? (isHighlighted ? 1.0 : 0.3) : 1.0;
               const pipelineNodeIdx = causalPath.pathNodes.indexOf(node.id);
               const isPipelineNode = pipelineNodeIdx !== -1;
               const isPipelineStart = isPipelineNode && pipelineNodeIdx === 0;

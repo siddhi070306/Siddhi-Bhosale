@@ -376,12 +376,30 @@ export const api = {
   addAsset: (ticker, name, sector) =>
     request('/api/kb/asset', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ticker, name: name || null, sector: sector || null }) }),
   removeAsset: (id) => request(`/api/kb/asset/${encodeURIComponent(id)}`, { method: 'DELETE' }),
-  updateEdge: (source, target, weight) =>
+  // linked: [{source, target, weight}] links that share the edited link's reason, saved in the same change
+  updateEdge: (source, target, weight, linked = null) =>
     request('/api/kb/edge', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ source, target, weight }),
+      body: JSON.stringify({ source, target, weight, linked: linked || null }),
     }),
+  // what a link edit would change, before it is saved (read only)
+  previewEdge: (source, target, weight, accepted = null, analysisId = null) =>
+    request('/api/kb/edge/preview', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ source, target, weight, accepted, analysis_id: analysisId || null }),
+    }),
+  // re-run the open analysis on the current graph from its saved events: no language model, nothing learned
+  async rescoreAnalysis(analysis) {
+    const id = analysis.raw && (analysis.raw.library_id || analysis.raw.article_id);
+    const res = await request('/api/analysis/rescore', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ analysis_id: id || null, result: slimResult(analysis.raw) }),
+    });
+    return adaptResult(res, analysis.text, analysis.source, analysis.link, analysis.title);
+  },
 
   // knowledge-graph assistant (read only) and the graph's change history
   // analysisId: the news graph open in the app, so "this story" means that one (null asks about the whole graph)

@@ -129,10 +129,15 @@ class Analyzer:
                 c["name"] + " (" + c["detail"] + ")" for c in report["failed"]), "guard": report}
         return {"ok": True, "guard": report, "version": report["version"]}
 
-    def update_edge(self, source, target, weight=None, strength=None, sign=None, reason=None):
-        """Change the weight (sign and strength) of an existing link."""
+    def update_edge(self, source, target, weight=None, strength=None, sign=None, reason=None, linked=None):
+        """Change the weight (sign and strength) of an existing link, and optionally (linked: [{source, target, weight}]) the
+        links that share its economic reason, all as ONE guarded change that one undo reverts."""
         if not self.kg.g.has_edge(source, target):
             return {"error": "Edge (%s -> %s) does not exist in graph." % (source, target)}
+        linked = [l for l in (linked or []) if (l.get("source"), l.get("target")) != (source, target)]
+        for l in linked:
+            if not self.kg.g.has_edge(l.get("source"), l.get("target")) or l.get("weight") is None:
+                return {"error": "Linked edge (%s -> %s) does not exist in graph." % (l.get("source"), l.get("target"))}
         if weight is not None:
             w = float(weight)
             sign = -1 if w < 0 else 1
@@ -141,20 +146,34 @@ class Analyzer:
             strength = max(0.01, min(0.99, float(strength)))
         out = {}
 
+        from . import channels
+        ch = channels.channel_of(self.kg, source, target)
+
         def mutate():
             out.update(self.kg.update_edge_weight(source, target, strength=strength, sign=sign))
             # re-check the link against market data now: a stored verdict was judged against the old direction
             self.kg.g[source][target]["validation"] = None
             self.kg.set_validation(source, target, ts.validate_edge(self.kg, source, target, live=False))
+            for l in linked:                       # same reason, same proportional change; each re-checked against data
+                w = float(l["weight"])
+                self.kg.update_edge_weight(l["source"], l["target"], strength=max(0.01, min(0.99, abs(w))), sign=-1 if w < 0 else 1)
+                self.kg.g[l["source"]][l["target"]]["validation"] = None
+                self.kg.set_validation(l["source"], l["target"], ts.validate_edge(self.kg, l["source"], l["target"], live=False))
 
-        res = self._guarded_edit(mutate, "edited link %s -> %s to %+.2f" % (
-            self.kg.g.nodes[source]["label"], self.kg.g.nodes[target]["label"],
-            (sign if sign is not None else self.kg.g[source][target]["sign"]) * (strength if strength is not None else self.kg.g[source][target]["strength"])),
-            "edit_link", reason)
+        lab = lambda n: self.kg.g.nodes[n]["label"]
+        label = "edited link %s -> %s to %+.2f" % (
+            lab(source), lab(target),
+            (sign if sign is not None else self.kg.g[source][target]["sign"]) * (strength if strength is not None else self.kg.g[source][target]["strength"]))
+        if linked:
+            label += "; adjusted with it (same reason: %s): %s" % (channels.LABEL[ch].lower(), ", ".join(
+                "%s -> %s to %+.2f" % (lab(l["source"]), lab(l["target"]), float(l["weight"])) for l in linked))
+        res = self._guarded_edit(mutate, label, "edit_link", reason)
         if res.get("error"):
             return res
         return dict(res, source=source, target=target, strength=out["strength"], sign=out["sign"],
-                    effective_weight=out["effective_weight"], before_strength=out["before_strength"])
+                    effective_weight=out["effective_weight"], before_strength=out["before_strength"],
+                    linked=[{"source": l["source"], "target": l["target"], "weight": float(l["weight"])} for l in linked],
+                    channel={"id": ch, "label": channels.LABEL[ch]})
 
     def add_link(self, source, target, sign, strength=0.5, lag=1, mechanism="", relation=None, reason=None):
         """Add a link the user is asserting between two nodes already in the graph."""
@@ -277,13 +296,25 @@ class Analyzer:
         return out
 
     # ------------------------------------------------------------------------------------------
-    def analyze(self, text, live=False, use_llm=False, link=None, full_text=False, title=None):
+    def rescore(self, prev, live=False):
+        """Re-run an earlier analysis on the CURRENT graph from its saved events, e.g. after a link edit: no language-model
+        call, no re-extraction and nothing learned, so every difference comes from the graph change alone."""
+        if not isinstance(prev, dict) or not prev.get("text"):
+            return {"error": "that analysis has no saved text to re-score"}
+        res = self.analyze(prev["text"], live=live, _reuse=prev)
+        if not res.get("error"):
+            res["rescored"] = True
+        return res
+
+    def analyze(self, text, live=False, use_llm=False, link=None, full_text=False, title=None, _reuse=None):
         text = (text or "").strip()
         if not text:
             return {"error": "empty text"}
         input_info = {"snippet_chars": len(text), "full_article": False, "article_chars": 0, "note": None,
                       "quality": "pasted", "sources": []}
-        if text.startswith("http://") or text.startswith("https://"):
+        if _reuse is not None:            # re-scoring a saved analysis: its text and input as they were
+            input_info = dict(_reuse.get("input") or input_info)
+        elif text.startswith("http://") or text.startswith("https://"):
             fa = feeds.fetch_article(text.split()[0])
             if not fa["ok"]:
                 return {"error": "Could not read that article: %s. Paste the text instead." % fa["reason"]}
@@ -296,10 +327,19 @@ class Analyzer:
             input_info.update(full_article=enr["quality"] == "article", article_chars=enr["article_chars"], note=enr["note"],
                               quality=enr["quality"], sources=enr["sources"])
         art_id = hashlib.sha1(text.encode("utf-8")).hexdigest()[:10]
-        extraction = ex.extract(text)
+        if _reuse is not None:            # the saved events (hypotheses are rebuilt below), not a new extraction
+            art_id = _reuse.get("article_id") or art_id
+            extraction = {"events": [dict(e) for e in _reuse.get("events") or [] if e.get("source") != "llm_hypothesis"],
+                          "mentions": [dict(m, sentence="") for m in _reuse.get("mentions") or [] if m.get("node") in kb.NODES],
+                          "unlinked": list(_reuse.get("unlinked") or [])}
+        else:
+            extraction = ex.extract(text)
         events = extraction["events"]
         llm_note, llm_links, companies, llm_read = None, [], [], False
-        if llm_required() or use_llm:
+        if _reuse is not None:
+            llm_note, companies = _reuse.get("llm_note"), list(_reuse.get("companies") or [])
+            llm_read = bool(_reuse.get("llm_read"))
+        elif llm_required() or use_llm:
             if not llm.available():
                 if llm_required():
                     return {"error": "An LLM is required to build the graph. Set GROQ_API_KEY or OPENROUTER_API_KEY "
@@ -331,7 +371,7 @@ class Analyzer:
                                                             ", ".join(c["name"] for c in companies)) if companies else "")
 
         guard_report = {"rolled_back": False, "failed": [], "version": self.guard.version, "pruned": []}
-        if self.guard.mode == "dynamic":
+        if self.guard.mode == "dynamic" and _reuse is None:
             before = self.guard.begin()
             changes = self.kg.ingest(art_id, text, extraction)
             changes += self.kg.add_llm_links(art_id, llm_links)
@@ -346,6 +386,8 @@ class Analyzer:
             nid = "ent_" + "".join(ch for ch in c["name"].lower() if ch.isalnum())[:30]
             in_graph = nid in self.kg.g
             company_nodes.append((nid if in_graph else None, c))
+            if _reuse is not None:                   # their events are among the saved ones already
+                continue
             if c["direction"] and in_graph:          # the article says its shares or value moved: a normal observed event
                 events.append({"id": "ev%d" % (len(events) + 1), "type": "price_move", "trigger": nid, "direction": c["direction"],
                                "magnitude": None, "intensity": 0.5 * (0.7 if c["status"] == "expected" else 1), "status": c["status"],
@@ -361,15 +403,16 @@ class Analyzer:
             {"node": m["node"], "label": kb.NODES[m["node"]]["label"], "type": kb.NODES[m["node"]]["type"],
              "text": m["text"], "start": m["start"], "end": m["end"]} for m in extraction["mentions"]],
             "unlinked": extraction["unlinked"], "graph_changes": changes, "graph_stats": self.kg.stats(),
-            "llm_note": llm_note, "text": text}
+            "llm_note": llm_note, "text": text, "companies": companies, "llm_read": llm_read}
         result["kb_guard"] = dict(guard_report, mode=self.guard.mode)
         result["kb_version"] = {"version": self.guard.version, "epoch": self.guard.epoch}   # the graph this analysis ran on
         result["input"] = dict(input_info, chars=len(text))
         hypothesis = None
-        if not sources and not companies and (use_llm or llm_required()) and llm.available():
+        reuse_hyp = (_reuse.get("hypothesis") or None) if _reuse is not None else None
+        if not sources and not companies and (reuse_hyp or (_reuse is None and (use_llm or llm_required()) and llm.available())):
             # nothing we know was stated: ask the model for market themes the story could touch. Hypotheses only:
             # they are labelled, drawn dashed, and never ingested into the knowledge graph (ingest already ran).
-            hyp = llm.suggest_themes(text)
+            hyp = reuse_hyp if _reuse is not None else llm.suggest_themes(text)
             if hyp:
                 hypothesis = {"background": hyp["background"], "themes": hyp["themes"]}
                 for i, th in enumerate(hyp["themes"]):
@@ -534,7 +577,8 @@ class Analyzer:
                        "data_modes": sorted({(ts.get_returns(n, live) or (0, 0, {"mode": "none"}))[2]["mode"] for n in nodes}),
                        "macro": ts.macro_snapshot(live) if live else [],
                        "caveats": self._caveats(live, nodes)})
-        result["summary"] = self._summary(result, sources, assets, sectors, comparison, use_llm or llm_required())
+        result["summary"] = self._summary(result, sources, assets, sectors, comparison,
+                                          use_llm or (llm_required() and _reuse is None))
         return result
 
     # ------------------------------------------------------------------------------------------

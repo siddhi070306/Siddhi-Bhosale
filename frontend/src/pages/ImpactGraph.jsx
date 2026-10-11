@@ -8,6 +8,7 @@ import TierFilterBar from '../components/graph/TierFilterBar';
 import RelationshipStory, { ScorePill } from '../components/graph/RelationshipStory';
 import RelationshipsBoard from '../components/graph/RelationshipsBoard';
 import ChainsBoard from '../components/graph/ChainsBoard';
+import EdgeRipple from '../components/graph/EdgeRipple';
 import { useUi } from '../context/UiContext';
 import { api } from '../services/api';
 
@@ -92,7 +93,7 @@ function EmptyState({ onNavigateToChat, onSelectEvent }) {
   );
 }
 
-export default function ImpactGraph({ analysis, onNavigateToChat, onSelectEvent, onReanalyze, onNavigateToTab, isAnalyzing = false }) {
+export default function ImpactGraph({ analysis, onNavigateToChat, onSelectEvent, onReanalyze, onRescore, onNavigateToTab, isAnalyzing = false }) {
   const graphData = (analysis && analysis.graphView) || null;
   const [activeTab, setActiveTab] = useState('pathways');
   // a context graph opens with nothing selected so the whole picture shows (selecting a node dims the rest)
@@ -102,6 +103,36 @@ export default function ImpactGraph({ analysis, onNavigateToChat, onSelectEvent,
   const [edgeUpdating, setEdgeUpdating] = useState(false);
   const [edgeSuccessMsg, setEdgeSuccessMsg] = useState(null);
   const [edgeErrorMsg, setEdgeErrorMsg] = useState(null);
+  // a link edit: live preview of the links that share its reason and of the ripple, then what it changed once saved
+  const [edgePreview, setEdgePreview] = useState(null);
+  const [previewLoading, setPreviewLoading] = useState(false);
+  const [acceptedLinked, setAcceptedLinked] = useState(null); // null = the proposal's defaults; else a list of "a>b" keys
+  const [lastEdit, setLastEdit] = useState((analysis && analysis.lastEdit) || null); // {preview, version}: "What changed because of this edit"
+  const analysisId = (analysis && analysis.raw && (analysis.raw.library_id || analysis.raw.article_id)) || null;
+  useEffect(() => {
+    if (!selectedEdge || edgeWeight == null) {
+      setEdgePreview(null);
+      return undefined;
+    }
+    let off = false;
+    setPreviewLoading(true);
+    const t = setTimeout(() => {
+      api.previewEdge(selectedEdge.from, selectedEdge.to, edgeWeight, acceptedLinked, analysisId)
+        .then((p) => !off && setEdgePreview(p))
+        .catch(() => !off && setEdgePreview(null))
+        .finally(() => !off && setPreviewLoading(false));
+    }, 300);
+    return () => {
+      off = true;
+      clearTimeout(t);
+    };
+  }, [selectedEdge && selectedEdge.from, selectedEdge && selectedEdge.to, edgeWeight, acceptedLinked, analysisId]);
+  const toggleLinked = (key) => {
+    const cur = acceptedLinked || (edgePreview ? edgePreview.linked.filter((l) => l.default).map((l) => `${l.source}>${l.target}`) : []);
+    setAcceptedLinked(cur.includes(key) ? cur.filter((k) => k !== key) : [...cur, key]);
+  };
+  const rippleShown = (activeTab === 'edge' && edgePreview) ? edgePreview.ripple : (lastEdit ? lastEdit.preview.ripple : null);
+  const rippleHighlight = rippleShown ? { nodes: rippleShown.downstream || [], edges: rippleShown.edges || [] } : null;
   const [resettingGraph, setResettingGraph] = useState(false);
   const [resetSuccessMsg, setResetSuccessMsg] = useState(null);
   const { search: searchQuery, setSearch: setSearchQuery } = useUi(); // shared with the header search box
@@ -130,6 +161,7 @@ export default function ImpactGraph({ analysis, onNavigateToChat, onSelectEvent,
     const base = typeof edge.baseStrength === 'number' ? edge.baseStrength : edge.strength;
     const w = (edge.sign || 1) * base;
     setEdgeWeight(Math.round(w * 100) / 100); // the slider always starts at the link's real weight, never 0
+    setAcceptedLinked(null);
     setEdgeSuccessMsg(null);
     setEdgeErrorMsg(null);
     if (openEdgeTab) setActiveTab('edge');
@@ -141,13 +173,33 @@ export default function ImpactGraph({ analysis, onNavigateToChat, onSelectEvent,
     setEdgeSuccessMsg(null);
     setEdgeErrorMsg(null);
     try {
-      await api.updateEdge(selectedEdge.from, selectedEdge.to, edgeWeight);
-      setEdgeSuccessMsg(`Transmission weight updated to ${edgeWeight >= 0 ? '+' : ''}${edgeWeight}. Re-evaluating propagation…`);
-      if (onReanalyze) {
-        onReanalyze(`Adjusted edge transmission weight ${selectedEdge.from} -> ${selectedEdge.to} to ${edgeWeight}`);
-      }
+      const ticked = (l) => (acceptedLinked ? acceptedLinked.includes(`${l.source}>${l.target}`) : l.selected);
+      const linked = edgePreview ? edgePreview.linked.filter(ticked).map((l) => ({ source: l.source, target: l.target, weight: l.after })) : [];
+      const res = await api.updateEdge(selectedEdge.from, selectedEdge.to, edgeWeight, linked);
+      const edit = edgePreview ? { preview: { ...edgePreview, linked: edgePreview.linked.map((l) => ({ ...l, selected: ticked(l) })) }, version: res.version } : null;
+      setLastEdit(edit);
+      setEdgeSuccessMsg(`Saved ${edgeWeight >= 0 ? '+' : ''}${Number(edgeWeight).toFixed(2)}${linked.length ? ` and ${linked.length} link${linked.length === 1 ? '' : 's'} that share its reason` : ''}. Re-scored from the article's saved events, without re-running the AI.`);
+      const note = `Edited ${selectedEdge.from} -> ${selectedEdge.to} to ${Number(edgeWeight).toFixed(2)}${linked.length ? ` with ${linked.length} linked link${linked.length === 1 ? '' : 's'}` : ''}; the analysis was re-scored.`;
+      if (onRescore) await onRescore(note, edit);
+      else if (onReanalyze) onReanalyze(note);
     } catch (e) {
       setEdgeErrorMsg(e.message);
+    } finally {
+      setEdgeUpdating(false);
+    }
+  };
+
+  const handleUndoEdit = async () => {
+    if (!lastEdit || !lastEdit.version) return;
+    setEdgeUpdating(true);
+    setEdgeErrorMsg(null);
+    try {
+      await api.restoreKbVersion(lastEdit.version - 1, 'undo link edit');
+      setLastEdit(null);
+      setEdgeSuccessMsg('The edit and its linked links were undone.');
+      if (onRescore) await onRescore('Link edit undone; the analysis was re-scored.');
+    } catch (e) {
+      setEdgeErrorMsg(`Undo failed: ${e.message}`);
     } finally {
       setEdgeUpdating(false);
     }
@@ -437,6 +489,27 @@ export default function ImpactGraph({ analysis, onNavigateToChat, onSelectEvent,
         </div>
       )}
 
+      {lastEdit && (
+        <div className="card edge-what-changed" style={{ marginBottom: 12, padding: '12px 16px', background: '#fafafa' }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 8, marginBottom: 6, flexWrap: 'wrap' }}>
+            <div style={{ fontSize: 14, fontWeight: 700 }}>What changed because of this edit</div>
+            <div style={{ display: 'flex', gap: 6 }}>
+              <button type="button" className="btn btn-outline btn-sm" style={{ fontSize: 11.5 }} onClick={handleUndoEdit} disabled={edgeUpdating}>
+                Undo this edit
+              </button>
+              <button type="button" className="btn btn-outline btn-sm" style={{ fontSize: 11.5 }} onClick={() => setLastEdit(null)}>
+                Dismiss
+              </button>
+            </div>
+          </div>
+          <EdgeRipple preview={lastEdit.preview} maxChains={8} maxNodes={10} />
+          <div style={{ fontSize: 11.5, color: '#71717a', marginTop: 6 }}>
+            Saved as one change in the knowledge base history, and the analysis was re-scored from the article's saved events, without
+            re-running the AI. The edited link and everything downstream of it are highlighted on the graph.
+          </div>
+        </div>
+      )}
+
       {/* Context-graph notice (story names entities but states no move) */}
       {analysis.contextOnly && (
         <div className="card" style={{ marginBottom: 12, padding: '10px 16px', fontSize: 12.5, color: '#1e3a8a', background: '#eff6ff' }}>
@@ -486,6 +559,7 @@ export default function ImpactGraph({ analysis, onNavigateToChat, onSelectEvent,
             }}
             selectedEdge={selectedEdge}
             onSelectEdge={handleSelectEdge}
+            rippleHighlight={rippleHighlight}
             onResetDefaults={handleResetGraphToDefaults}
             isResetting={resettingGraph}
           />
@@ -552,6 +626,19 @@ export default function ImpactGraph({ analysis, onNavigateToChat, onSelectEvent,
                 </span>
               </div>
 
+              {edgePreview && (
+                <button
+                  type="button"
+                  className="edge-drawer-summary"
+                  onClick={() => setActiveTab('edge')}
+                  title="Open the preview in the Edge Sensitivity tab"
+                  style={{ background: 'none', border: 'none', color: '#cbd5e1', fontSize: 11.5, cursor: 'pointer', padding: 0, textAlign: 'left' }}
+                >
+                  {edgePreview.linked.filter((l) => l.selected).length > 0 ? `+${edgePreview.linked.filter((l) => l.selected).length} linked (same reason) · ` : ''}
+                  {edgePreview.ripple.chains_total} chains · {edgePreview.ripple.nodes_total} changes
+                  {edgePreview.ripple.flipped ? ` · ${edgePreview.ripple.flipped} flip` : ''}
+                </button>
+              )}
               <button
                 type="button"
                 className="btn btn-black btn-sm"
@@ -893,6 +980,14 @@ export default function ImpactGraph({ analysis, onNavigateToChat, onSelectEvent,
                           </button>
                         ))}
                       </div>
+                    </div>
+
+                    {/* What this edit would change, live, before it is saved */}
+                    <div style={{ marginBottom: 14 }}>
+                      <div style={{ fontSize: 11, fontWeight: 600, color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.04em', marginBottom: 6 }}>
+                        Preview: what this edit changes
+                      </div>
+                      <EdgeRipple preview={edgePreview} loading={previewLoading} onToggle={toggleLinked} checkedKeys={acceptedLinked} />
                     </div>
 
                     {/* Status feedback */}

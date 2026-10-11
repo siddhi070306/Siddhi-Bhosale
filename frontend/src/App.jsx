@@ -294,6 +294,19 @@ export default function App() {
     }
   };
 
+  // after a link edit: re-score the open analysis from its saved events (no AI call, so only the edit changes the result)
+  // lastEdit ({preview, version}) travels with the re-scored analysis: the graph page is rebuilt for it and shows what changed
+  const handleRescore = async (note, lastEdit = null) => {
+    if (!analysis || !analysis.raw) return;
+    try {
+      const res = await api.rescoreAnalysis(analysis);
+      handleAnalysisComplete(analysis.text, lastEdit ? { ...res, lastEdit } : res);
+      if (note) setNotice(note);
+    } catch (e) {
+      setNotice(`Re-scoring failed: ${e.message}`);
+    }
+  };
+
   const handleSelectEvent = async (eventText, source, link, title) => {
     setCurrentEventText(eventText);
     setIsAnalyzingEvent(true);
@@ -360,6 +373,7 @@ export default function App() {
             onNavigateToChat={() => setActiveTab('chat')}
             onSelectEvent={handleSelectEvent}
             onReanalyze={handleReanalyze}
+            onRescore={handleRescore}
             onNavigateToTab={(tabId, assetId, mode) => setActiveTab(tabId, assetId, mode)}
             isAnalyzing={isAnalyzingEvent}
           />
