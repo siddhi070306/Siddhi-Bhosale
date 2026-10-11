@@ -58,6 +58,20 @@ export default function ForecastChart({ data, loading, error, name, horizon = 30
     );
   }
 
+  if (data && data.available === false) {
+    // the backend refused to simulate (simulated / non-return / missing data): show exactly why, never a made-up fan
+    return (
+      <div className="asset-trend-box">
+        <div className="ticker-header" style={{ marginBottom: 12 }}>
+          <div style={{ fontSize: 13, fontWeight: 600, color: '#18181b' }}>Volatility fan ({name || data.node_id})</div>
+        </div>
+        <p style={{ fontSize: 12.5, color: '#71717a', lineHeight: 1.55 }}>
+          No forecast is shown for this asset. {data.reason}
+        </p>
+      </div>
+    );
+  }
+
   if (!data || !data.bands || !data.bands.p50) {
     return (
       <div className="asset-trend-box">
@@ -114,11 +128,11 @@ export default function ForecastChart({ data, loading, error, name, horizon = 30
       <div className="ticker-header" style={{ marginBottom: 10, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
         <div>
           <div style={{ fontSize: 13, fontWeight: 700, color: '#18181b', display: 'flex', alignItems: 'center', gap: 6 }}>
-            <span>Econometric Monte Carlo</span>
+            <span>Volatility fan (Monte Carlo)</span>
             <span style={{ fontSize: 11, fontWeight: 500, color: '#71717a' }}>({name || data.ticker || 'Asset'})</span>
           </div>
           <div style={{ fontSize: 11, color: '#71717a', marginTop: 1 }}>
-            500 paths · Geometric Brownian Motion · {params?.sigma_annualized_pct}% ann vol
+            {data.simulations} paths · zero drift · {params?.sigma_annualized_pct}% annual volatility measured on {data.observations} real daily returns ({data.source})
           </div>
         </div>
 
@@ -170,7 +184,7 @@ export default function ForecastChart({ data, loading, error, name, horizon = 30
           </div>
         </div>
         <div style={{ background: '#fafafa', border: '1px solid #f4f4f5', borderRadius: 6, padding: '6px 8px' }}>
-          <div style={{ fontSize: 10, color: '#71717a', textTransform: 'uppercase', letterSpacing: '0.04em' }}>Prob Loss</div>
+          <div style={{ fontSize: 10, color: '#71717a', textTransform: 'uppercase', letterSpacing: '0.04em' }}>Chance below start</div>
           <div style={{ fontSize: 12.5, fontWeight: 700, color: (metrics?.prob_loss_pct || 0) > 50 ? '#991b1b' : '#18181b' }}>
             {metrics?.prob_loss_pct}%
           </div>
@@ -251,7 +265,7 @@ export default function ForecastChart({ data, loading, error, name, horizon = 30
 
           {/* X-axis tick labels */}
           <text x={PX} y={H - 8} fontSize="10" fill="#a1a1aa" fontFamily="var(--font-mono)" textAnchor="start">
-            D+0 (Shock)
+            D+0 (assumed {data.shock_pct >= 0 ? '+' : ''}{data.shock_pct}%)
           </text>
           <text x={PX + innerW / 2} y={H - 8} fontSize="10" fill="#a1a1aa" fontFamily="var(--font-mono)" textAnchor="middle">
             D+{Math.floor((nDays - 1) / 2)}
@@ -320,6 +334,8 @@ export default function ForecastChart({ data, loading, error, name, horizon = 30
           </div>
         )}
       </div>
+
+      <p style={{ fontSize: 11, color: '#71717a', lineHeight: 1.5, marginTop: 8 }}>{data.note}</p>
 
       {/* Legend */}
       <div style={{ display: 'flex', gap: 14, marginTop: 10, fontSize: 11, color: '#71717a', flexWrap: 'wrap', alignItems: 'center' }}>

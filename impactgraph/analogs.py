@@ -6,6 +6,7 @@ invented; if no data is available the response omits analogs gracefully.
 
 This is for pattern illustration ONLY. Past analogs do not predict future moves.
 """
+from __future__ import annotations
 
 import math
 from datetime import datetime
@@ -14,29 +15,10 @@ import numpy as np
 
 from . import timeseries as ts
 
-# ---------------------------------------------------------------------------
-# Known macro shock windows (inclusive ISO dates) -> human-readable label.
-# Used to auto-label detected analog windows. Order matters: first match wins.
-# ---------------------------------------------------------------------------
-_EVENTS = [
-    ("2020-02-15", "2020-04-30", "COVID-19 Crash"),
-    ("2022-02-15", "2022-04-30", "Ukraine Invasion"),
-    ("2022-05-01", "2022-10-31", "Fed Rate Hike Cycle"),
-    ("2023-03-01", "2023-03-31", "SVB Banking Crisis"),
-    ("2023-09-01", "2023-10-31", "Bond Yield Surge"),
-    ("2024-08-01", "2024-08-31", "Yen Carry Unwind"),
-    ("2024-10-01", "2024-12-31", "US Election / Rate Pivot"),
-    ("2019-09-01", "2020-01-31", "US-China Trade War"),
-    ("2018-10-01", "2018-12-31", "Q4 2018 Risk-Off"),
-]
-
-
 def _event_label(iso_date: str) -> str:
-    """Return a macro event label if the date falls in a known window, else 'Prior shock YYYY-MM-DD'."""
-    for start, end, label in _EVENTS:
-        if start <= iso_date <= end:
-            return label
-    return f"Prior shock {iso_date}"
+    """Neutral label. Earlier versions named windows after macro events ("COVID Crash", ...) from memory; the series
+    only spans ~2 years and the names were never verified against sources, so none is claimed."""
+    return f"Move on {iso_date}"
 
 
 def _find_analog_windows(dates: list, price_vals: np.ndarray, shock_threshold: float, max_windows: int = 4):
@@ -162,10 +144,6 @@ def historical_analogs(node_id: str, shock_pct: float = 5.0, live: bool = True) 
     for idx, window_shock_pct in windows:
         shock_date = clean_dates[idx]
         label = _event_label(shock_date)
-        # Deduplicate same-label analogs (e.g. two windows in the Ukraine period)
-        if label in seen_labels:
-            label = f"{label} ({shock_date})"
-        seen_labels.add(label)
 
         values = _rebase_series(clean_vals, idx, length=90)
         if not values:

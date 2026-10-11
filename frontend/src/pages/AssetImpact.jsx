@@ -8,7 +8,6 @@ import { useUi } from '../context/UiContext';
 import { useLiveQuotes, fmtPrice, fmtPct } from '../context/useLiveQuotes';
 import { api, toAssetView } from '../services/api';
 
-
 function EmptyState({ onNavigateToChat, what }) {
   return (
     <div className="card" style={{ padding: 28, textAlign: 'center' }}>

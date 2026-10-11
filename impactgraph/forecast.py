@@ -1,17 +1,29 @@
-"""Monte Carlo Econometric Forecast for Apex Zenith time-series layer.
+"""Monte Carlo volatility fan for an asset, calibrated on its REAL historical returns.
 
-Simulates future asset trajectories under macro shocks using Geometric Brownian
-Motion (GBM) calibrated on empirical historical volatility (FRED / Yahoo Finance).
-Provides quantile bands (p10, p25, p50, p75, p90) and parametric risk metrics
-(VaR, Expected Shortfall, Prob of Loss).
+What this is, and is not
+  * It shows how wide the range of outcomes could plausibly be, given how volatile the series has actually been
+    (geometric Brownian motion, zero drift). It is not a prediction of direction and not a price target.
+  * The day-0 shock is an ASSUMPTION supplied by the caller (what-if). The knowledge graph's plausibility scores are
+    not price moves and must never be passed in as one.
+  * It refuses to run, and says why, when the only data would be invented: a simulated series, a series that is not
+    a return series (yields and expectations are stored as changes in percentage points), or no series at all.
 """
+from __future__ import annotations
 
 import math
+
 import numpy as np
 
 from . import timeseries as ts
 
 TRADING_DAYS_PER_YEAR = 252
+MIN_OBSERVATIONS = 120
+
+
+def _unavailable(node_id, reason, shock_pct, horizon):
+    return {"available": False, "node_id": node_id, "reason": reason, "shock_pct": round(float(shock_pct), 2),
+            "horizon_days": horizon,
+            "note": "No forecast is shown rather than one built on invented data. " + reason}
 
 
 def simulate_monte_carlo(
@@ -20,111 +32,83 @@ def simulate_monte_carlo(
     horizon_days: int = 30,
     simulations: int = 500,
     live: bool = False,
-    seed: int | None = 42
+    seed: int | None = 42,
 ) -> dict:
-    """Run a calibrated Monte Carlo forward simulation.
+    """Run a volatility-calibrated Monte Carlo fan.
 
     Args:
-        node_id: Knowledge graph node id (e.g. 'crude_oil', 'airlines').
-        shock_pct: Event shock applied immediately at Day 0 (e.g., +5.0 or -8.5).
-        horizon_days: Forecast horizon in trading days (default 30, clamped 10-90).
-        simulations: Number of Monte Carlo stochastic paths (default 500).
-        live: Whether to try fetching live series data.
-        seed: Random seed for reproducibility (default 42).
-
-    Returns:
-        Dict with percentile bands, metrics, and parameters.
+        node_id: knowledge graph node id (e.g. 'crude_oil', 'airlines').
+        shock_pct: the day-0 jump to ASSUME (e.g. +5.0 or -8.5). 0 means no event shock.
+        horizon_days: trading days ahead (clamped to 10-90).
+        simulations: number of paths (clamped to 100-2000).
+        live: allow a live fetch of the series if it is not cached.
+        seed: random seed for reproducible fans.
     """
     horizon = int(max(10, min(90, horizon_days)))
     n_sims = int(max(100, min(2000, simulations)))
 
-    # Fetch historical returns for calibration
     ret_res = ts.get_returns(node_id, live=live)
-    source_label = "Model Prior (Calibrated)"
-    ticker = None
+    if ret_res is None:
+        return _unavailable(node_id, "This node has no market price series in the knowledge base.", shock_pct, horizon)
+    _, rets, info = ret_res
+    if info.get("simulated"):
+        return _unavailable(node_id, "Only simulated data is available for this node%s." % (
+            "" if live else " (turn on live market data and re-run the analysis to fetch the real series)"), shock_pct, horizon)
+    if info.get("kind") != "ret":
+        return _unavailable(node_id, "This series is a level measured in percentage points (a yield or an expectation), "
+                                     "so a return-based simulation does not apply to it.", shock_pct, horizon)
+    clean = [r for r in rets if math.isfinite(r)]
+    if len(clean) < MIN_OBSERVATIONS:
+        return _unavailable(node_id, "Only %d usable daily returns; at least %d are needed." % (len(clean), MIN_OBSERVATIONS),
+                            shock_pct, horizon)
 
-    if ret_res is not None:
-        _, rets, info = ret_res
-        source_label = info.get("source", "historical")
-        ticker = info.get("ticker")
-        clean_rets = [r for r in rets if math.isfinite(r)]
-    else:
-        clean_rets = []
+    sigma_daily = float(np.std(clean, ddof=1))
+    if not math.isfinite(sigma_daily) or sigma_daily < 1e-6:
+        return _unavailable(node_id, "The series is flat, so its volatility cannot be estimated.", shock_pct, horizon)
+    mu_daily = 0.0        # no drift: the sample mean of a short history says nothing reliable about direction
 
-    # Calibrate daily drift (mu) and daily volatility (sigma)
-    if len(clean_rets) >= 30:
-        mu_daily = float(np.mean(clean_rets))
-        sigma_daily = float(np.std(clean_rets, ddof=1))
-        # Protect against degenerate zero volatility
-        if sigma_daily < 1e-4:
-            sigma_daily = 0.015
-    else:
-        # Fallback prior: neutral drift, 1.5% daily vol (~23.8% ann vol)
-        mu_daily = 0.0002
-        sigma_daily = 0.015
-
-    # Day 0 starting value incorporating immediate event shock
-    # E.g. shock_pct = +5.0 -> S_0 = 105.0; shock_pct = 0.0 -> S_0 = 100.0
+    # Day 0 level: pre-event level = 100, plus the assumed shock
     s0 = 100.0 * (1.0 + float(shock_pct) / 100.0)
 
-    # Simulation engine: Geometric Brownian Motion
-    # dS_t = S_t * (mu * dt + sigma * dW_t)
-    # log(S_t / S_0) = (mu - 0.5 * sigma^2) * t + sigma * W_t
+    # Geometric Brownian motion: log(S_t / S_0) = (mu - 0.5 sigma^2) t + sigma W_t
     rng = np.random.default_rng(seed)
-
-    # Standard normal increments: shape (n_sims, horizon)
     shocks = rng.standard_normal(size=(n_sims, horizon))
-
-    drift_step = mu_daily - 0.5 * (sigma_daily ** 2)
-    step_log_returns = drift_step + sigma_daily * shocks
-
-    # Cumulative log returns from t=1 to horizon
+    step_log_returns = (mu_daily - 0.5 * sigma_daily ** 2) + sigma_daily * shocks
     cum_log_returns = np.cumsum(step_log_returns, axis=1)
 
-    # Matrix of simulated paths: shape (n_sims, horizon + 1)
-    # Column 0 is Day 0 (S0)
     paths = np.empty((n_sims, horizon + 1), dtype=float)
     paths[:, 0] = s0
     paths[:, 1:] = s0 * np.exp(cum_log_returns)
 
-    # Percentile extraction at each trading day t in [0..horizon]
-    p10 = np.percentile(paths, 10, axis=0)
-    p25 = np.percentile(paths, 25, axis=0)
-    p50 = np.percentile(paths, 50, axis=0)  # median trajectory
-    p75 = np.percentile(paths, 75, axis=0)
-    p90 = np.percentile(paths, 90, axis=0)
+    pct = lambda q: np.percentile(paths, q, axis=0)
+    p10, p25, p50, p75, p90 = pct(10), pct(25), pct(50), pct(75), pct(90)
     mean_path = np.mean(paths, axis=0)
 
-    # Terminal distribution metrics at horizon (relative to initial base 100)
-    terminal_prices = paths[:, -1]
-    terminal_returns_pct = (terminal_prices / 100.0 - 1.0) * 100.0
-
-    # Value at Risk (VaR 95%): 5th percentile loss from base 100
+    # terminal outcomes relative to the PRE-EVENT level (100)
+    terminal_returns_pct = (paths[:, -1] / 100.0 - 1.0) * 100.0
     p5_terminal = np.percentile(terminal_returns_pct, 5)
     var_95_pct = round(abs(min(0.0, float(p5_terminal))), 2)
-
-    # Conditional VaR (Expected Shortfall 95%): average loss when loss exceeds VaR 95%
-    tail_losses = terminal_returns_pct[terminal_returns_pct <= p5_terminal]
-    cvar_95_pct = round(abs(min(0.0, float(np.mean(tail_losses)))), 2) if len(tail_losses) > 0 else var_95_pct
-
+    tail = terminal_returns_pct[terminal_returns_pct <= p5_terminal]
+    cvar_95_pct = round(abs(min(0.0, float(np.mean(tail)))), 2) if len(tail) else var_95_pct
     prob_loss = round(float(np.mean(terminal_returns_pct < 0.0)) * 100.0, 1)
     median_return = round(float(np.percentile(terminal_returns_pct, 50)), 2)
 
-    days = [f"D+{t}" for t in range(horizon + 1)]
-
     return {
+        "available": True,
         "node_id": node_id,
-        "ticker": ticker,
-        "source": source_label,
+        "ticker": info.get("source", "").split(":")[-1] or None,
+        "source": info.get("source", "historical"),
+        "data_mode": info.get("mode"),
+        "observations": len(clean),
         "horizon_days": horizon,
         "simulations": n_sims,
         "shock_pct": round(float(shock_pct), 2),
         "params": {
-            "mu_daily_pct": round(mu_daily * 100.0, 4),
+            "mu_daily_pct": 0.0,
             "sigma_daily_pct": round(sigma_daily * 100.0, 3),
             "sigma_annualized_pct": round(sigma_daily * math.sqrt(TRADING_DAYS_PER_YEAR) * 100.0, 2),
         },
-        "days": days,
+        "days": ["D+%d" % t for t in range(horizon + 1)],
         "bands": {
             "p10": [round(float(v), 2) for v in p10],
             "p25": [round(float(v), 2) for v in p25],
@@ -140,5 +124,8 @@ def simulate_monte_carlo(
             "prob_loss_pct": prob_loss,
             "s0": round(s0, 2),
         },
-        "note": "Monte Carlo paths generated via calibrated Geometric Brownian Motion. For risk modeling only; past volatility does not guarantee future results."
+        "note": ("A volatility fan, not a forecast of direction: geometric Brownian motion with zero drift, volatility measured on "
+                 "%d real daily returns of %s. The day-0 shock (%+.1f%%) is an assumption you set, not a model estimate. "
+                 "Real markets have fatter tails than this model, so the bands understate extreme moves. Not investment advice."
+                 % (len(clean), info.get("source", "the series"), float(shock_pct))),
     }
