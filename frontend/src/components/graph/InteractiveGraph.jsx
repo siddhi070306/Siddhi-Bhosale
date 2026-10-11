@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect, useMemo } from 'react';
-import { ZoomIn, ZoomOut, RotateCcw, Maximize2, Play, Zap } from 'lucide-react';
+import { ZoomIn, ZoomOut, RotateCcw, Maximize2, Play, Zap, Sun, Moon } from 'lucide-react';
 
 // Closed-form cubic Bezier curve evaluation for smooth, exact path tracking
 function evalCubicBezier(p1, cx1, cy1, cx2, cy2, p2, t) {
@@ -201,6 +201,9 @@ export default function InteractiveGraph({
   const [zoom, setZoom] = useState(1);
   const [pan, setPan] = useState({ x: 20, y: 10 });
   const [isPanning, setIsPanning] = useState(false);
+  const [legendCollapsed, setLegendCollapsed] = useState(false);
+  const [canvasTheme, setCanvasTheme] = useState('dark');
+  const isDark = canvasTheme === 'dark';
   const rawNodes = data?.nodes || [];
   const rawEdges = data?.edges || [];
 
@@ -664,33 +667,87 @@ export default function InteractiveGraph({
     };
   }, [particlesList, causalPath]);
 
-  const getNodeColor = (type) => {
-    switch (type) {
-      case 'event_class':
-        return { fill: '#a7f3d0', stroke: '#6ee7b7', text: '#064e3b' }; // mint green
-      case 'commodity':
-        return { fill: '#fef08a', stroke: '#f59e0b', text: '#854d0e' }; // warm yellow/amber
-      case 'indicator':
-        return { fill: '#ddd6fe', stroke: '#c084fc', text: '#581c87' }; // lavender/purple
-      case 'sector':
-        return { fill: '#bae6fd', stroke: '#38bdf8', text: '#0369a1' }; // sky blue
-      case 'company':
-      case 'instrument':
-      case 'index':
-      default:
-        return { fill: '#e2e8f0', stroke: '#cbd5e1', text: '#334155' }; // slate grey
+  // Dynamically map confidence level & anchor facts to high-contrast colors (optimized for both dark & light themes)
+  const getNodeColor = (node) => {
+    // 1. Anchor Fact (Observed directly in article / ground truth)
+    if (node?.isAnchor) {
+      return {
+        fill: isDark ? '#262c3a' : '#0f172a',
+        stroke: isDark ? '#cbd5e1' : '#000000',
+        text: '#ffffff',
+        badgeBg: isDark ? '#262c3a' : '#0f172a',
+        badgeText: '#ffffff',
+        badgeBorder: isDark ? '#475168' : '#000000',
+        glow: isDark ? 'rgba(148, 163, 184, 0.45)' : 'rgba(15, 23, 42, 0.35)',
+        tierLabel: 'Anchor Fact (100%)',
+      };
     }
+
+    // 2. Map confidence level to distinct high-contrast colors
+    const conf = typeof node?.confidence === 'number' ? node.confidence : 0.5;
+
+    // High Confidence (>= 0.70): Rich Emerald Green
+    if (conf >= 0.70) {
+      return {
+        fill: '#10b981',
+        stroke: isDark ? '#34d399' : '#047857',
+        text: isDark ? '#6ee7b7' : '#064e3b',
+        badgeBg: isDark ? 'rgba(6, 78, 59, 0.90)' : '#ecfdf5',
+        badgeText: isDark ? '#a7f3d0' : '#047857',
+        badgeBorder: isDark ? '#059669' : '#a7f3d0',
+        glow: isDark ? 'rgba(16, 185, 129, 0.70)' : 'rgba(16, 185, 129, 0.45)',
+        tierLabel: `High (${Math.round(conf * 100)}%)`,
+      };
+    }
+
+    // Moderate Confidence (0.45 <= conf < 0.70, e.g. 0.61): Vibrant Royal Blue / Sapphire
+    if (conf >= 0.45) {
+      return {
+        fill: '#3b82f6',
+        stroke: isDark ? '#60a5fa' : '#1d4ed8',
+        text: isDark ? '#93c5fd' : '#1e3a8a',
+        badgeBg: isDark ? 'rgba(30, 58, 138, 0.90)' : '#eff6ff',
+        badgeText: isDark ? '#bfdbfe' : '#1d4ed8',
+        badgeBorder: isDark ? '#2563eb' : '#bfdbfe',
+        glow: isDark ? 'rgba(59, 130, 246, 0.70)' : 'rgba(59, 130, 246, 0.45)',
+        tierLabel: `Mod (${Math.round(conf * 100)}%)`,
+      };
+    }
+
+    // Lower Confidence (< 0.45): Warm Amber / Gold
+    return {
+      fill: '#f59e0b',
+      stroke: isDark ? '#fbbf24' : '#b45309',
+      text: isDark ? '#fde68a' : '#78350f',
+      badgeBg: isDark ? 'rgba(120, 53, 15, 0.90)' : '#fffbeb',
+      badgeText: isDark ? '#fde68a' : '#b45309',
+      badgeBorder: isDark ? '#d97706' : '#fde68a',
+      glow: isDark ? 'rgba(245, 158, 11, 0.65)' : 'rgba(245, 158, 11, 0.40)',
+      tierLabel: `Low (${Math.round(conf * 100)}%)`,
+    };
   };
 
   return (
     <div
       ref={containerRef}
-      className="graph-canvas-wrapper"
+      className={`graph-canvas-wrapper ${isDark ? 'canvas-dark-mode' : 'canvas-light-mode'}`}
       onMouseDown={handleMouseDown}
       onMouseMove={handleMouseMove}
       onMouseUp={handleMouseUp}
       onMouseLeave={handleMouseUp}
-      style={{ userSelect: 'none', position: 'relative', width: '100%', height: '100%', overflow: 'hidden' }}
+      style={{
+        userSelect: 'none',
+        position: 'relative',
+        width: '100%',
+        height: '100%',
+        overflow: 'hidden',
+        background: isDark
+          ? 'radial-gradient(ellipse at 50% 35%, #242938 0%, #191c26 55%, #11141b 100%)'
+          : '#fcfdfd',
+        border: isDark ? '1px solid #2d3444' : '1px solid #e2e8f0',
+        borderRadius: 12,
+        transition: 'background 0.3s ease, border-color 0.3s ease',
+      }}
     >
       {/* Floating Start-to-End Causal Pipeline Simulation HUD Bar */}
       {causalPath.pathNodes.length >= 2 && (
@@ -705,11 +762,15 @@ export default function InteractiveGraph({
             display: 'flex',
             alignItems: 'center',
             gap: 10,
-            background: 'rgba(255, 255, 255, 0.96)',
+            background: isDark ? 'rgba(25, 29, 39, 0.94)' : 'rgba(255, 255, 255, 0.96)',
             backdropFilter: 'blur(14px)',
             WebkitBackdropFilter: 'blur(14px)',
-            border: isSimulating ? '1.5px solid #60a5fa' : '1px solid #e2e8f0',
-            boxShadow: isSimulating ? '0 6px 24px rgba(37, 99, 235, 0.20)' : '0 2px 10px rgba(0, 0, 0, 0.05)',
+            border: isSimulating
+              ? (isDark ? '1.5px solid #38bdf8' : '1.5px solid #60a5fa')
+              : (isDark ? '1px solid #3c4456' : '1px solid #e2e8f0'),
+            boxShadow: isSimulating
+              ? (isDark ? '0 6px 24px rgba(56, 189, 248, 0.35)' : '0 6px 24px rgba(37, 99, 235, 0.20)')
+              : (isDark ? '0 4px 16px rgba(0, 0, 0, 0.40)' : '0 2px 10px rgba(0, 0, 0, 0.05)'),
             borderRadius: 30,
             padding: '5px 16px 5px 8px',
             transition: 'all 0.25s ease',
@@ -728,9 +789,13 @@ export default function InteractiveGraph({
               display: 'inline-flex',
               alignItems: 'center',
               gap: 6,
-              background: isSimulating ? '#1d4ed8' : '#09090b',
-              boxShadow: isSimulating ? '0 0 10px rgba(37, 99, 235, 0.4)' : 'none',
+              background: isSimulating ? (isDark ? '#2563eb' : '#1d4ed8') : (isDark ? '#3b82f6' : '#09090b'),
+              color: '#ffffff',
+              boxShadow: isSimulating ? '0 0 12px rgba(59, 130, 246, 0.55)' : 'none',
               flexShrink: 0,
+              cursor: 'pointer',
+              border: 'none',
+              transition: 'all 0.2s ease',
             }}
           >
             <Play size={12} fill="currentColor" />
@@ -743,20 +808,20 @@ export default function InteractiveGraph({
                 width: 9,
                 height: 9,
                 borderRadius: '50%',
-                backgroundColor: isSimulating ? '#2563eb' : '#10b981',
-                boxShadow: isSimulating ? '0 0 10px #2563eb' : '0 0 6px #10b981',
+                backgroundColor: isSimulating ? '#38bdf8' : '#10b981',
+                boxShadow: isSimulating ? '0 0 10px #38bdf8' : '0 0 6px #10b981',
                 flexShrink: 0,
               }}
             />
 
             <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
-              <span style={{ fontWeight: 700, color: '#0f172a', whiteSpace: 'nowrap' }}>
+              <span style={{ fontWeight: 700, color: isDark ? '#f8fafc' : '#0f172a', whiteSpace: 'nowrap' }}>
                 {isSimulating ? (
-                  <span style={{ color: '#2563eb' }}>
+                  <span style={{ color: isDark ? '#60a5fa' : '#2563eb' }}>
                     Pipeline Step {Math.min(currentSimHop + 1, causalPath.pathEdges.length)}/{causalPath.pathEdges.length}:
                   </span>
                 ) : (
-                  <span style={{ color: '#059669' }}>Pipeline Delivered:</span>
+                  <span style={{ color: isDark ? '#34d399' : '#059669' }}>Pipeline Delivered:</span>
                 )}
               </span>
 
@@ -772,7 +837,7 @@ export default function InteractiveGraph({
                     <React.Fragment key={id}>
                       {nIdx > 0 && (
                         <span style={{
-                          color: isSimulating && nIdx - 1 === currentSimHop ? '#2563eb' : '#94a3b8',
+                          color: isSimulating && nIdx - 1 === currentSimHop ? '#38bdf8' : (isDark ? '#475569' : '#94a3b8'),
                           fontWeight: isSimulating && nIdx - 1 === currentSimHop ? 700 : 400,
                           fontSize: 11,
                         }}>
@@ -786,16 +851,18 @@ export default function InteractiveGraph({
                           fontSize: 11,
                           fontWeight: isCurrentActive ? 700 : isCompleted ? 600 : 500,
                           backgroundColor: isCurrentActive
-                            ? 'rgba(37, 99, 235, 0.12)'
+                            ? (isDark ? 'rgba(59, 130, 246, 0.28)' : 'rgba(37, 99, 235, 0.12)')
                             : isCompleted
-                            ? 'rgba(241, 245, 249, 0.8)'
+                            ? (isDark ? 'rgba(30, 41, 59, 0.85)' : 'rgba(241, 245, 249, 0.8)')
                             : 'transparent',
                           color: isCurrentActive
-                            ? '#1d4ed8'
+                            ? (isDark ? '#60a5fa' : '#1d4ed8')
                             : isCompleted
-                            ? '#0f172a'
-                            : '#94a3b8',
-                          border: isCurrentActive ? '1px solid #93c5fd' : '1px solid transparent',
+                            ? (isDark ? '#f1f5f9' : '#0f172a')
+                            : (isDark ? '#64748b' : '#94a3b8'),
+                          border: isCurrentActive
+                            ? (isDark ? '1px solid #60a5fa' : '1px solid #93c5fd')
+                            : '1px solid transparent',
                           transition: 'all 0.2s ease',
                           whiteSpace: 'nowrap',
                         }}
@@ -815,10 +882,18 @@ export default function InteractiveGraph({
         className="graph-canvas-svg"
         viewBox="0 0 1080 870"
         preserveAspectRatio="xMidYMid meet"
-        style={{ width: '100%', height: '100%', display: 'block', background: '#fcfdfd' }}
+        style={{
+          width: '100%',
+          height: '100%',
+          display: 'block',
+          background: isDark
+            ? 'radial-gradient(ellipse at 50% 35%, #242938 0%, #191c26 55%, #11141b 100%)'
+            : '#fcfdfd',
+          transition: 'background 0.3s ease',
+        }}
       >
         <defs>
-          {/* Active Highlight Arrow (Solid Black) */}
+          {/* Active Highlight Arrow */}
           <marker
             id="arrow-active"
             viewBox="0 0 10 10"
@@ -828,7 +903,7 @@ export default function InteractiveGraph({
             markerHeight="7"
             orient="auto"
           >
-            <path d="M 0 1.5 L 9 5 L 0 8.5 z" fill="#09090b" />
+            <path d="M 0 1.5 L 9 5 L 0 8.5 z" fill={isDark ? '#38bdf8' : '#09090b'} />
           </marker>
 
           {/* Positive Transmission Arrow (Green) */}
@@ -857,9 +932,9 @@ export default function InteractiveGraph({
             <path d="M 0 1.5 L 9 5 L 0 8.5 z" fill="#f43f5e" />
           </marker>
 
-          {/* Light Grid Pattern (Subtle Graph Paper Texture) */}
+          {/* Precision Blueprint / Slate Grid Pattern */}
           <pattern id="graph-grid" width="28" height="28" patternUnits="userSpaceOnUse">
-            <path d="M 28 0 L 0 0 0 28" fill="none" stroke="#f1f5f9" strokeWidth="1" />
+            <path d="M 28 0 L 0 0 0 28" fill="none" stroke={isDark ? 'rgba(255, 255, 255, 0.055)' : '#f1f5f9'} strokeWidth="1" />
           </pattern>
 
           {/* Keyframe animations and graph motion styling */}
@@ -979,9 +1054,9 @@ export default function InteractiveGraph({
                     <path
                       d={pathData}
                       fill="none"
-                      stroke={isCurrentHop ? '#2563eb' : isPastHop ? '#38bdf8' : '#93c5fd'}
+                      stroke={isCurrentHop ? (isDark ? '#3b82f6' : '#2563eb') : isPastHop ? (isDark ? '#0ea5e9' : '#38bdf8') : (isDark ? '#1e3a8a' : '#93c5fd')}
                       strokeWidth={isCurrentHop ? 9 : 6.5}
-                      strokeOpacity={isCurrentHop ? 0.45 : isPastHop ? 0.28 : 0.16}
+                      strokeOpacity={isCurrentHop ? (isDark ? 0.70 : 0.45) : isPastHop ? (isDark ? 0.45 : 0.28) : (isDark ? 0.25 : 0.16)}
                       strokeLinecap="round"
                       style={{
                         pointerEvents: 'none',
@@ -1152,12 +1227,12 @@ export default function InteractiveGraph({
                   />
 
                   {/* High-visibility continuous traveling light stream along the connection */}
-                  <path
+                    <path
                     d={pathData}
                     fill="none"
                     stroke={strokeColor}
                     strokeWidth={strokeWidth + (isHighlighted ? 2.6 : 1.2)}
-                    strokeOpacity={isHighlighted ? 0.75 : 0.35}
+                    strokeOpacity={isHighlighted ? (isDark ? 0.95 : 0.75) : (isDark ? 0.55 : 0.35)}
                     strokeDasharray={isHighlighted ? '14 22' : '8 32'}
                     className="edge-traveling-dash"
                     style={{ pointerEvents: 'none' }}
@@ -1287,23 +1362,23 @@ export default function InteractiveGraph({
                 <circle
                   cx="0"
                   cy="0"
-                  r="16"
-                  fill="#2563eb"
-                  opacity="0.45"
+                  r="18"
+                  fill={isDark ? '#38bdf8' : '#2563eb'}
+                  opacity={isDark ? 0.55 : 0.45}
                   style={{ pointerEvents: 'none' }}
                 />
                 <circle
                   cx="0"
                   cy="0"
-                  r="6.5"
-                  fill="#0284c7"
+                  r="7"
+                  fill={isDark ? '#38bdf8' : '#0284c7'}
                   opacity="1.0"
                   style={{ pointerEvents: 'none' }}
                 />
                 <circle
                   cx="0"
                   cy="0"
-                  r="2.6"
+                  r="2.8"
                   fill="#ffffff"
                   opacity="1.0"
                   style={{ pointerEvents: 'none' }}
@@ -1320,9 +1395,10 @@ export default function InteractiveGraph({
               const isAnchor = !!node.isAnchor;
               const isHighlighted = isNodeHighlighted(node.id);
               const isHovered = hoveredNode === node.id;
-              const colors = getNodeColor(node.type);
+              const colors = getNodeColor(node);
 
-              const opacity = (hoveredNode || activeNodeId) && !isHighlighted ? 0.22 : 1.0;
+              // Fix: Only dim non-connected nodes during active hover focus. In normal view and during simulation, keep 1.0 opacity so node colors and labels never look dull
+              const opacity = hoveredNode ? (isHighlighted ? 1.0 : 0.35) : 1.0;
               const pipelineNodeIdx = causalPath.pathNodes.indexOf(node.id);
               const isPipelineNode = pipelineNodeIdx !== -1;
               const isPipelineStart = isPipelineNode && pipelineNodeIdx === 0;
@@ -1456,22 +1532,22 @@ export default function InteractiveGraph({
                     />
                   )}
 
-                  {/* Anchor Double Black Ring with Ambient Breathing Pulse */}
+                  {/* Anchor Double Ring with Ambient Breathing Pulse */}
                   {isAnchor && (
                     <>
                       <circle
                         r={22}
                         fill="none"
-                        stroke="#000000"
+                        stroke={isDark ? '#e2e8f0' : '#000000'}
                         strokeWidth="3.4"
                       />
                       <circle
                         className="node-anchor-ring"
                         r={27}
                         fill="none"
-                        stroke="#09090b"
+                        stroke={isDark ? '#94a3b8' : '#09090b'}
                         strokeWidth="1.6"
-                        opacity="0.55"
+                        opacity={isDark ? 0.70 : 0.55}
                         style={{
                           transformOrigin: '0px 0px',
                           animation: 'nodeAnchorPulse 2.6s ease-in-out infinite',
@@ -1510,7 +1586,7 @@ export default function InteractiveGraph({
                     <circle
                       r={21}
                       fill="none"
-                      stroke="#94a3b8"
+                      stroke={isDark ? '#475569' : '#94a3b8'}
                       strokeWidth="1.6"
                       strokeDasharray="3,3"
                     />
@@ -1521,30 +1597,40 @@ export default function InteractiveGraph({
                     <circle
                       r={22}
                       fill="none"
-                      stroke="#94a3b8"
+                      stroke={isDark ? '#475569' : '#94a3b8'}
                       strokeWidth="1.5"
                     />
                   )}
 
-                  {/* Primary Node Circle (Smooth Interactive Hover & Scale) */}
+                  {/* Primary Node Circle (Vibrant Confidence Colored Core) */}
                   <circle
                     className="node-primary-circle"
-                    r={isHovered ? 15.0 : isSelected ? 14.8 : isAnchor ? 14 : 14}
+                    r={isHovered ? 16.5 : isSelected ? 16.0 : isAnchor ? 15.5 : 15.0}
                     fill={isSelected ? '#0284c7' : colors.fill}
-                    stroke={isHovered ? '#4338ca' : isSelected ? '#0369a1' : colors.stroke}
-                    strokeWidth={isHovered ? 2.6 : isSelected ? 2.2 : 1.8}
+                    stroke={isHovered ? (isDark ? '#a5b4fc' : '#1e1b4b') : isSelected ? '#38bdf8' : colors.stroke}
+                    strokeWidth={isHovered ? 2.8 : isSelected ? 2.6 : 2.0}
                     strokeDasharray={node.isHypothesis && !isSelected ? '3,2' : undefined}
-                    opacity={node.isHypothesis && !isSelected ? 0.8 : 1}
+                    opacity={node.isHypothesis && !isSelected ? 0.85 : 1}
                     filter={
                       isHovered
-                        ? 'drop-shadow(0 4px 10px rgba(99, 102, 241, 0.35))'
+                        ? 'drop-shadow(0 4px 14px rgba(99, 102, 241, 0.65))'
                         : isSelected
-                        ? 'drop-shadow(0 2px 8px rgba(37, 99, 235, 0.35))'
-                        : 'drop-shadow(0 1px 3px rgba(0,0,0,0.06))'
+                        ? 'drop-shadow(0 3px 12px rgba(37, 99, 235, 0.60))'
+                        : `drop-shadow(0 2px 8px ${colors.glow})`
                     }
                     style={{
                       transition: 'r 0.22s cubic-bezier(0.16, 1, 0.3, 1), stroke 0.22s ease, stroke-width 0.22s ease',
                     }}
+                  />
+
+                  {/* Inner Specular Core Dot for professional crisp finish */}
+                  <circle
+                    cx="0"
+                    cy="0"
+                    r={node.isAnchor ? 5.0 : 4.2}
+                    fill="#ffffff"
+                    opacity={node.isAnchor ? 0.85 : 0.95}
+                    style={{ pointerEvents: 'none' }}
                   />
 
                   {/* Mixed Signals Badge (±) on bottom-right of node */}
@@ -1563,15 +1649,19 @@ export default function InteractiveGraph({
                     </g>
                   )}
 
-                  {/* Node Label (Below Circle) */}
+                  {/* Node Label (Crisp, High-Contrast with Text Halo) */}
                   <text
                     y={node.col === 4 ? 4 : 26}
-                    x={node.col === 4 ? 20 : 0}
+                    x={node.col === 4 ? 22 : 0}
                     textAnchor={node.col === 4 ? 'start' : 'middle'}
-                    fontSize={node.col === 4 ? '11' : '11.5'}
-                    fontWeight={isSelected || isAnchor || isHovered ? '700' : '500'}
-                    fill={isSelected || isAnchor ? '#09090b' : isHovered ? '#1e1b4b' : '#334155'}
-                    letterSpacing="-0.1px"
+                    fontSize={node.col === 4 ? '11.5' : '12'}
+                    fontWeight={isSelected || isAnchor || isHovered ? '800' : '700'}
+                    fill={isDark ? '#ffffff' : (isSelected || isAnchor ? '#09090b' : '#0f172a')}
+                    stroke={isDark ? '#191c26' : '#ffffff'}
+                    strokeWidth="4"
+                    strokeLinejoin="round"
+                    paintOrder="stroke fill"
+                    letterSpacing="-0.15px"
                     style={{
                       transition: 'fill 0.2s ease, font-weight 0.2s ease',
                       userSelect: 'none',
@@ -1579,6 +1669,64 @@ export default function InteractiveGraph({
                   >
                     {node.label}
                   </text>
+
+                  {/* Node Confidence Pill Tag */}
+                  {node.confidence != null && !node.isAnchor && (
+                    <g
+                      transform={node.col === 4 ? 'translate(22, 13)' : 'translate(0, 35)'}
+                      style={{ pointerEvents: 'none' }}
+                    >
+                      <rect
+                        x={node.col === 4 ? 0 : -19}
+                        y="0"
+                        width="38"
+                        height="13"
+                        rx="6.5"
+                        fill={colors.badgeBg}
+                        stroke={colors.badgeBorder}
+                        strokeWidth="1"
+                      />
+                      <text
+                        x={node.col === 4 ? 19 : 0}
+                        y="9.5"
+                        textAnchor="middle"
+                        fontSize="8.5"
+                        fontWeight="800"
+                        fill={colors.badgeText}
+                      >
+                        {Math.round(node.confidence * 100)}%
+                      </text>
+                    </g>
+                  )}
+
+                  {node.isAnchor && (
+                    <g
+                      transform={node.col === 4 ? 'translate(22, 13)' : 'translate(0, 35)'}
+                      style={{ pointerEvents: 'none' }}
+                    >
+                      <rect
+                        x={node.col === 4 ? 0 : -20}
+                        y="0"
+                        width="40"
+                        height="13"
+                        rx="6.5"
+                        fill={isDark ? '#1e293b' : '#0f172a'}
+                        stroke={isDark ? '#475569' : '#000000'}
+                        strokeWidth="1"
+                      />
+                      <text
+                        x={node.col === 4 ? 20 : 0}
+                        y="9.5"
+                        textAnchor="middle"
+                        fontSize="8"
+                        fontWeight="800"
+                        fill="#ffffff"
+                        letterSpacing="0.04em"
+                      >
+                        FACT
+                      </text>
+                    </g>
+                  )}
                 </g>
               );
             })}
@@ -1623,112 +1771,91 @@ export default function InteractiveGraph({
         </div>
       )}
 
-      {/* ===================== EVIDENCE TIERS LEGEND ===================== */}
+      {/* ===================== EVIDENCE TIERS & CONFIDENCE LEGEND ===================== */}
       <div
         className="evidence-tiers-legend"
         style={{
           position: 'absolute',
-          bottom: 24,
-          left: 24,
-          background: 'rgba(255, 255, 255, 0.78)',
+          bottom: 20,
+          left: 20,
+          background: isDark ? 'rgba(25, 29, 39, 0.94)' : 'rgba(255, 255, 255, 0.90)',
           backdropFilter: 'blur(16px) saturate(180%)',
           WebkitBackdropFilter: 'blur(16px) saturate(180%)',
-          border: '1px solid rgba(255, 255, 255, 0.85)',
-          borderRadius: 14,
-          padding: '14px 18px',
-          boxShadow: '0 8px 32px rgba(15, 23, 42, 0.08), inset 0 1px 0 rgba(255, 255, 255, 0.95)',
+          border: isDark ? '1px solid rgba(60, 67, 85, 0.8)' : '1px solid rgba(226, 232, 240, 0.95)',
+          borderRadius: 12,
+          padding: legendCollapsed ? '8px 12px' : '12px 16px',
+          boxShadow: isDark ? '0 8px 24px rgba(0, 0, 0, 0.45)' : '0 8px 24px rgba(15, 23, 42, 0.08)',
           fontFamily: 'inherit',
-          zIndex: 10,
-          minWidth: 260,
+          zIndex: 15,
+          minWidth: legendCollapsed ? 'auto' : 240,
+          transition: 'all 0.2s ease',
         }}
       >
         <div
           style={{
-            fontSize: 10,
-            fontWeight: 700,
-            letterSpacing: '0.8px',
-            color: '#94a3b8',
-            marginBottom: 10,
-            textTransform: 'uppercase',
+            display: 'flex',
+            justifyContent: 'space-between',
+            alignItems: 'center',
+            marginBottom: legendCollapsed ? 0 : 8,
+            cursor: 'pointer',
           }}
+          onClick={() => setLegendCollapsed(!legendCollapsed)}
         >
-          EVIDENCE TIERS LEGEND
-        </div>
-
-        <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 8, fontSize: 12, color: '#334155' }}>
-          <div
+          <span
             style={{
-              width: 14,
-              height: 14,
-              borderRadius: '50%',
-              border: '2.5px solid #000000',
-              background: 'transparent',
-              flexShrink: 0,
-            }}
-          />
-          <span>Observed in Article (Anchor Ring)</span>
-        </div>
-
-        <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 8, fontSize: 12, color: '#334155' }}>
-          <div style={{ display: 'flex', alignItems: 'center', width: 16, height: 8 }}>
-            <div style={{ width: 12, height: 2.5, background: '#34d399' }} />
-            <div
-              style={{
-                width: 0,
-                height: 0,
-                borderTop: '3.5px solid transparent',
-                borderBottom: '3.5px solid transparent',
-                borderLeft: '5px solid #34d399',
-              }}
-            />
-          </div>
-          <span>Positive Transmission (+)</span>
-        </div>
-
-        <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 8, fontSize: 12, color: '#334155' }}>
-          <div style={{ display: 'flex', alignItems: 'center', width: 16, height: 8 }}>
-            <div style={{ width: 12, height: 2.5, background: '#f43f5e' }} />
-            <div
-              style={{
-                width: 0,
-                height: 0,
-                borderTop: '3.5px solid transparent',
-                borderBottom: '3.5px solid transparent',
-                borderLeft: '5px solid #f43f5e',
-              }}
-            />
-          </div>
-          <span>Negative Transmission (-)</span>
-        </div>
-
-        <div style={{ display: 'flex', alignItems: 'center', gap: 10, fontSize: 12, color: '#334155' }}>
-          <div
-            style={{
-              width: 15,
-              height: 15,
-              borderRadius: '50%',
-              background: '#f59e0b',
-              color: '#ffffff',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
               fontSize: 10,
               fontWeight: 700,
-              flexShrink: 0,
+              letterSpacing: '0.8px',
+              color: isDark ? '#94a3b8' : '#64748b',
+              textTransform: 'uppercase',
             }}
           >
-            ±
-          </div>
-          <span>Mixed Signals Flagged (≥30%)</span>
+            Graph Legend & Confidence
+          </span>
+          <span style={{ fontSize: 11, color: isDark ? '#cbd5e1' : '#94a3b8', fontWeight: 600, marginLeft: 8 }}>
+            {legendCollapsed ? '▶ Show' : '▼ Hide'}
+          </span>
         </div>
 
-        <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginTop: 8, fontSize: 12, color: '#334155' }}>
-          <div style={{ width: 14, height: 14, borderRadius: '50%', border: '2px dashed #64748b', flexShrink: 0 }} />
-          <span>Hypothesis: possible driver / context (not in the article)</span>
-        </div>
+        {!legendCollapsed && (
+          <div>
+            {/* Confidence Spectrum */}
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 5, fontSize: 11.5, color: isDark ? '#f1f5f9' : '#1e293b' }}>
+              <div style={{ width: 11, height: 11, borderRadius: '50%', background: '#10b981', border: isDark ? '1.5px solid #34d399' : '1.5px solid #047857', flexShrink: 0 }} />
+              <span>High Confidence (≥ 70%)</span>
+            </div>
+
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 5, fontSize: 11.5, color: isDark ? '#f1f5f9' : '#1e293b' }}>
+              <div style={{ width: 11, height: 11, borderRadius: '50%', background: '#3b82f6', border: isDark ? '1.5px solid #60a5fa' : '1.5px solid #1d4ed8', flexShrink: 0 }} />
+              <span>Moderate Confidence (45% – 69%)</span>
+            </div>
+
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 7, fontSize: 11.5, color: isDark ? '#f1f5f9' : '#1e293b' }}>
+              <div style={{ width: 11, height: 11, borderRadius: '50%', background: '#f59e0b', border: isDark ? '1.5px solid #fbbf24' : '1.5px solid #b45309', flexShrink: 0 }} />
+              <span>Lower Confidence (&lt; 45%)</span>
+            </div>
+
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 7, fontSize: 11.5, color: isDark ? '#f1f5f9' : '#1e293b' }}>
+              <div style={{ width: 11, height: 11, borderRadius: '50%', background: isDark ? '#262c3a' : '#0f172a', border: isDark ? '1.5px solid #94a3b8' : '1.5px solid #000', flexShrink: 0 }} />
+              <span>Observed Fact (100% Anchor)</span>
+            </div>
+
+            <div style={{ height: 1, background: isDark ? '#373e4f' : '#f1f5f9', margin: '6px 0' }} />
+
+            {/* Edge Indicators */}
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4, fontSize: 11, color: isDark ? '#cbd5e1' : '#475569' }}>
+              <div style={{ width: 14, height: 2.5, background: '#34d399' }} />
+              <span>Positive Shock (+)</span>
+            </div>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 11, color: isDark ? '#cbd5e1' : '#475569' }}>
+              <div style={{ width: 14, height: 2.5, background: '#f43f5e' }} />
+              <span>Negative Shock (−)</span>
+            </div>
+          </div>
+        )}
       </div>
 
-      {/* ===================== ZOOM & FIT CONTROLS (Glassmorphic) ===================== */}
+      {/* ===================== ZOOM, FIT & THEME CONTROLS (Glassmorphic) ===================== */}
       <div
         className="graph-zoom-controls"
         style={{
@@ -1738,16 +1865,37 @@ export default function InteractiveGraph({
           display: 'flex',
           flexDirection: 'column',
           gap: 6,
-          background: 'rgba(255, 255, 255, 0.78)',
+          background: isDark ? 'rgba(25, 29, 39, 0.92)' : 'rgba(255, 255, 255, 0.78)',
           backdropFilter: 'blur(16px) saturate(180%)',
           WebkitBackdropFilter: 'blur(16px) saturate(180%)',
-          border: '1px solid rgba(255, 255, 255, 0.85)',
+          border: isDark ? '1px solid rgba(60, 67, 85, 0.8)' : '1px solid rgba(255, 255, 255, 0.85)',
           borderRadius: 12,
           padding: 6,
-          boxShadow: '0 8px 24px rgba(15, 23, 42, 0.08), inset 0 1px 0 rgba(255, 255, 255, 0.95)',
+          boxShadow: isDark ? '0 8px 24px rgba(0, 0, 0, 0.40)' : '0 8px 24px rgba(15, 23, 42, 0.08), inset 0 1px 0 rgba(255, 255, 255, 0.95)',
           zIndex: 10,
         }}
       >
+        {/* Canvas Theme Toggle Button */}
+        <button
+          className="graph-zoom-btn"
+          onClick={() => setCanvasTheme(isDark ? 'light' : 'dark')}
+          title={isDark ? 'Switch to Light Canvas' : 'Switch to Slate Gradient Canvas'}
+          style={{
+            width: 32,
+            height: 32,
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            background: isDark ? 'rgba(38, 44, 58, 0.9)' : 'rgba(241, 245, 249, 0.9)',
+            border: 'none',
+            cursor: 'pointer',
+            borderRadius: 6,
+            color: isDark ? '#fbbf24' : '#6366f1',
+          }}
+        >
+          {isDark ? <Sun size={15} /> : <Moon size={15} />}
+        </button>
+
         <button
           className="graph-zoom-btn"
           onClick={handleZoomIn}
@@ -1762,7 +1910,7 @@ export default function InteractiveGraph({
             border: 'none',
             cursor: 'pointer',
             borderRadius: 6,
-            color: '#334155',
+            color: isDark ? '#cbd5e1' : '#334155',
           }}
         >
           <ZoomIn size={16} />
@@ -1781,7 +1929,7 @@ export default function InteractiveGraph({
             border: 'none',
             cursor: 'pointer',
             borderRadius: 6,
-            color: '#334155',
+            color: isDark ? '#cbd5e1' : '#334155',
           }}
         >
           <ZoomOut size={16} />
@@ -1800,7 +1948,7 @@ export default function InteractiveGraph({
             border: 'none',
             cursor: 'pointer',
             borderRadius: 6,
-            color: '#334155',
+            color: isDark ? '#cbd5e1' : '#334155',
           }}
         >
           <Maximize2 size={15} />

@@ -21,6 +21,7 @@ export default function ChatInterface({
   onOpenDashboard,
   onSelectEventText,
   onAnalysisComplete,
+  isAnalyzing = false,
 }) {
   const [internalMessages, setInternalMessages] = useState([]);
   const messages = externalMessages !== undefined ? externalMessages : internalMessages;
@@ -28,6 +29,7 @@ export default function ChatInterface({
 
   const [inputText, setInputText] = useState('');
   const [loading, setLoading] = useState(false);
+  const isLoading = loading || isAnalyzing;
   const messagesEndRef = useRef(null);
   const textareaRef = useRef(null);
 
@@ -40,7 +42,7 @@ export default function ChatInterface({
 
   useEffect(() => {
     scrollToBottom();
-  }, [messages, loading]);
+  }, [messages, isLoading]);
 
   useEffect(() => {
     if (textareaRef.current) {
@@ -51,7 +53,7 @@ export default function ChatInterface({
 
   const handleSend = async (textToSend) => {
     const text = textToSend || inputText;
-    if (!text.trim() || loading) return;
+    if (!text.trim() || isLoading) return;
 
     const userMsgId = `usr-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`;
     const userMsg = { id: userMsgId, sender: 'user', text };
@@ -183,11 +185,6 @@ export default function ChatInterface({
                         <strong>Background (model knowledge, not from the article):</strong> {msg.hypothesis.background}
                       </p>
                     )}
-                    {msg.hypothesis && msg.hypothesis.themes.length > 0 && (
-                      <p style={{ fontSize: 11.5, color: '#92400e' }}>
-                        Hypothesis: nothing was stated that the graph knows, so the model suggested themes this story could touch ({msg.hypothesis.themes.map((t) => `${t.node.replace(/_/g, ' ')} ${t.direction > 0 ? '↑' : '↓'}`).join(', ')}). They are guesses, drawn dashed, and the graph did not learn from them.
-                      </p>
-                    )}
                     {msg.context && (
                       <p style={{ fontSize: 11.5, color: '#92400e' }}>
                         Thin graph: {msg.context.reason}
@@ -293,7 +290,7 @@ export default function ChatInterface({
             )
           )}
 
-          {loading && (
+          {isLoading && (
             <div className="chat-message-row">
               <div className="chat-msg-avatar ai">
                 <img src="/image.png" alt="Apex Zenith" className="chat-ai-avatar-img" />

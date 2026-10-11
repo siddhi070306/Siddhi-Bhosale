@@ -60,7 +60,7 @@ export default function CausalChainWalkthrough({
   });
 
   return (
-    <div className="card" style={{ marginBottom: 24, padding: 20, border: '1px solid #e4e4e7', background: '#ffffff' }}>
+    <div className="card" style={{ marginBottom: 32, padding: 22, border: '1px solid #e4e4e7', borderRadius: 12, background: '#ffffff', boxShadow: '0 4px 16px rgba(0, 0, 0, 0.06)' }}>
       {/* Header */}
       <div
         style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', cursor: 'pointer' }}
@@ -259,9 +259,13 @@ export default function CausalChainWalkthrough({
                     )}
 
                     {/* Data check on this link (real series; flagged when simulated) */}
-                    {stepObj && stepObj.validation && stepObj.validation.verdict && (
+                    {stepObj &&
+                      stepObj.validation &&
+                      stepObj.validation.verdict &&
+                      stepObj.validation.verdict !== 'no_data' &&
+                      stepObj.validation.verdict !== 'none' && (
                       <div style={{ fontSize: 11.5, color: '#71717a', marginTop: 5 }}>
-                        Data check: <strong>{stepObj.validation.verdict}</strong>
+                        Data check: <strong>{stepObj.validation.verdict.replace(/_/g, ' ')}</strong>
                         {typeof stepObj.validation.corr === 'number' && ` · r = ${stepObj.validation.corr}`}
                         {stepObj.validation.n ? ` over ${stepObj.validation.n} days` : ''}
                         {stepObj.validation.simulated ? ' · simulated data (does not change confidence)' : ''}

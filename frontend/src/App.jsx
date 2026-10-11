@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { RefreshCw } from 'lucide-react';
 import Layout from './components/layout/Layout';
 import ChatInterface from './pages/ChatInterface';
 import MarketIntelligence from './pages/MarketIntelligence';
@@ -79,6 +80,8 @@ export default function App() {
   const [sessions, setSessions] = useState(() => getAllSessions());
   const [activeSessionId, setActiveSessionIdState] = useState(() => getActiveSessionId());
   const [library, setLibrary] = useState({ total: 0, items: [] }); // graphs saved on the backend (analysis library)
+  const [isAnalyzingEvent, setIsAnalyzingEvent] = useState(false);
+  const [analyzingEventInfo, setAnalyzingEventInfo] = useState(null);
 
   const refreshLibrary = () =>
     api
@@ -293,20 +296,35 @@ export default function App() {
 
   const handleSelectEvent = async (eventText, source, link, title) => {
     setCurrentEventText(eventText);
-    setNotice('Analysing selected event…');
+    setIsAnalyzingEvent(true);
+    setAnalyzingEventInfo({ text: eventText, title: title || eventText });
+    setNotice(null);
+
+    // Provide instant feedback: record user prompt in chat and transition immediately to Knowledge Graph Generator
+    const userMsgId = `usr-${Date.now()}`;
+    const displayText = title || eventText;
+    setMessages((prev) => [...prev, { id: userMsgId, sender: 'user', text: displayText }]);
+    setActiveTab('chat');
+
     try {
       const res = await api.analyze(eventText, undefined, source, link, title);
       // a headline analysis is a new chat: never overwrite the chat that happened to be open
       setActiveSessionIdState(null);
       setActiveSessionId(null);
       handleAnalysisComplete(eventText, res);
-      setMessages([
-        { id: `usr-${Date.now()}`, sender: 'user', text: eventText },
+      setMessages((prev) => [
+        ...prev,
         buildAiMessage(eventText, res),
       ]);
-      setActiveTab('chat');
     } catch (e) {
       setNotice(`Analysis failed: ${e.message}`);
+      setMessages((prev) => [
+        ...prev,
+        { id: `err-${Date.now()}`, sender: 'ai', error: e.message },
+      ]);
+    } finally {
+      setIsAnalyzingEvent(false);
+      setAnalyzingEventInfo(null);
     }
   };
 
@@ -319,6 +337,8 @@ export default function App() {
             analysis={analysis}
             onSelectEvent={handleSelectEvent}
             onNavigateToTab={(tabId, assetId, mode) => setActiveTab(tabId, assetId, mode)}
+            isAnalyzingEvent={isAnalyzingEvent}
+            analyzingEventInfo={analyzingEventInfo}
           />
         );
       case 'event-analysis':
@@ -341,6 +361,7 @@ export default function App() {
             onSelectEvent={handleSelectEvent}
             onReanalyze={handleReanalyze}
             onNavigateToTab={(tabId, assetId, mode) => setActiveTab(tabId, assetId, mode)}
+            isAnalyzing={isAnalyzingEvent}
           />
         );
       case 'asset-impact':
@@ -404,6 +425,7 @@ export default function App() {
             onSelectEventText={(text) => setCurrentEventText(text)}
             onAnalysisComplete={handleAnalysisComplete}
             onNewChat={handleNewChat}
+            isAnalyzing={isAnalyzingEvent}
           />
         );
     }
@@ -433,6 +455,37 @@ export default function App() {
       {notice && (
         <div className="card" style={{ marginBottom: 16, padding: '10px 16px', fontSize: 13, color: notice.startsWith('Analysis failed') ? '#991b1b' : '#27272a' }}>
           {notice}
+        </div>
+      )}
+      {isAnalyzingEvent && (
+        <div
+          className="card"
+          style={{
+            marginBottom: 16,
+            padding: '12px 18px',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            gap: 12,
+            borderLeft: '4px solid #18181b',
+            backgroundColor: '#ffffff',
+            boxShadow: '0 2px 8px rgba(0, 0, 0, 0.04)',
+          }}
+        >
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+            <RefreshCw size={15} className="spinning" color="#18181b" />
+            <div>
+              <div style={{ fontSize: 13, fontWeight: 600, color: '#18181b' }}>
+                Constructing Knowledge Graph…
+              </div>
+              <div style={{ fontSize: 12, color: '#71717a' }}>
+                Tracing multi-hop causal transmission paths for “{analyzingEventInfo?.title || analyzingEventInfo?.text}”
+              </div>
+            </div>
+          </div>
+          <span className="badge badge-black" style={{ fontSize: 11, padding: '3px 8px' }}>
+            Processing
+          </span>
         </div>
       )}
       {renderPage()}

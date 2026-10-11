@@ -210,10 +210,11 @@ export function toGraphView(res) {
   const out = [];
   byCol.forEach((arr, c) => {
     arr.sort((a, b) => (b.confidence || 0) - (a.confidence || 0));
-    const top = 80;
-    const bottom = 800;
-    const step = arr.length > 1 ? Math.min(70, (bottom - top) / (arr.length - 1)) : 0;
-    const start = arr.length > 1 ? 440 - (step * (arr.length - 1)) / 2 : 440;
+    const minStep = 56;
+    const maxStep = 68;
+    const step = arr.length > 1 ? Math.min(maxStep, Math.max(minStep, 600 / (arr.length - 1))) : 0;
+    const totalSpan = step * (arr.length - 1);
+    const start = Math.max(100, 430 - totalSpan / 2);
     arr.forEach((n, i) => {
       out.push({
         id: n.id,

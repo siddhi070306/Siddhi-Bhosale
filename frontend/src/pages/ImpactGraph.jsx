@@ -92,7 +92,7 @@ function EmptyState({ onNavigateToChat, onSelectEvent }) {
   );
 }
 
-export default function ImpactGraph({ analysis, onNavigateToChat, onSelectEvent, onReanalyze, onNavigateToTab }) {
+export default function ImpactGraph({ analysis, onNavigateToChat, onSelectEvent, onReanalyze, onNavigateToTab, isAnalyzing = false }) {
   const graphData = (analysis && analysis.graphView) || null;
   const [activeTab, setActiveTab] = useState('pathways');
   // a context graph opens with nothing selected so the whole picture shows (selecting a node dims the rest)
@@ -282,6 +282,24 @@ export default function ImpactGraph({ analysis, onNavigateToChat, onSelectEvent,
       </div>
     );
   }
+  if (!graphData && isAnalyzing) {
+    return (
+      <div className="card" style={{ padding: '48px 28px', maxWidth: 680, margin: '32px auto', textAlign: 'center' }}>
+        <div style={{ display: 'inline-flex', padding: 12, borderRadius: '50%', background: '#f4f4f5', marginBottom: 14 }}>
+          <RefreshCw size={22} className="spinning" color="#18181b" />
+        </div>
+        <div style={{ fontSize: 18, fontWeight: 700, color: '#09090b', marginBottom: 6 }}>
+          Constructing Knowledge Graph…
+        </div>
+        <p style={{ fontSize: 13.5, color: '#71717a', maxWidth: 460, margin: '0 auto 16px', lineHeight: 1.5 }}>
+          Extracting entities, checking quotes against article text, and tracing multi-hop causal transmission paths.
+        </p>
+        <div className="minimal-progress-bar">
+          <div className="minimal-progress-fill" />
+        </div>
+      </div>
+    );
+  }
   if (!graphData) return <EmptyState onNavigateToChat={onNavigateToChat} onSelectEvent={onSelectEvent} />;
 
   const filteredNodes = searchQuery
@@ -317,6 +335,14 @@ export default function ImpactGraph({ analysis, onNavigateToChat, onSelectEvent,
 
   return (
     <div>
+      {isAnalyzing && (
+        <div style={{ display: 'flex', justifyContent: 'center', marginBottom: 12 }}>
+          <div className="graph-analyzing-pill">
+            <RefreshCw size={13} className="spinning" />
+            <span>Updating Knowledge Graph for new event…</span>
+          </div>
+        </div>
+      )}
       {/* Page Header */}
       <div className="page-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: 16 }}>
         <div>
@@ -411,18 +437,11 @@ export default function ImpactGraph({ analysis, onNavigateToChat, onSelectEvent,
         </div>
       )}
 
-      {/* Hypothesis / thin-graph notices */}
+      {/* Context-graph notice (story names entities but states no move) */}
       {analysis.contextOnly && (
         <div className="card" style={{ marginBottom: 12, padding: '10px 16px', fontSize: 12.5, color: '#1e3a8a', background: '#eff6ff' }}>
           <strong>Context graph, no impact claimed:</strong> {analysis.contextOnly.reason}
           <div style={{ marginTop: 4, color: '#334155' }}>{analysis.summary}</div>
-        </div>
-      )}
-      {analysis.hypothesis && analysis.hypothesis.themes.length > 0 && (
-        <div className="card" style={{ marginBottom: 12, padding: '10px 16px', fontSize: 12.5, color: '#92400e', background: '#fffbeb' }}>
-          <strong>Hypothesis, not from the article:</strong> no stated event matched the graph, so the model suggested{' '}
-          {analysis.hypothesis.themes.map((t) => `${t.node.replace(/_/g, ' ')} ${t.direction > 0 ? '↑' : '↓'}`).join(', ')} as themes this story could touch.
-          Everything below is built from those guesses (dashed) and the graph did not learn from them.
         </div>
       )}
       {analysis.context && (
@@ -457,7 +476,7 @@ export default function ImpactGraph({ analysis, onNavigateToChat, onSelectEvent,
       {/* Main Graph Explorer Split Layout */}
       <div className="graph-explorer-container">
         {/* Left: Interactive Canvas with On-Canvas Floating Sensitivity Drawer */}
-        <div style={{ position: 'relative', width: '100%', height: '100%', minWidth: 0 }}>
+        <div style={{ position: 'relative', width: '100%', height: '100%', minWidth: 0, minHeight: 0, overflow: 'hidden' }}>
           <InteractiveGraph
             data={currentGraphData}
             selectedNode={selectedNode}
@@ -480,12 +499,12 @@ export default function ImpactGraph({ analysis, onNavigateToChat, onSelectEvent,
                 bottom: 20,
                 left: '50%',
                 transform: 'translateX(-50%)',
-                background: 'rgba(255, 255, 255, 0.94)',
-                backdropFilter: 'blur(12px)',
-                WebkitBackdropFilter: 'blur(12px)',
-                border: '1px solid #bfdbfe',
+                background: 'rgba(25, 29, 39, 0.95)',
+                backdropFilter: 'blur(16px)',
+                WebkitBackdropFilter: 'blur(16px)',
+                border: '1px solid rgba(60, 67, 85, 0.8)',
                 borderRadius: 12,
-                boxShadow: '0 10px 30px rgba(0, 0, 0, 0.12)',
+                boxShadow: '0 12px 32px rgba(0, 0, 0, 0.35)',
                 padding: '10px 16px',
                 zIndex: 35,
                 display: 'flex',
@@ -496,8 +515,8 @@ export default function ImpactGraph({ analysis, onNavigateToChat, onSelectEvent,
               }}
             >
               <div style={{ display: 'flex', alignItems: 'center', gap: 6, minWidth: 140 }}>
-                <Sliders size={15} color="#2563eb" />
-                <span style={{ fontSize: 12, fontWeight: 700, color: '#0f172a' }}>
+                <Sliders size={15} color="#60a5fa" />
+                <span style={{ fontSize: 12, fontWeight: 700, color: '#f8fafc' }}>
                   {selectedEdge.from?.replace(/_/g, ' ').toUpperCase()} → {selectedEdge.to?.replace(/_/g, ' ').toUpperCase()}
                 </span>
               </div>
@@ -1042,7 +1061,7 @@ export default function ImpactGraph({ analysis, onNavigateToChat, onSelectEvent,
 
       {/* Feature 1: Causal Transmission Walkthrough */}
       {analysis && analysis.raw && analysis.raw.paths && analysis.raw.paths.length > 0 && (
-        <div style={{ marginTop: 20 }}>
+        <div style={{ marginTop: 64, marginBottom: 40, clear: 'both', position: 'relative', zIndex: 1 }}>
           <CausalChainWalkthrough
             paths={analysis.raw.paths}
             title="Step-by-Step Causal Transmission Walkthrough"
