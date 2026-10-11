@@ -643,6 +643,12 @@ export default function ImpactGraph({ analysis, onNavigateToChat, onSelectEvent,
                   Top Propagation Paths
                 </div>
 
+                {graphData.contextOnly && graphData.pathways.length > 0 && (
+                  <p style={{ fontSize: 12.5, color: '#1e3a8a', lineHeight: 1.5 }}>
+                    Conditional paths: the story states no move, so these show how the named companies are usually affected if a
+                    driver moves. No impact is claimed.
+                  </p>
+                )}
                 {graphData.contextOnly && graphData.pathways.length === 0 && (
                   <p style={{ fontSize: 12.5, color: '#52525b', lineHeight: 1.5 }}>
                     No propagation paths: the story states no price move or policy decision, so nothing is propagated. The graph shows
@@ -1064,7 +1070,7 @@ export default function ImpactGraph({ analysis, onNavigateToChat, onSelectEvent,
         <div style={{ marginTop: 64, marginBottom: 40, clear: 'both', position: 'relative', zIndex: 1 }}>
           <CausalChainWalkthrough
             paths={analysis.raw.paths}
-            title="Step-by-Step Causal Transmission Walkthrough"
+            title={analysis.contextOnly ? 'Step-by-Step Walkthrough of the Conditional Chains (no move stated)' : 'Step-by-Step Causal Transmission Walkthrough'}
           />
         </div>
       )}

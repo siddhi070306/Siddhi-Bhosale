@@ -50,6 +50,17 @@ def _named(g, n):
     return ("the " if g.nodes[n]["type"] == "index" or lab.startswith("US ") else "") + lab
 
 
+def _lc_first(g, s):
+    """Lower-case the first letter for use mid-sentence, unless the sentence starts with a name ("HDFC Bank is ...", "Infosys
+    ...", "OPEC+ ...")."""
+    if not s:
+        return s
+    first = s.split()[0].strip(",.;:")
+    if first[1:2].isupper() or any(d.get("label", "").startswith(first) for _, d in g.nodes(data=True)):
+        return s
+    return s[0].lower() + s[1:]
+
+
 def _quote(s, n=180):
     """The sentence in quotation marks, ending with its own full stop inside them (so no '.".' doubling)."""
     s = " ".join((s or "").split())
@@ -75,7 +86,7 @@ def explain_link(kg, u, v):
     if relation and len(mech) < 30:            # "Sector member" says less than the relation does
         why, relation = "Why: " + relation[0].lower() + relation[1:] if relation.startswith("The ") else "Why: " + relation, None
     else:
-        why = "Why: %s." % (mech[0].lower() + mech[1:] if mech else "no reason is recorded for this link")
+        why = "Why: %s." % (_lc_first(g, mech) if mech else "no reason is recorded for this link")
 
     # how the relationship was identified
     ident = []
@@ -194,10 +205,11 @@ _WEAK_REASON = {
 }
 
 
-def explain_chain(kg, path, source_event=None, observed=None):
+def explain_chain(kg, path, source_event=None, observed=None, conditional=False):
     """One impact chain, explained. `path` is an explained path from the analysis (nodes, steps with the direction each node
     takes, score, horizon); `source_event` the event it starts from; `observed` maps nodes the article reports moving to the
-    direction it reports, so a chain that ends on one can say whether it agrees."""
+    direction it reports, so a chain that ends on one can say whether it agrees. conditional=True: the story states no move, and
+    the chain shows how its end is usually affected if the first node rises."""
     g = kg.g
     steps_in = path.get("steps") or []
     if not steps_in:
@@ -208,7 +220,10 @@ def explain_chain(kg, path, source_event=None, observed=None):
     ev = source_event or {}
     status, quote = ev.get("status"), ev.get("quote") or ""
     start_label = ev.get("label") or _label(g, path["nodes"][0])
-    if status == "observed":
+    if conditional:
+        opening = ("The article does not say that %s moved. This chain shows how the effect usually travels if it does: "
+                   "it assumes %s." % (_target(g, path["nodes"][0]), _move_in(g, path["nodes"][0], dirs[0])))
+    elif status == "observed":
         opening = "The article reports %s%s." % (start_label, " (%s)" % _quote(quote, 160) if quote else "")
     elif status == "expected":
         opening = "The article expects %s, stated as a possibility rather than as something that happened%s." % (
@@ -229,7 +244,7 @@ def explain_chain(kg, path, source_event=None, observed=None):
         to_word = "up" if dirs[i + 1] > 0 else "down"
         sentence = "%s pushes %s %s" % (_move_in(g, u, dirs[i]), _target(g, v), to_word)
         told = "%s pushes %s %s" % (_move_in(g, u, dirs[i], "a" if i == 0 else "that"), _target(g, v), to_word)
-        clauses.append(("and " if i == last and i else "") + told + ", because " + why[0].lower() + why[1:])
+        clauses.append(("and " if i == last and i else "") + told + ", because " + _lc_first(g, why))
         discount = 1.0 if i == 0 else s.get("decay", 1.0)
         weight = s["effective"] * discount
         quotes = [x for x in (s.get("evidence") or []) if x]
@@ -287,7 +302,13 @@ def explain_chain(kg, path, source_event=None, observed=None):
             weakest["from_label"], weakest["to_label"], weakest["weight"], why_weak)
 
     end, end_dir = path["nodes"][-1], dirs[-1]
-    if observed and end in observed:
+    if conditional:
+        days = round(path.get("horizon_days") or 0)
+        conclusion = ("So if there were %s, the graph would expect %s to move %s%s. This is conditional: the article states no "
+                      "such move, so no impact is claimed." % (_move_in(g, path["nodes"][0], dirs[0]), _target(g, end),
+                                                               "up" if end_dir > 0 else "down",
+                                                               " on the same day" if days == 0 else " within about %d days" % days))
+    elif observed and end in observed:
         conclusion = "The article itself reports %s moving %s, and this chain %s." % (
             _target(g, end), "up" if observed[end] > 0 else "down",
             "agrees with it" if observed[end] == end_dir else "points the other way, so the graph and the article disagree here")
@@ -300,4 +321,5 @@ def explain_chain(kg, path, source_event=None, observed=None):
             "evidence_counts": {"steps": n, "analyst": analyst, "article": article, "llm": llm, "user": user,
                                 "data_agrees": agree, "data_disagrees": disagree, "data_too_weak": weak, "unchecked": unchecked},
             "arithmetic": arithmetic, "weakest": weakest_sentence, "conclusion": conclusion,
-            "score": round(path["score"], 3), "score_band": _band(path["score"]), "horizon_days": path.get("horizon_days")}
+            "score": round(path["score"], 3), "score_band": _band(path["score"]), "horizon_days": path.get("horizon_days"),
+            "conditional": bool(conditional)}

@@ -103,7 +103,8 @@ def node_card(kg, n):
     if ins:
         bits.append("Strongest incoming links: " + ", ".join("%s (%s%.2f)" % (label(g, u), "+" if g[u][v]["sign"] > 0 else "-",
                                                                             kg.eff_strength(u, v)) for u, v in ins) + ".")
-    brief = "%s is a %s in tier %d (%s)" % (p["label"], p["type"], p["level"], p["tier_name"])
+    kind = p["type"].replace("_", " ")
+    brief = "%s is %s %s in tier %d (%s)" % (p["label"], "an" if kind[0] in "aeiou" else "a", kind, p["level"], p["tier_name"])
     return {"id": "n:%s" % n, "kind": "node", "tiers": [p["tier"]] if p["tier"] else [], "refs": [n], "title": p["label"],
             "text": " ".join(bits), "brief": brief}
 
@@ -148,8 +149,11 @@ def path_card(kg, p, start_dir=1):
         parts.append(label(g, v) + " " + ARROW[cur])
         mech.append("%s → %s: %s" % (label(g, u), label(g, v), g[u][v]["mechanism"].rstrip(".")))
     layers = " → ".join((hierarchy.layer_of(g.nodes[n]["type"]) or {"id": "?"})["id"] for n in p["nodes"])
-    text = ("If %s rises: %s. Path plausibility %.2f (a 0-1 score, not a probability or a price move), %d hops, typical lag %d "
-            "days, tiers %s. Steps: %s.") % (label(g, p["nodes"][0]), " → ".join(parts), p["score"], len(p["edges"]), p["lag"],
+    first = p["nodes"][0]
+    move = (("turns hawkish" if start_dir > 0 else "turns dovish") if g.nodes[first]["type"] == "institution" else
+            ("rises" if start_dir > 0 else "falls"))
+    text = ("If %s %s: %s. Path plausibility %.2f (a 0-1 score, not a probability or a price move), %d hops, typical lag %d "
+            "days, tiers %s. Steps: %s.") % (label(g, first), move, " → ".join(parts), p["score"], len(p["edges"]), p["lag"],
                                               layers, " | ".join(mech))
     return {"id": "p:" + ">".join(p["nodes"]), "kind": "path", "tiers": sorted({_tier(g, n) for n in p["nodes"]} - {None}),
             "refs": list(p["nodes"]), "title": " → ".join(label(g, n) for n in p["nodes"]), "text": text,
@@ -263,7 +267,8 @@ def analysis_card(rec, graph_version=None):
     if exp:
         parts.append("Stated as expected or hedged (not reported as happened): " + "; ".join(e["label"] for e in exp) + ".")
     if rec.get("paths"):
-        parts.append("INFERRED by the model (chains it traced): " + " | ".join(
+        parts.append(("CONDITIONAL chains (how it is usually affected; the article states no move): " if rec.get("context_only") else
+                      "INFERRED by the model (chains it traced): ") + " | ".join(
             "%s (plausibility %.2f)" % (p["text"], p["score"] or 0) for p in rec["paths"][:4]) + ".")
     rows = [r for r in rec.get("assets", [])[:5] + rec.get("sectors", [])[:3] if r.get("node")]
     if rows:
@@ -272,6 +277,13 @@ def analysis_card(rec, graph_version=None):
     if rec.get("comparison"):
         parts.append("Model vs article: " + "; ".join("%s: %s" % (c["label"], (c["verdict"] or "").replace("_", " "))
                                                       for c in rec["comparison"][:6]) + ".")
+    ctx = rec.get("context_only") or {}
+    if ctx.get("focus"):
+        parts.append("No price move or policy decision was stated, so the graph drawn is CONTEXT only (where %s sit%s in the market "
+                     "and what usually moves %s); no impact was claimed." % (", ".join(ctx["focus"]), "s" if len(ctx["focus"]) == 1 else "",
+                                                                             "it" if len(ctx["focus"]) == 1 else "them"))
+    if rec.get("summary"):
+        parts.append("Summary of the graph: %s" % _clip(rec["summary"], 500))
     hy = [e["label"] for e in hyp] + [h["text"] for h in rec.get("hypotheses", [])[:3]]
     if hy:
         parts.append("Model HYPOTHESES (not stated in the article): " + "; ".join(hy) + ".")
@@ -353,6 +365,9 @@ def get_card(kg, card_id, library=None, graph_version=None):
     if kind == "d":
         a, _, b = rest.partition("&")
         return shared_drivers_card(kg, a, b) if a in g and b in g else None
+    if kind == "o" and rest == "graph":
+        from . import retrieval
+        return retrieval.overview_card(kg)
     if kind == "a" and library is not None:
         rec = library.get(rest)
         return analysis_card(rec, graph_version) if rec else None

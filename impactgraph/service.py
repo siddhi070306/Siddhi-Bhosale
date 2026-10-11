@@ -396,13 +396,22 @@ class Analyzer:
             ctx = ctxmod.entity_context(self.kg, focus[:4]) if focus else None
             if ctx:
                 graph = {"nodes": ctx["nodes"], "links": ctx["links"]}
+                # conditional chains: how each named entity is usually affected (a company with no graph node: via its sector)
+                targets = [f if isinstance(f, str) else f.get("sector") for f in focus[:4]]
+                cond = []
+                for i, p in enumerate(ctxmod.conditional_paths(self.kg, targets)):
+                    ex_p = self._explain_path(p, i, "%s rises (conditional)" % self.kg.g.nodes[p["nodes"][0]]["label"])
+                    ex_p["conditional"] = True
+                    ex_p["story"] = explain.explain_chain(self.kg, ex_p, None, None, conditional=True)
+                    cond.append(ex_p)
+                ctxmod.merge_paths(self.kg, graph, cond)
                 hierarchy.annotate_nodes(self.kg, graph["nodes"])
                 hierarchy.annotate_links(self.kg, graph["links"])
                 for l in graph["links"]:
                     if self.kg.g.has_edge(l["source"], l["target"]):
                         l["mechanism"] = self.kg.g[l["source"]][l["target"]].get("mechanism")
                         l["story"] = explain.explain_link(self.kg, l["source"], l["target"])
-                result.update({"paths": [], "assets": [], "sectors": [], "variables": [], "graph": graph, "comparison": [],
+                result.update({"paths": cond, "assets": [], "sectors": [], "variables": [], "graph": graph, "comparison": [],
                                "sources": [], "sparks": {}, "data_modes": [], "macro": [],
                                "hierarchy": hierarchy.rollup(self.kg, [], [], [], [], []),
                                "context_only": {"focus": ctx["focus"], "reason": ctx["reason"]},

@@ -4,7 +4,7 @@
 [![FastAPI](https://img.shields.io/badge/FastAPI-0.110%2B-009688.svg)](https://fastapi.tiangolo.com/)
 [![React](https://img.shields.io/badge/React-19.0-61DAFB.svg)](https://react.dev/)
 [![Vite](https://img.shields.io/badge/Vite-6.0-646CFF.svg)](https://vitejs.dev/)
-[![Tests](https://img.shields.io/badge/Tests-257%20Passed-brightgreen.svg)](tests/)
+[![Tests](https://img.shields.io/badge/Tests-280%20Passed-brightgreen.svg)](tests/)
 [![Architecture](https://img.shields.io/badge/Architecture-4--Tier%20Causal%20DAG-orange.svg)](#4-tier-hierarchical-knowledge-graph)
 
 **Apex Zenith** transforms raw financial news, central bank statements, regulatory filings, and commodity shocks into a **grounded, transparent causal dependency graph**. It traces how macro shocks propagate through economic variables, industry sectors, and tradable assets—validating every causal link against empirical market data, quantifying risk with Monte Carlo simulations and historical analogs, and discovering algorithmic hedges for investor portfolios.
@@ -129,6 +129,10 @@ Every link is characterized by:
 - Answers natural-language analytical questions strictly from knowledge graph facts.
 - Deconstructs graph entities into citable text cards (`n:<node>`, `l:<from>><to>`, `p:<path>`, `s:<sector>`, `t:<tier>`).
 - Enforces strict quote verification: answers must cite real graph cards; unsupported claims or hallucinations are automatically stripped.
+- Knows every entity and relationship in the live graph, including companies learned from articles, and tolerates typos; a keyword search over every card and a whole-graph overview answer questions that name nothing.
+- Understands events and their direction ("an interest hike", "RBI cuts rates", "a recession", "the rupee falls", "a market crash") and runs them through the graph as a labelled what-if.
+- Understands names the graph does not contain (people, brands, events): well-known people directly, anything else mapped by the language model to the closest graph entity, with the reason shown ("Read as: Elon Musk → Autos").
+- Knows which news graph is open: "this story" means that one. If the graph cannot answer, that specific article answers (quotes checked); with no AI at all, the graph's facts and the article's best sentences answer. Every answer is labelled with where it came from.
 
 ### 8. Dynamic Knowledge Base & Rollback Guard (`impactgraph/kbstate.py`, `changelog.py`)
 - Dynamically learns new entities and links from ingested articles while safeguarding core baseline integrity.
@@ -148,6 +152,7 @@ Every link is characterized by:
 ### 11. A Graph for Every Financial Story (`impactgraph/context.py`)
 - A story that names a company but states no move (an IPO, a stake purchase, a new branch network) gets a **context graph** instead of an empty screen: the company, its sector, sector peers, the index, and what usually moves that sector.
 - Companies the graph does not know are read by the LLM (name checked against the text, sector, corporate event) and learned in their sector in dynamic mode.
+- It also gets **conditional chains** with their evidence (*if interest-rate expectations rise → banks → HDFC Bank*), clearly labelled: the article states no move, so no impact is claimed.
 - No direction or impact is claimed; the page and the chat card say so. Non-financial stories (sports, celebrity) still get an honest explanation, not an invented graph.
 
 ---
@@ -212,7 +217,7 @@ Visit **`http://localhost:5173`** for the full interactive glassmorphic applicat
 ### 4. Running the Test Suite
 
 ```bash
-# Execute all 257 automated unit and integration tests
+# Execute all 280 automated unit and integration tests
 python -m unittest discover tests
 ```
 
@@ -227,7 +232,7 @@ python -m unittest discover tests
 | `/api/analogs` | `GET` | Retrieves historical 5-day rolling analog episodes with Base-100 normalized trajectories. |
 | `/api/forecast` | `GET` | Runs 500-path Monte Carlo GBM simulation with VaR95 and CVaR95 risk statistics. |
 | `/api/portfolio/hedge` | `POST` | Computes portfolio contagion impact and suggests counter-balancing reverse hedges. |
-| `/api/assistant` | `POST` | Citable, grounded Q&A answering questions exclusively from graph cards. |
+| `/api/assistant` | `POST` | Grounded Q&A: graph cards with checked citations, the open story's article as backup, never empty for a graph or story question. |
 | `/api/stream` | `GET` | Server-Sent Events (SSE) stream for real-time market ticks via Yahoo Finance WebSocket. |
 | `/api/quotes` | `GET` | Batched polling fallback for live quote prices and daily percentage changes. |
 | `/api/hierarchy` | `GET` | Audits the 4-tier graph layout and inspects tier cross-link boundaries. |

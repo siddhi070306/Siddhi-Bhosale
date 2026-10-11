@@ -50,6 +50,7 @@ function ScoreMath({ p }) {
 export default function RelationshipsBoard({ edges = [], selectedEdge, onSelect }) {
   const [band, setBand] = useState('all');
   const [open, setOpen] = useState(null);
+  const [showAll, setShowAll] = useState(false);
   const all = edges.filter((e) => e.story).sort((a, b) => b.story.score_value - a.story.score_value);
 
   if (!all.length) {
@@ -66,8 +67,12 @@ export default function RelationshipsBoard({ edges = [], selectedEdge, onSelect 
     return m;
   }, {});
   const data = count(all, (e) => (e.story.data_check || {}).result || 'unchecked');
-  const rows = band === 'all' ? all : all.filter((e) => e.story.score_band === band);
+  const filtered = band === 'all' ? all : all.filter((e) => e.story.score_band === band);
   const keyOf = (e) => `${e.from}>${e.to}`;
+  // the 5 strongest first; a link picked on the graph stays visible even when it is not among them
+  const TOP = 5;
+  const picked = selectedEdge ? filtered.find((e) => e.from === selectedEdge.from && e.to === selectedEdge.to) : null;
+  const rows = showAll ? filtered : [...filtered.slice(0, TOP), ...(picked && filtered.indexOf(picked) >= TOP ? [picked] : [])];
 
   return (
     <div className="card relationships-board" style={{ padding: '16px 18px' }}>
@@ -176,6 +181,11 @@ export default function RelationshipsBoard({ edges = [], selectedEdge, onSelect 
           </tbody>
         </table>
       </div>
+      {filtered.length > TOP && (
+        <button type="button" className="btn btn-outline btn-sm" style={{ marginTop: 10, fontSize: 12 }} onClick={() => setShowAll(!showAll)}>
+          {showAll ? `Show the ${TOP} strongest` : `Show all ${filtered.length} relationships`}
+        </button>
+      )}
     </div>
   );
 }

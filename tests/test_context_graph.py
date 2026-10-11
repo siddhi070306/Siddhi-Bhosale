@@ -32,7 +32,12 @@ class ContextGraphTests(unittest.TestCase):
         a, res = run(IPO, [FUSION])
         self.assertTrue(res["context_only"])
         self.assertEqual(res["context_only"]["focus"], ["Fusion CX"])
-        self.assertEqual(res["paths"], [])
+        self.assertTrue(res["paths"])                       # conditional chains: how Fusion CX is usually affected
+        for p in res["paths"]:
+            self.assertTrue(p["conditional"] and p["story"]["conditional"])
+            self.assertEqual(p["nodes"][-1], "ent_fusioncx")
+            self.assertIn("does not say", p["story"]["opening"])
+            self.assertIn("no impact is claimed", p["story"]["conclusion"])
         roles = {n["id"]: n["role"] for n in res["graph"]["nodes"]}
         self.assertEqual(roles["ent_fusioncx"], "focus")
         self.assertEqual(roles["it_services"], "peer")
@@ -41,6 +46,8 @@ class ContextGraphTests(unittest.TestCase):
         self.assertTrue([n for n, r in roles.items() if r == "driver"])
         for n in res["graph"]["nodes"]:
             self.assertIsNone(n["direction"])               # no direction claimed anywhere
+        ids = set(roles)
+        self.assertTrue(all(n in ids for p in res["paths"] for n in p["nodes"]))   # every chain is drawn
         for l in res["graph"]["links"]:
             self.assertEqual(l["kind"], "context")
             self.assertIn(l["source"], roles)

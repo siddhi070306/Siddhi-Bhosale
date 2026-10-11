@@ -147,7 +147,9 @@ export default function ChainsBoard({ paths = [], onFocusNode, contextOnly = nul
   const article = distinct.filter((st) => (st.identified_by || []).includes('article')).length;
   const llm = distinct.filter((st) => (st.identified_by || []).includes('llm')).length;
   const filtered = endFilter === 'all' ? all : all.filter((p) => endOf(p) === endFilter);
-  const rows = showAll ? filtered : filtered.slice(0, 12);
+  const TOP = 5;
+  const rows = showAll ? filtered : filtered.slice(0, TOP);
+  const conditional = all.some((p) => p.story.conditional);
 
   return (
     <div className="card chains-board" style={{ padding: '16px 18px' }}>
@@ -157,6 +159,13 @@ export default function ChainsBoard({ paths = [], onFocusNode, contextOnly = nul
         market data says about it, and how the chain's plausibility is calculated. Inferences are labelled as inferences; what the
         article itself says is quoted. Click a chain to open it.
       </p>
+      {conditional && contextOnly && (
+        <div style={{ fontSize: 12.5, color: '#1e3a8a', background: '#eff6ff', border: '1px solid #bfdbfe', borderRadius: 8, padding: '8px 12px', marginBottom: 10, lineHeight: 1.5 }}>
+          <strong>Conditional chains.</strong> This story names {contextOnly.focus.join(', ')} but states no price move or policy decision.
+          These chains show how {contextOnly.focus.length === 1 ? 'it is' : 'they are'} usually affected if a driver moves, with the
+          evidence for every step. No impact is claimed.
+        </div>
+      )}
       <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, fontSize: 12, color: '#27272a', marginBottom: 12, alignItems: 'center' }}>
         <span style={{ fontWeight: 700 }}>{all.length} impact chains explained</span>
         <span>ending at {Object.entries(ends).map(([k, v]) => `${v} ${END_LABEL[k] || k}`).join(', ')}</span>
@@ -213,9 +222,9 @@ export default function ChainsBoard({ paths = [], onFocusNode, contextOnly = nul
           </div>
         );
       })}
-      {filtered.length > 12 && (
+      {filtered.length > TOP && (
         <button type="button" className="btn btn-outline btn-sm" style={{ marginTop: 10, fontSize: 12 }} onClick={() => setShowAll(!showAll)}>
-          {showAll ? 'Show the 12 strongest' : `Show all ${filtered.length} chains`}
+          {showAll ? `Show the ${TOP} strongest` : `Show all ${filtered.length} chains`}
         </button>
       )}
     </div>

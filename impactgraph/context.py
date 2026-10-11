@@ -219,3 +219,65 @@ def entity_context(kg, focus, max_peers=3, max_drivers=3):
             "reason": "No price move or policy decision is stated, so this is a context graph: where %s sit%s in the market "
                       "and what usually moves %s. It claims no direction or impact." % (
                           names, "s" if len(focus_labels) == 1 else "", "it" if len(focus_labels) == 1 else "them")}
+
+
+def conditional_paths(kg, targets, per_target=3, max_total=12):
+    """Chains for a story that states no move: how each named entity is USUALLY affected. For a company or sector, the strongest
+    chain from each of its usual drivers (economic variables, policy makers, events) down to it; for a variable or policy maker,
+    the strongest chains out of it. Each chain assumes the first node rises; nothing here is claimed by the article."""
+    from . import cards as cardlib
+    g = kg.g
+    out, seen = [], set()
+    for t in targets:
+        if not t or t not in g:
+            continue
+        if g.nodes[t]["type"] in CONTEXT_ASSETS + ("sector",):
+            best = {}
+            for p in pg.upstream_paths(kg, t, 1, max_depth=3):
+                drv = p["nodes"][0]
+                if g.nodes[drv]["type"] in CONTEXT_ASSETS + ("sector",):
+                    continue
+                if drv not in best or p["score"] > best[drv]["score"]:
+                    best[drv] = p
+            nodes_list = [p["nodes"] for p in sorted(best.values(), key=lambda p: -p["score"])[:per_target]]
+        else:
+            nodes_list = [p["nodes"] for p in cardlib.find_paths(kg, t, None, per_target, diverse=True)]
+        for nodes in nodes_list:
+            p = cardlib.path_from_nodes(kg, nodes)
+            if not p or tuple(nodes) in seen:
+                continue
+            seen.add(tuple(nodes))
+            p["edge_decays"] = [1.0] + [pg._edge_decay(g[u][v]) for u, v in p["edges"][1:]]
+            p["target"] = t
+            out.append(p)
+    out.sort(key=lambda p: -p["score"])
+    return out[:max_total]
+
+
+def merge_paths(kg, graph, explained):
+    """Add the nodes and links of conditional chains to a context graph, and tag each link with the chains that use it."""
+    g = kg.g
+    have = {n["id"]: n for n in graph["nodes"]}
+    links = {(l["source"], l["target"]): l for l in graph["links"]}
+    for i, p in enumerate(explained):
+        for j, n in enumerate(p["nodes"]):
+            if n not in have:
+                have[n] = {"id": n, "label": g.nodes[n]["label"], "type": g.nodes[n]["type"], "direction": None, "confidence": None,
+                           "eta": None, "observed": False, "source": False, "mixed": False, "inferred": True,
+                           "role": "driver" if j == 0 else "via", "context": True}
+                graph["nodes"].append(have[n])
+        for u, v in p["edges"]:
+            if (u, v) not in links:
+                e = g[u][v]
+                links[(u, v)] = {"source": u, "target": v, "sign": e["sign"], "strength": round(kg.eff_strength(u, v), 3),
+                                 "lag": e["lag"], "provenance": list(e.get("provenance") or []), "inferred": bool(e.get("inferred")),
+                                 "verdict": (e.get("validation") or {}).get("verdict"), "paths": [], "kind": "context",
+                                 "relation": hierarchy_rel(g, u, v)}
+                graph["links"].append(links[(u, v)])
+            links[(u, v)]["paths"].append(i)
+    return graph
+
+
+def hierarchy_rel(g, u, v):
+    from . import hierarchy
+    return hierarchy.rel(g, u, v)

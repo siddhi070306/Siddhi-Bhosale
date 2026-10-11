@@ -17,7 +17,14 @@ import {
 import { api } from '../services/api';
 import { useUi } from '../context/UiContext';
 
-const SOURCE_LABEL = { link: 'Link', path: 'Path', node: 'Entity', analysis: 'Article', sector: 'Sector', tier: 'Tier' };
+const SOURCE_LABEL = { link: 'Link', path: 'Path', node: 'Entity', analysis: 'Article', sector: 'Sector', tier: 'Tier', overview: 'Whole graph', gap: 'No link', shared: 'Shared drivers' };
+// where an answer came from (assistant.answer: graph cards -> the article itself -> the graph's facts without AI)
+const MODE_BADGE = {
+  llm: { label: 'From the knowledge graph', bg: '#ecfdf5', fg: '#047857' },
+  article: { label: 'From the article itself (backup)', bg: '#eff6ff', fg: '#1d4ed8' },
+  cards: { label: 'From the knowledge graph (no AI)', bg: '#f4f4f5', fg: '#3f3f46' },
+  none: { label: 'Outside the graph', bg: '#fef3c7', fg: '#92400e' },
+};
 
 export default function KgAssistant({ analysis, onNavigateToTab, onSelectEventText, libraryTotal = 0, localAnalyses = 0, onImportHistory }) {
   const [messages, setMessages] = useState([
@@ -33,6 +40,10 @@ export default function KgAssistant({ analysis, onNavigateToTab, onSelectEventTe
   const [copiedId, setCopiedId] = useState(null);
   const [importing, setImporting] = useState(false);
   const [importNote, setImportNote] = useState(null);
+  // the news graph open in the app: questions are about it unless the user switches to the whole graph
+  const openId = (analysis && analysis.raw && (analysis.raw.library_id || analysis.raw.article_id)) || null;
+  const openTitle = (analysis && (analysis.title || (analysis.text || '').split(/(?<=[.!?])\s/)[0])) || '';
+  const [useOpenGraph, setUseOpenGraph] = useState(true);
 
   const handleImport = async () => {
     if (!onImportHistory || importing) return;
@@ -99,7 +110,9 @@ export default function KgAssistant({ analysis, onNavigateToTab, onSelectEventTe
         .filter((m) => m.id !== 'welcome-1')
         .slice(-6)
         .map((m) => ({ role: m.sender === 'user' ? 'user' : 'assistant', text: m.text }));
-      const res = await api.askAssistant(text, history);
+      // the story's own text goes along, so the backup can answer even if this graph is not in the backend library
+      const story = useOpenGraph && openId ? { title: openTitle, text: (analysis.text || '').slice(0, 6000), summary: analysis.summary || '' } : null;
+      const res = await api.askAssistant(text, history, useOpenGraph ? openId : null, story);
       const botMsg = {
         id: `bot-${Date.now()}`,
         sender: 'assistant',
@@ -110,6 +123,9 @@ export default function KgAssistant({ analysis, onNavigateToTab, onSelectEventTe
         note: res.note || null,
         grounded: !!res.grounded,
         suggestions: res.suggestions || null,
+        focus: res.focus || null,
+        interpretation: res.interpretation || [],
+        scenario: res.scenario || [],
         time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
       };
       setMessages((prev) => [...prev, botMsg]);
@@ -253,6 +269,29 @@ export default function KgAssistant({ analysis, onNavigateToTab, onSelectEventTe
                 >
                   {msg.text}
                 </div>
+                {!isUser && msg.mode && MODE_BADGE[msg.mode] && (
+                  <div className="assistant-answer-meta" style={{ marginTop: 6, display: 'flex', flexWrap: 'wrap', gap: 6, alignItems: 'center', maxWidth: 640 }}>
+                    <span style={{ fontSize: 11, fontWeight: 600, padding: '2px 8px', borderRadius: 10, background: MODE_BADGE[msg.mode].bg, color: MODE_BADGE[msg.mode].fg }}>
+                      {MODE_BADGE[msg.mode].label}
+                    </span>
+                    {msg.scenario && msg.scenario.length > 0 && (
+                      <span className="assistant-scenario" style={{ fontSize: 11, color: '#52525b' }}>
+                        Scenario: {msg.scenario.map((s) => `${s.label} ${s.direction > 0 ? '↑' : '↓'}`).join(', ')}
+                      </span>
+                    )}
+                    {msg.interpretation && msg.interpretation.length > 0 && (
+                      <span className="assistant-reading" style={{ fontSize: 11, color: '#6d28d9' }} title="Mapped by the language model from general knowledge: an interpretation, not a fact in the graph">
+                        Read as: {msg.interpretation.map((l) => `“${l.term}” → ${l.label}${l.why ? ` (${l.why})` : ''}`).join('; ')}
+                      </span>
+                    )}
+                    {msg.focus && (
+                      <span style={{ fontSize: 11, color: '#52525b' }}>
+                        About: “{msg.focus.title.length > 70 ? msg.focus.title.slice(0, 68) + '…' : msg.focus.title}”
+                        {msg.focus.how === 'matched' ? ' (matched by its headline)' : msg.focus.how === 'latest' ? ' (latest analysed story)' : ''}
+                      </span>
+                    )}
+                  </div>
+                )}
 
                 {!isUser && msg.sources && msg.sources.length > 0 && (
                   <div style={{ marginTop: 6, display: 'flex', flexWrap: 'wrap', gap: 5, maxWidth: 640 }}>
@@ -338,6 +377,27 @@ export default function KgAssistant({ analysis, onNavigateToTab, onSelectEventTe
 
       {/* Input Box Footer */}
       <div style={{ padding: '14px 24px 20px', background: '#ffffff', borderTop: '1px solid #e4e4e7' }}>
+        {openId && (
+          <div className="assistant-focus-bar" style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap', fontSize: 12, color: '#3f3f46', marginBottom: 8 }}>
+            {useOpenGraph ? (
+              <>
+                <span>
+                  Asking about the open graph: <strong>“{openTitle.length > 80 ? openTitle.slice(0, 78) + '…' : openTitle}”</strong>
+                </span>
+                <button type="button" className="btn btn-outline" style={{ fontSize: 11, padding: '2px 8px' }} onClick={() => setUseOpenGraph(false)}>
+                  Ask about the whole graph instead
+                </button>
+              </>
+            ) : (
+              <>
+                <span>Asking about the whole knowledge graph and every analysed story.</span>
+                <button type="button" className="btn btn-outline" style={{ fontSize: 11, padding: '2px 8px' }} onClick={() => setUseOpenGraph(true)}>
+                  Ask about the open graph
+                </button>
+              </>
+            )}
+          </div>
+        )}
         <div style={{ position: 'relative', display: 'flex', alignItems: 'center', background: '#f4f4f5', borderRadius: 12, padding: '8px 12px', border: '1px solid #e4e4e7' }}>
           <textarea
             ref={textareaRef}
@@ -382,7 +442,7 @@ export default function KgAssistant({ analysis, onNavigateToTab, onSelectEventTe
           </button>
         </div>
         <div style={{ textAlign: 'center', fontSize: 11, color: '#a1a1aa', marginTop: 8 }}>
-          Answers come from the knowledge graph only and cite what they use. Scores are plausibility, not probabilities or price forecasts.
+          Answers come from the knowledge graph and cite what they use; when the graph does not cover a question about the open story, that story's own article answers it (labelled). Scores are plausibility, not probabilities or price forecasts.
         </div>
       </div>
     </div>

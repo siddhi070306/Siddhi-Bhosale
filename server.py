@@ -103,13 +103,16 @@ def hierarchy_info():
 class AssistantBody(BaseModel):
     question: str
     history: Optional[list] = None
+    analysis_id: Optional[str] = None    # the news graph open in the app: "this story" means this one
+    story: Optional[Dict[str, Any]] = None   # that story's title, text and summary, in case it is not in the library
 
 
 @app.post("/api/assistant")
 def assistant_answer(body: AssistantBody):
     """Answer a question from the knowledge graph. Read only: the question is never analysed as an article."""
     res = assistant.answer(analyzer.kg, {"version": analyzer.guard.version, "epoch": analyzer.guard.epoch}, body.question,
-                           history=body.history or [], use_llm=True, library=LIB)
+                           history=body.history or [], use_llm=True, library=LIB, analysis_id=body.analysis_id,
+                           story=body.story)
     if res.get("error"):
         raise HTTPException(status_code=400, detail=res["error"])
     return res

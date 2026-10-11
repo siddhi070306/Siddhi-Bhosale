@@ -79,7 +79,8 @@ def compact(res, title=None, link=None, t=None, origin="generator"):
     paths = []
     for p in (res.get("paths") or [])[:6]:
         if isinstance(p, dict) and p.get("nodes"):
-            paths.append({"text": _clip(p.get("tier_sentence") or p.get("headline"), 300),
+            paths.append({"text": _clip(("Conditional (no move stated): " if p.get("conditional") else "") +
+                                        (p.get("tier_sentence") or p.get("headline") or ""), 300),
                           "nodes": [n for n in p["nodes"] if n in kb.NODES], "score": p.get("score"),
                           "horizon_days": p.get("horizon_days")})
     hyp = res.get("hypothesis") or {}

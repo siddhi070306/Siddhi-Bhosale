@@ -348,3 +348,52 @@ def suggest_themes(text):
             break
     bg = data.get("background")
     return {"background": bg.strip()[:400] if isinstance(bg, str) and bg.strip() else None, "themes": themes}
+
+
+_LINK_CACHE = {}
+
+
+def link_question(question, nodes):
+    """Map the names and terms in a question that the graph does not contain (people, brands, events, places) to the closest
+    graph nodes. nodes: [(id, label, type)] from the LIVE graph. Returns [{"term","node","direction","why"}] (direction 1/-1 only
+    when the question states a move, else 0), [] when nothing maps, or None when the model failed. Every node is checked
+    against the list and every term against the question; results are cached per question."""
+    key = re.sub(r"\s+", " ", question.strip().lower())
+    if key in _LINK_CACHE:
+        return _LINK_CACHE[key]
+    ids = {n for n, _, _ in nodes}
+    listing = "; ".join("%s=%s (%s)" % (n, l, t) for n, l, t in nodes)
+    sys_p = ("You map a question about financial markets onto a knowledge graph. For each name or term in the question that is "
+             "a person, company, brand, product, place, institution or event, give the ONE graph node it most directly concerns, "
+             "using widely known facts (a chief executive -> the company or sector they run; a company not in the graph -> its "
+             "sector; a central banker -> the central bank; a country's conflict -> geopolitical tension; a commodity-producing "
+             "region -> that commodity). A person maps to the company they run if it is in the list, otherwise to THAT company's "
+             "sector; never map anything to a different company just because it is in the list. Terms that refer to the same "
+             "thing (a chief executive and their company) map to the same node. Skip terms with no market connection (an actor's film, a sports result) unless the "
+             "question ties them to spending, a company or a market. Reply with JSON only: "
+             '{"links":[{"term":"<the words exactly as in the question>","node":"<node id>","direction":1|-1|0,'
+             '"why":"<one short sentence>"}]}. direction is 1 or -1 only if the question states that the thing rises/falls, '
+             "grows/shrinks, is hiked/cut or similar; otherwise 0. At most 4 links; an empty list is fine. "
+             "Use ONLY these node ids: " + listing)
+    out = _chat(sys_p, question[:600], json_mode=True, max_tokens=500)
+    if not out:
+        return None
+    try:
+        data = json.loads(re.search(r"\{.*\}", out, re.S).group(0))
+    except Exception:
+        _LAST_ERROR[0] = "the model did not return valid JSON"
+        return None
+    low, res, seen = question.lower(), [], set()
+    for x in data.get("links") or []:
+        term, n = str((x or {}).get("term") or "").strip(), (x or {}).get("node")
+        if not term or term.lower() not in low or n not in ids or n in seen:
+            continue
+        seen.add(n)
+        res.append({"term": term[:60], "node": n, "direction": x.get("direction") if x.get("direction") in (1, -1) else 0,
+                    "why": str(x.get("why") or "")[:200]})
+        if len(res) == 4:
+            break
+    if len(_LINK_CACHE) > 500:
+        _LINK_CACHE.clear()
+    _LINK_CACHE[key] = res
+    return res

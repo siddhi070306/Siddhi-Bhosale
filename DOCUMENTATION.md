@@ -383,7 +383,12 @@ For each stated event the system compares the direction the model predicts for t
   decision, so no impact is claimed. HDFC Bank sits in the Banks sector (peers: JPMorgan Chase, State Bank of India), part of the
   Nifty Bank and S&P 500. What usually moves Banks: Economic Growth (a rise lifts it), Interest-Rate Expectations (a rise lifts
   it), ..."*. The Impact Graph page shows a "Context graph, no impact claimed" banner, the chat card is badged "Context graph (no
-  move stated)", and every link in it is explained in the relationships table. Rules-only mode does the same for graph entities the
+  move stated)", and every link in it is explained in the relationships table. It also gets **conditional chains**
+  (`context.conditional_paths`): for each named company, the strongest chain from each of its sector's usual drivers down to it
+  (*If Interest-Rate Expectations rise → Banks ↑ → HDFC Bank ↑*), each explained with the same evidence as an impact chain but
+  opening *"The article does not say that Interest-Rate Expectations moved"* and concluding *"This is conditional: the article states
+  no such move, so no impact is claimed."* They are listed in the chains section, the Pathways panel ("If it rises: …") and the
+  walkthrough, and never feed rankings or forecasts. Rules-only mode does the same for graph entities the
   rules recognise. When the LLM read the story and found no company, stray rule matches are not used (a "gold medal" is not gold).
 * When a text states **nothing recognisable**, the LLM may suggest hedged *themes* the story could touch, each with the quote that supports it and a background note; they form a dashed hypothesis graph (at most 20 paths) and are never ingested into the knowledge graph. If nothing can be drawn the page says why and what to try.
 
@@ -400,16 +405,59 @@ For each stated event the system compares the direction the model predicts for t
 
 Yahoo offers no webhooks, so two real feeds are combined: yfinance's WebSocket (a tick whenever a symbol trades) and a batched poll every 20 seconds (which supplies the previous close and covers closed markets). Both feed one cache, pushed to browsers over **Server-Sent Events** (`/api/stream`), with `/api/quotes` as a polling fallback. Prices are never simulated; if Yahoo throttles, the last good quote stays visible with an error and its age. A watchlist of any Yahoo ticker is validated with a real quote before it is saved. `market.py` supplies six headline levels from FRED (S&P 500, NASDAQ, Dow, Brent, US 10Y, VIX).
 
-### 4.11 The KG assistant (`assistant.py`, `cards.py`)
+### 4.11 The KG assistant (`assistant.py`, `retrieval.py`, `cards.py`)
 
-`POST /api/assistant {question, history}` answers a question from the graph and **never changes it** (a question is never analysed as an article). The steps:
+`POST /api/assistant {question, history, analysis_id, story}` answers a question from the graph and **never changes it** (a question is
+never analysed as an article). `analysis_id` is the news graph open in the app, so "this story" means that one; `story` (its headline,
+text and summary) lets the backup work even if that graph is not in the backend library. The steps:
 
-1. **Find the entities** in the question with the same alias matcher; a *real follow-up* ("and what about it?") may borrow the previous question's subject, an unrelated question may not.
+1. **Find the entities** in the question across the **whole live graph** (`retrieval.resolve_entities`): every node by its label, id
+   and aliases, including companies learned from articles and assets users added, with typo tolerance (*"oill"*, *"airlnes"*,
+   *"infosis"*; common words such as *"soil"* or *"fighter jets"* do not match). A *real follow-up* ("and what about it?") may borrow
+   the previous question's subject, an unrelated question may not. A question about the open story that names nothing ("explain
+   this graph") uses that story's own starting entities.
+   **Events and their direction** (`retrieval.detect_scenario`): event words map to graph nodes (*interest/rate hike or cut*,
+   *recession*, *slowdown*, *war*, *sanctions*, *ceasefire*, *market crash*, *sell-off*, *deflation*, *stagflation*, *strong dollar*),
+   and the direction comes from the word itself or a direction word next to the entity (*hike, surge, spike* vs *cut, fall, crash,
+   ease*). *"The rupee falls"* is read as USD/INR (rupee weakness) **up**; *"RBI cuts rates"* as a dovish RBI and rate expectations
+   down; *"oil prices crash"* as crude oil down, but *"stock market crash"* as risk aversion up. A follow-up such as *"and if it
+   falls?"* keeps the previous subject and takes the new direction. The scenario is run through the graph (`scenario_card`, id
+   `q:`): the most affected sectors and companies with their direction, confidence and best chain, labelled the graph's inference
+   for a hypothetical, never a forecast; every chain card is told in that direction (*"If Reserve Bank of India turns dovish …
+   Real Estate ↑"*).
+   **Names the graph does not contain** (people, brands, places, events): well-known people resolve without any model
+   (*Jerome Powell* → Fed, *Mukesh Ambani* → Reliance, *Christine Lagarde* → ECB). Any other unknown name (`retrieval.unknown_terms`:
+   a capitalised word or a word found in no card) is mapped by the language model onto the closest graph node, from general
+   knowledge, with its reason (`llm.link_question`): *Elon Musk* → Autos (he runs Tesla, which is not in the graph), *Satya Nadella* →
+   IT Services, *"war in Ukraine"* → Geopolitical Tension ↑, *a Taylor Swift tour* → Consumer Spending ↑. Every node is checked
+   against the live graph and every term against the question; the result is cached per question; a name with no market
+   connection (*a film's box-office record*) maps to nothing. The mapping becomes an *interpretation card* (`i:question`) and the
+   answer says plainly that the name is not in the graph and which entity it used instead. The assistant page shows it under the
+   answer as *"Read as: …"*, next to *"Scenario: …"*.
+2. **Find the story** (`retrieval.pick_analysis`): the graph open in the app; else a story whose headline the question echoes
+   (*"tell me about the Hormuz tanker story"*); else, for "the latest article", the newest one.
+3. **Keyword search over every card** (`retrieval.rank_cards`): a text card exists for every node, link, sector and tier, so a
+   question that names no entity (*"what drives inflaton expectations"*) still retrieves the cards that answer it (typos tolerated,
+   rarer words weigh more), up to 12 graph cards in all. A question about the graph as a whole (*"which link is the strongest?"*,
+   *"which links does market data contradict?"*) gets the **overview card** (`o:graph`) first: size per tier, sectors, the strongest
+   and weakest cause-and-effect links, data-check counts and contradicted links, the most connected entities and the learned ones.
 2. **Retrieve graph cards**: an entity card for each, link cards and path cards between entities, or, for one entity, up to five downstream chains chosen to cover different channels (below) and its strongest drivers; a *gap* card when the graph holds no path between two entities (so the answer is "the graph does not say"), together with a *shared-drivers* card (`d:a&b`) when something moves both: for Gold and TLT, rate expectations push both down and risk aversion pushes both up, while inflation expectations push them apart. The card says this is co-movement through common causes, not an effect of one on the other; a driver that acts only through one already listed (the Fed through rate expectations) is left out.
 3. **Retrieve saved analyses** from the analysis library (section 4.14): up to three *analysis cards* (`a:<id>`) for the most recent articles that touched the named entities, or, for a question about the news ("which articles…", "what did the last article report?"), the latest ones. "The last / latest / this article" means exactly the newest one. An analysis card keeps apart what the article **reported** (observed events with their quotes), what the model **inferred** at the time (chains, affected assets, on a stated graph version, with a note if the graph has changed since) and the model's **hypotheses**.
 4. **Ask the LLM to answer from those cards only**, citing card ids in brackets, saying what kind of basis supports each claim, never presenting an inference or hypothesis as something an article reported, and never stating a price move.
-5. **Verify the answer:** invented citations are stripped; an answer with no valid citation gets one retry (the model is shown its answer and asked to cite the cards), and if it still cites nothing it is replaced by a plain answer built from the cards; with no LLM, the cards themselves are the answer. A question naming no graph entity and not about the news gets suggestions, not an answer.
-6. **Return** the answer, the cited sources (title, kind, text), the graph version it was answered from, and how many graph and analysis cards were considered.
+5. **Verify the answer:** invented citations are stripped; an answer with no valid citation gets one retry (the model is shown its answer and asked to cite the cards).
+6. **Backup: the specific article.** When the graph's answer is missing, uncited, or says the graph does not say, and the question is
+   about a story, the LLM answers from **that story's** headline, text and graph summary (never a random article), quoting it. The
+   quotes are checked against the article text; an answer with no matching quote gets one retry and, if still unmatched, is shown
+   with a warning. *"Which states will get most of the new branches?"* about an HDFC Bank story is answered *"most branches in Uttar
+   Pradesh and Bihar"* from the article.
+7. **Without any LLM** (or if every call fails) the answer is built from the graph's most relevant cards plus the article's best
+   matching sentences: *"how many jobs will this add?"* returns the article's own sentence *"the expansion will add 4,000 jobs"*.
+   Only a question that names nothing in the graph, matches no story and is not about the graph as a whole (*"what is the weather?"*)
+   gets an explanation and suggestions instead.
+8. **Return** the answer, where it came from (`mode`: `llm` = the graph's cards, `article` = the article backup, `cards` = the graph
+   without AI, `none` = outside the graph), the story it is about (`focus`), the cited sources, and the graph version. The assistant
+   page shows this as a badge under every answer, and a bar above the input says which graph questions are about, with a switch to
+   ask about the whole graph instead.
 
 **Diverse chains for one-topic questions.** A chain's score is a product of strengths, so the strongest chains out of one entity are short and
 share its strongest first link. For "what happens if X rises?" the assistant therefore takes the strongest chain through each *different*
@@ -498,7 +546,7 @@ User-adjustable assumptions (a shock size in the forecast, a link weight, a scen
 | `extract.py` | 305 | Rule-based entity and event extraction |
 | `llm.py` | 312 | Provider selection and fallback; extraction, summary, themes, sector suggestion |
 | `timeseries.py` | 360 | FRED and Yahoo data, cache, link validation, dynamic lag, simulated series |
-| `context.py` | 221 | Thin-graph context (drivers, peers) and context graphs for stories that state no move |
+| `context.py` | 283 | Thin-graph context (drivers, peers), context graphs and conditional chains for stories that state no move |
 | `enrich.py` | 92 | Fallback chain for headline text |
 | `feeds.py` | 356 | RSS, NewsAPI, safe article reader, SEC, caches |
 | `quotes.py` | 334 | Live quote hub, watchlist, SSE |
@@ -506,7 +554,8 @@ User-adjustable assumptions (a shock size in the forecast, a link weight, a scen
 | `forecast.py` | 131 | Volatility fan |
 | `analogs.py` | 189 | Past-move analogs |
 | `cards.py` | 311 | Citable text cards (graph and saved analyses) and their export; diverse path retrieval |
-| `assistant.py` | 179 | Question answering over the cards and the analysis library |
+| `assistant.py` | 348 | Question answering: graph cards, then the specific article as backup, then the graph without AI |
+| `retrieval.py` | 358 | Whole-graph entity matching with typo tolerance, keyword search over every card, the overview card, which story a question is about |
 | `library.py` | 250 | The analysis library: every generated graph, compact records, full results, import |
 | `hedge.py` | 227 | Portfolio contagion and counter-hedges (contributed) |
 | `priority.py` | 489 | Headline priority scorer and duplicate-story clustering, used by `feeds.headlines` (contributed) |
@@ -590,7 +639,7 @@ A React 19 single-page app (`frontend/src`), served by Vite on port 5173 in deve
 | **Asset Impact** (`#/asset-impact`) | Ranked affected assets next to live prices; the *Why* sentence per asset; trend chart; links to analogs and forecast; sector heatmap; add an asset to the graph; executive memo. Shows baseline assets before any analysis. |
 | **Analogs & Forecast** (`#/econometrics`) | Past-move analogs and the volatility fan, side by side or separately, for any of 38 assets; the shock is a stated assumption; refusals show their reason. |
 | **Event Diagnostics** (`#/event-analysis`) | Entities, event details, the source quote, model-vs-article checks, the step-by-step causal walkthrough, the executive memo. |
-| **Impact Graph** (`#/impact-graph`) | The interactive graph with tier headers, a **Relationships** tab that explains every relationship in plain English (strongest first), a full-width **Identify and score relationships between entities** table and an **Explain each impact chain and the evidence behind it** section below the graph (every chain told step by step with the evidence per step, the score arithmetic, the weakest step and the conclusion; the 12 strongest first; filter by where a chain ends) (one row per relationship: the sentence, how it was identified, what market data says, the score with its arithmetic, the delay; filter by strength; click a row for the full explanation and to highlight the link), a tier bar (hide a tier or fold sector members), a pipeline cascade animation, and a side panel: **Pathways**, **Node Details** (including what the graph knows), **Edge Sensitivity** (edit a link's weight), **Hierarchy** (roll-up, evidence mix, sector to members). |
+| **Impact Graph** (`#/impact-graph`) | The interactive graph with tier headers, a **Relationships** tab that explains every relationship in plain English (strongest first), a full-width **Identify and score relationships between entities** table and an **Explain each impact chain and the evidence behind it** section below the graph (every chain told step by step with the evidence per step, the score arithmetic, the weakest step and the conclusion; the 5 strongest first, then show all; the table also shows its 5 strongest relationships first; filter by where a chain ends) (one row per relationship: the sentence, how it was identified, what market data says, the score with its arithmetic, the delay; filter by strength; click a row for the full explanation and to highlight the link), a tier bar (hide a tier or fold sector members), a pipeline cascade animation, and a side panel: **Pathways**, **Node Details** (including what the graph knows), **Edge Sensitivity** (edit a link's weight), **Hierarchy** (roll-up, evidence mix, sector to members). |
 | **Scenario Simulator** (`#/scenario-simulator`) | Single and multi-shock what-ifs, presets (labelled as assumptions), scenario comparison, net force balance at a chosen asset. |
 | **Engine & Settings** (`#/settings`) | Backend and key status; live-data and full-article toggles; knowledge-base mode, undo and revert; the last health check; recent changes; the **change history** with details, restore and JSON export. |
 
@@ -646,7 +695,7 @@ The system is **local-first**. A `vercel.json` exists, but it serves only `serve
 
 ## 9. Testing and verification
 
-### 9.1 Automated tests: 257 passing
+### 9.1 Automated tests: 280 passing
 
 | Suite | Tests | Covers |
 | --- | --- | --- |
@@ -654,11 +703,12 @@ The system is **local-first**. A `vercel.json` exists, but it serves only `serve
 | `test_dynamic.py` | 22 | Guard, learning, rollback, assets, edge edit, persistence |
 | `test_history.py` | 22 | Diffs, guarded edits, undo, restore, link rules, move, export and import, persistence, API |
 | `test_context.py` | 24 | Thin-graph context, upstream paths, hypotheses |
-| `test_context_graph.py` | 11 | Context graphs for stories with no stated move: focus, sector, peers, index and drivers with no direction claimed; learned entity in dynamic mode, temporary node in static mode; a stated share move becomes an event; non-financial stories stay empty; library records; LLM company validation |
+| `test_context_graph.py` | 11 | Context graphs for stories with no stated move: focus, sector, peers, index and drivers with no direction claimed, conditional chains; learned entity in dynamic mode, temporary node in static mode; a stated share move becomes an event; non-financial stories stay empty; library records; LLM company validation |
 | `test_step3.py` | 17 | Tier sentences, evidence mix (hand-counted), cards and their endpoints |
 | `test_enrich.py` | 16 | Headline text fallback chain |
 | `test_tiered_properties.py` | 15 | Stored tier properties, relations, back-fill of old states, node properties |
 | `test_assistant.py` | 12 | Retrieval, citations, read-only guarantee, endpoint |
+| `test_rag.py` | 23 | Events and their direction (hike, cut, recession, war, crash, rupee), a rate cut told as a cut, follow-ups, mapping names the graph does not contain (checked and cached), well-known people, typos, common words, learned entities, a card for every node and link, the overview, the open story, headline matching, a story missing from the library, the article backup (only that story is sent, quotes checked, retry), every model call failing still answers |
 | `test_explain.py` | 15 | Plain-English relationship and chain explanations: wording and grammar, data agreeing or disagreeing, article and LLM evidence, user edits, score arithmetic, every analysis link explained, the endpoint |
 | `test_library.py` | 16 | Analysis records (reported vs inferred vs hypotheses), persistence, limits, import, delete, analysis cards, "the last article", diverse one-topic paths, endpoints |
 | `test_hierarchy.py` | 11 | Tiers, link kinds, roll-up, guard rule, score reproduction |
@@ -821,7 +871,7 @@ server.py            FastAPI application (endpoints, SSE, warm-up)
 run.py               Starts the backend on 127.0.0.1:8000
 requirements.txt     Python dependencies
 impactgraph/         The engine (modules in section 6.1)
-tests/               The 257 automated tests
+tests/               The 280 automated tests
 research/            PAPER.md (research write-up), evaluate.py (reproducible experiments), results.json (their output)
 frontend/            React 19 + Vite application (pages, components, services, context, storage)
 public/              Legacy offline cockpit served at "/" by the backend

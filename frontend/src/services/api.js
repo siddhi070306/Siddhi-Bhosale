@@ -298,7 +298,7 @@ export function toGraphView(res) {
       endId: p.end,
       path: p.headline,
       score: fmt(p.score),
-      impact: `${p.end_dir > 0 ? 'Positive' : 'Negative'} · ${p.hops} hop${p.hops === 1 ? '' : 's'} · ~${p.horizon_days}d`,
+      impact: `${p.conditional ? 'If it rises: ' : ''}${p.end_dir > 0 ? 'Positive' : 'Negative'} · ${p.hops} hop${p.hops === 1 ? '' : 's'} · ~${p.horizon_days}d`,
       steps: p.steps || [],
       nodes: p.nodes || (p.steps ? [p.steps[0]?.from, ...p.steps.map((s) => s.to)] : []),
     })),
@@ -384,11 +384,12 @@ export const api = {
     }),
 
   // knowledge-graph assistant (read only) and the graph's change history
-  askAssistant: (question, history) =>
+  // analysisId: the news graph open in the app, so "this story" means that one (null asks about the whole graph)
+  askAssistant: (question, history, analysisId = null, story = null) =>
     request('/api/assistant', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ question, history: history || [] }),
+      body: JSON.stringify({ question, history: history || [], analysis_id: analysisId || null, story: story || null }),
     }),
   getNode: (id) => request(`/api/node/${encodeURIComponent(id)}`),
   getKbHistory: (limit = 50, offset = 0) => request(`/api/kb/history?limit=${limit}&offset=${offset}`),
