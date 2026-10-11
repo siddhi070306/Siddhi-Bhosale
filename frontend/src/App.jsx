@@ -44,6 +44,33 @@ export default function App() {
   const [sessions, setSessions] = useState(() => getAllSessions());
   const [activeSessionId, setActiveSessionIdState] = useState(() => getActiveSessionId());
 
+  const TOUR_STORAGE_KEY = 'apex_zenith_has_seen_tour_v1';
+
+  // Automatically start tour for first-time visitors on this device
+  useEffect(() => {
+    try {
+      const hasSeen = localStorage.getItem(TOUR_STORAGE_KEY);
+      if (!hasSeen) {
+        const timer = setTimeout(() => {
+          setTourIsActive(true);
+        }, 700);
+        return () => clearTimeout(timer);
+      }
+    } catch (e) {
+      console.warn('Failed to read tour status from localStorage:', e);
+    }
+  }, []);
+
+  const handleTourComplete = () => {
+    try {
+      localStorage.setItem(TOUR_STORAGE_KEY, 'true');
+    } catch (e) {
+      console.warn('Failed to save tour status to localStorage:', e);
+    }
+    setTourIsActive(false);
+    setActiveTab('chat');
+  };
+
   // Restore active session on initial mount
   useEffect(() => {
     const activeId = getActiveSessionId();
@@ -282,7 +309,7 @@ export default function App() {
     >
       <ProductTour 
         isActive={tourIsActive} 
-        onComplete={() => setTourIsActive(false)} 
+        onComplete={handleTourComplete} 
         setActiveTab={setActiveTab} 
         setHasAnalyzed={setHasAnalyzed} 
       />

@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 
 const TOUR_STEPS = [
-  { tab: 'chat', el: '.chat-input-wrapper', fallback: '.chatgpt-new-chat-top-btn', title: "1. The News Input", desc: "Paste any financial news article here, or select a sample event. You can also fetch live headlines to start analyzing." },
+  { tab: 'chat', el: '.chat-input-box', fallback: '.chat-input-container', title: "1. The News Input", desc: "Paste any financial news article here, or select a sample event. You can also fetch live headlines to start analyzing." },
   { tab: 'event-analysis', el: '.page-header', fallback: '.sidebar', title: "2. Extraction & Tags", desc: "Apex Zenith uses an LLM to read the article, extracting entities (companies, sectors, commodities) and tagging them as 'Observed' or 'Expected' events." },
   { tab: 'impact-graph', el: '.page-header', fallback: '.sidebar', title: "3. Layered Causal Graph", desc: "This interactive graph models the cascading effects of the event. It dynamically maps shocks from specific assets to broader sectors based on historical knowledge." },
   { tab: 'asset-impact', el: '.page-header', fallback: '.sidebar', title: "4. Results Tabs", desc: "View the most affected assets, exact causal paths, and read LLM-generated explanations that verify whether each causal link makes economic sense." },
@@ -11,6 +11,13 @@ const TOUR_STEPS = [
 export default function ProductTour({ isActive, onComplete, setActiveTab, setHasAnalyzed }) {
   const [step, setStep] = useState(0);
   const [rect, setRect] = useState(null);
+
+  // Reset step to 0 whenever tour is opened
+  useEffect(() => {
+    if (isActive) {
+      setStep(0);
+    }
+  }, [isActive]);
 
   useEffect(() => {
     if (!isActive) return;
