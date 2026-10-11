@@ -182,10 +182,13 @@ class Analyzer:
         head = [_fmt(kg.g.nodes[p["nodes"][0]]["label"], cur)]
         for (u, v) in p["edges"]:
             e = kg.g[u][v]
+            val = e.get("validation") or {}
+            eff_lag = kg.eff_lag(u, v)
             cur *= e["sign"]
             steps.append({"from": u, "to": v, "from_label": kg.g.nodes[u]["label"], "to_label": kg.g.nodes[v]["label"],
                           "to_dir": cur, "sign": e["sign"], "strength": round(e["strength"], 3),
-                          "effective": round(kg.eff_strength(u, v), 3), "lag": e["lag"], "mechanism": e["mechanism"],
+                          "effective": round(kg.eff_strength(u, v), 3), "lag": eff_lag, "base_lag": e["lag"],
+                          "vol_regime": val.get("vol_regime", "normal"), "mechanism": e["mechanism"],
                           "provenance": e["provenance"], "validation": e.get("validation"),
                           "evidence": [ev["sentence"] for ev in e["evidence"][-2:]]})
             head.append(_fmt(kg.g.nodes[v]["label"], cur))
@@ -517,7 +520,8 @@ class Analyzer:
                     e = kg.g[u][v]
                     val = e.get("validation") or {}
                     links[k] = {"source": u, "target": v, "sign": e["sign"], "strength": round(kg.eff_strength(u, v), 3), "base_strength": round(e["strength"], 3),
-                                "lag": e["lag"], "provenance": e["provenance"], "inferred": e.get("inferred", False),
+                                "lag": kg.eff_lag(u, v), "base_lag": e["lag"], "vol_regime": val.get("vol_regime", "normal"),
+                                "provenance": e["provenance"], "inferred": e.get("inferred", False),
                                 "verdict": val.get("verdict"), "paths": []}
                 links[k]["paths"].append(ex_["id"])
         for s in sources:                 # a stated move with no forward paths must still be on the canvas

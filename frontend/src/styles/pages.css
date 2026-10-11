@@ -56,15 +56,17 @@
 }
 
 .ticker-card {
-  background: var(--bg-white);
-  border: 1px solid var(--border-subtle);
+  background: var(--glass-bg);
+  backdrop-filter: var(--glass-blur);
+  -webkit-backdrop-filter: var(--glass-blur);
+  border: var(--glass-border-subtle);
   border-radius: var(--radius-md);
   padding: 16px;
   display: flex;
   flex-direction: column;
   gap: 8px;
   transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);
-  box-shadow: var(--shadow-card);
+  box-shadow: var(--glass-shadow);
   animation: slideUpFade 0.6s cubic-bezier(0.16, 1, 0.3, 1) both;
 }
 
@@ -76,8 +78,9 @@
 
 .ticker-card:hover {
   transform: translateY(-4px) scale(1.02);
-  border-color: #cbd5e1;
-  box-shadow: 0 12px 24px -8px rgba(0,0,0,0.12), 0 4px 8px -4px rgba(0,0,0,0.05);
+  background: var(--glass-bg-hover);
+  border-color: rgba(203, 213, 225, 0.9);
+  box-shadow: var(--glass-shadow-hover);
 }
 
 [data-trend="up"],
@@ -307,12 +310,14 @@
    2. EVENT ANALYSIS DASHBOARD
    ========================================================================== */
 .analysis-input-box {
-  background: var(--bg-white);
-  border: 1px solid var(--border-subtle);
+  background: var(--glass-bg);
+  backdrop-filter: var(--glass-blur);
+  -webkit-backdrop-filter: var(--glass-blur);
+  border: var(--glass-border-subtle);
   border-radius: var(--radius-md);
   padding: 16px 20px;
   margin-bottom: 24px;
-  box-shadow: var(--shadow-card);
+  box-shadow: var(--glass-shadow);
 }
 
 .input-with-button {
@@ -533,12 +538,14 @@
 }
 
 .graph-canvas-wrapper {
-  background: var(--bg-white);
-  border: 1px solid var(--border-subtle);
+  background: var(--glass-bg);
+  backdrop-filter: var(--glass-blur);
+  -webkit-backdrop-filter: var(--glass-blur);
+  border: var(--glass-border-subtle);
   border-radius: var(--radius-md);
   position: relative;
   overflow: hidden;
-  box-shadow: var(--shadow-card);
+  box-shadow: var(--glass-shadow);
   display: flex;
   flex-direction: column;
 }
@@ -560,11 +567,13 @@
   display: flex;
   flex-direction: column;
   gap: 6px;
-  background: var(--bg-white);
-  border: 1px solid var(--border-subtle);
+  background: rgba(255, 255, 255, 0.78);
+  backdrop-filter: blur(16px) saturate(180%);
+  -webkit-backdrop-filter: blur(16px) saturate(180%);
+  border: 1px solid rgba(255, 255, 255, 0.85);
   border-radius: var(--radius-md);
-  padding: 4px;
-  box-shadow: var(--shadow-sm);
+  padding: 5px;
+  box-shadow: 0 8px 24px rgba(15, 23, 42, 0.08), inset 0 1px 0 rgba(255, 255, 255, 0.95);
 }
 
 .graph-zoom-btn {
@@ -580,23 +589,24 @@
   color: var(--text-main);
   font-size: 16px;
   font-weight: 600;
-  transition: background-color 0.15s ease;
+  transition: all 0.15s ease;
 }
 
 .graph-zoom-btn:hover {
-  background-color: var(--bg-surface-subtle);
+  background-color: rgba(255, 255, 255, 0.9);
 }
 
 .evidence-tiers-legend {
   position: absolute;
   bottom: 24px;
   left: 24px;
-  background: rgba(255, 255, 255, 0.96);
-  backdrop-filter: blur(10px);
-  border: 1px solid var(--border-subtle);
+  background: rgba(255, 255, 255, 0.78);
+  backdrop-filter: blur(16px) saturate(180%);
+  -webkit-backdrop-filter: blur(16px) saturate(180%);
+  border: 1px solid rgba(255, 255, 255, 0.85);
   border-radius: var(--radius-md);
   padding: 14px 18px;
-  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.06);
+  box-shadow: 0 8px 32px rgba(15, 23, 42, 0.08), inset 0 1px 0 rgba(255, 255, 255, 0.95);
   font-family: inherit;
   z-index: 10;
   min-width: 260px;
@@ -610,10 +620,12 @@
 
 /* Right Panel: Pathways & Details */
 .graph-side-panel {
-  background: var(--bg-white);
-  border: 1px solid var(--border-subtle);
+  background: var(--glass-bg);
+  backdrop-filter: var(--glass-blur);
+  -webkit-backdrop-filter: var(--glass-blur);
+  border: var(--glass-border-subtle);
   border-radius: var(--radius-md);
-  box-shadow: var(--shadow-card);
+  box-shadow: var(--glass-shadow);
   display: flex;
   flex-direction: column;
   overflow: hidden;
@@ -656,17 +668,21 @@
 
 .pathway-card {
   padding: 12px;
-  border: 1px solid var(--border-subtle);
+  border: var(--glass-border-subtle);
   border-radius: var(--radius-md);
   margin-bottom: 12px;
-  background-color: var(--bg-white);
+  background: var(--glass-bg-subtle);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
   cursor: pointer;
-  transition: all 0.15s ease;
+  transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
 }
 
 .pathway-card:hover {
-  border-color: var(--border-strong);
-  background-color: var(--bg-surface-subtle);
+  border-color: rgba(203, 213, 225, 0.9);
+  background: var(--glass-bg-hover);
+  transform: translateY(-1px);
+  box-shadow: var(--glass-shadow);
 }
 
 .pathway-num {
@@ -793,12 +809,14 @@
 }
 
 .asset-trend-box {
-  background: var(--bg-white);
-  border: 1px solid var(--border-subtle);
+  background: var(--glass-bg);
+  backdrop-filter: var(--glass-blur);
+  -webkit-backdrop-filter: var(--glass-blur);
+  border: var(--glass-border-subtle);
   border-radius: var(--radius-md);
   padding: 20px;
   margin-bottom: 20px;
-  box-shadow: var(--shadow-card);
+  box-shadow: var(--glass-shadow);
 }
 
 /* Heatmap */
@@ -872,13 +890,23 @@
 }
 
 .sector-tile {
-  background: var(--bg-white);
-  border: 1px solid var(--border-subtle);
+  background: var(--glass-bg);
+  backdrop-filter: var(--glass-blur);
+  -webkit-backdrop-filter: var(--glass-blur);
+  border: var(--glass-border-subtle);
   border-radius: var(--radius-md);
   padding: 14px 16px;
   display: flex;
   flex-direction: column;
   gap: 4px;
+  box-shadow: var(--glass-shadow);
+  transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.sector-tile:hover {
+  background: var(--glass-bg-hover);
+  transform: translateY(-2px);
+  box-shadow: var(--glass-shadow-hover);
 }
 
 .sector-tile-name {
@@ -957,25 +985,31 @@
 
 .scenario-card-mini {
   padding: 12px;
-  border: 1px solid var(--border-subtle);
+  border: var(--glass-border-subtle);
   border-radius: var(--radius-md);
-  background: var(--bg-white);
+  background: var(--glass-bg-subtle);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
   margin-bottom: 10px;
   cursor: pointer;
-  transition: all 0.15s ease;
+  transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
 }
 
 .scenario-card-mini:hover {
-  border-color: var(--border-strong);
-  background: var(--bg-surface-subtle);
+  border-color: rgba(203, 213, 225, 0.9);
+  background: var(--glass-bg-hover);
+  transform: translateY(-1px);
+  box-shadow: var(--glass-shadow);
 }
 
 .scenario-chart-wrapper {
-  background: var(--bg-white);
-  border: 1px solid var(--border-subtle);
+  background: var(--glass-bg);
+  backdrop-filter: var(--glass-blur);
+  -webkit-backdrop-filter: var(--glass-blur);
+  border: var(--glass-border-subtle);
   border-radius: var(--radius-md);
   padding: 20px;
-  box-shadow: var(--shadow-card);
+  box-shadow: var(--glass-shadow);
 }
 
 .scenario-buttons-row {

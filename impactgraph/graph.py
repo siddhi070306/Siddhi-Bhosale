@@ -38,6 +38,22 @@ class KnowledgeGraph:
             mult = val.get("multiplier", 1.0)
         return min(0.99, e["strength"] * mult)
 
+    def eff_lag(self, u, v):
+        """Return the dynamic transmission lag (in trading days).
+
+        If the edge has been empirically validated against market data, returns the
+        dynamic lag scaled by current volatility regime. Otherwise falls back to
+        the static baseline prior lag.
+        """
+        e = self.g[u][v]
+        val = e.get("validation")
+        if val and val.get("adjusts"):
+            dyn = val.get("dynamic_lag")
+            if dyn is not None:
+                return dyn
+            return val.get("lag_days", e.get("lag", 1))
+        return e.get("lag", 1)
+
     # ---- ingestion -------------------------------------------------------------------------
     def ingest(self, article_id, text, extraction):
         """Update the graph with one analysed article. Returns a list of change records."""

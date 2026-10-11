@@ -253,6 +253,8 @@ export function toGraphView(res) {
       strength: l.strength,
       baseStrength: l.base_strength,
       lag: l.lag,
+      baseLag: l.base_lag,
+      volRegime: l.vol_regime,
       mechanism: l.mechanism,
       isActive: (l.paths || []).includes(0),
       provenance: l.provenance,
@@ -326,6 +328,15 @@ export const api = {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ source, target, weight }),
+    }),
+
+  // portfolio contagion & optimal hedge finder
+  getPortfolioPresets: () => request('/api/portfolio/presets'),
+  getPortfolioHedge: (body) =>
+    request('/api/portfolio/hedge', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body || {}),
     }),
 
   // Returns the raw backend result plus adapted views for the pages. Throws on any failure.
