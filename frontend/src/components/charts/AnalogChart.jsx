@@ -99,6 +99,100 @@ export default function AnalogChart({
   const innerW = W - PX_LEFT - PX_RIGHT;
   const innerH = H - PY_TOP - PB_BOTTOM;
 
+  // Collect series safely (runs unconditionally across all renders)
+  const currentVals = data?.current?.values || [];
+  const analogsList = data?.analogs || [];
+  const allSeries = [];
+  if (currentVals.length) allSeries.push(currentVals);
+  analogsList.forEach((a) => {
+    if (a?.values?.length) allSeries.push(a.values);
+  });
+
+  const nDays = allSeries.length ? Math.max(...allSeries.map((s) => s.length), 90) : 90;
+
+  // Compute Scales
+  const allVals = allSeries.flat();
+  let minV = allVals.length ? Math.min(...allVals) : 90;
+  let maxV = allVals.length ? Math.max(...allVals) : 110;
+
+  // Buffer bounds to ensure clear baseline margin
+  minV = Math.floor(Math.min(minV, 92) / 5) * 5;
+  maxV = Math.ceil(Math.max(maxV, 108) / 5) * 5;
+  const span = maxV - minV || 1;
+
+  const toX = (i) => PX_LEFT + (i / Math.max(nDays - 1, 1)) * innerW;
+  const toY = (v) => PY_TOP + innerH - ((v - minV) / span) * innerH;
+
+  // Build Upper, Lower, and Median trajectories across all historical analogs
+  const { corridorUpper, corridorLower, medianPoints } = useMemo(() => {
+    const upper = [];
+    const lower = [];
+    const median = [];
+
+    if (!analogsList.length) return { corridorUpper: [], corridorLower: [], medianPoints: [] };
+
+    for (let day = 0; day < nDays; day++) {
+      const dayVals = analogsList
+        .map((a) => a.values?.[day])
+        .filter((v) => v != null)
+        .sort((a, b) => a - b);
+
+      if (dayVals.length > 0) {
+        const minVal = dayVals[0];
+        const maxVal = dayVals[dayVals.length - 1];
+        const midVal = dayVals[Math.floor(dayVals.length / 2)];
+        const x = toX(day);
+
+        upper.push({ x, y: toY(maxVal) });
+        lower.push({ x, y: toY(minVal) });
+        median.push({ x, y: toY(midVal) });
+      }
+    }
+    return { corridorUpper: upper, corridorLower: lower, medianPoints: median };
+  }, [analogsList, nDays, minV, maxV, innerW, innerH]);
+
+  // Points for current series
+  const currentPoints = useMemo(() => {
+    return currentVals.map((v, i) => ({ x: toX(i), y: toY(v) }));
+  }, [currentVals, minV, maxV, innerW, innerH]);
+
+  // Points for individual analogs
+  const analogPaths = useMemo(() => {
+    return analogsList.map((a) => {
+      const pts = (a.values || []).map((v, i) => ({ x: toX(i), y: toY(v) }));
+      return {
+        label: a.label,
+        shock_date: a.shock_date,
+        shock_pct: a.shock_pct,
+        path: getSmoothPath(pts),
+        points: pts,
+      };
+    });
+  }, [analogsList, minV, maxV, innerW, innerH]);
+
+  // Hover Crosshair Data
+  const hoverData = useMemo(() => {
+    if (hoveredDay === null) return null;
+    const cur = currentVals[hoveredDay];
+    const medVal = analogsList.map((a) => a.values?.[hoveredDay]).filter((v) => v != null).sort((a, b) => a - b);
+    const median = medVal.length ? medVal[Math.floor(medVal.length / 2)] : null;
+    const minVal = medVal.length ? medVal[0] : null;
+    const maxVal = medVal.length ? medVal[medVal.length - 1] : null;
+
+    return {
+      day: hoveredDay,
+      current: cur,
+      median,
+      min: minVal,
+      max: maxVal,
+      analogs: analogsList.map((a) => ({
+        date: a.shock_date,
+        val: a.values?.[hoveredDay],
+      })),
+    };
+  }, [hoveredDay, currentVals, analogsList]);
+
+  // Conditional early returns (guaranteed consistent hook call count)
   if (loading) {
     return (
       <div className="card" style={{ padding: 22 }}>
@@ -145,77 +239,6 @@ export default function AnalogChart({
     );
   }
 
-  // Collect series
-  const currentVals = data.current?.values || [];
-  const analogsList = data.analogs || [];
-  const allSeries = [];
-  if (currentVals.length) allSeries.push(currentVals);
-  analogsList.forEach((a) => {
-    if (a.values?.length) allSeries.push(a.values);
-  });
-
-  const nDays = Math.max(...allSeries.map((s) => s.length), 90);
-
-  // Compute Scales
-  const allVals = allSeries.flat();
-  let minV = Math.min(...allVals);
-  let maxV = Math.max(...allVals);
-
-  // Buffer bounds to ensure clear baseline margin
-  minV = Math.floor(Math.min(minV, 92) / 5) * 5;
-  maxV = Math.ceil(Math.max(maxV, 108) / 5) * 5;
-  const span = maxV - minV || 1;
-
-  const toX = (i) => PX_LEFT + (i / (nDays - 1)) * innerW;
-  const toY = (v) => PY_TOP + innerH - ((v - minV) / span) * innerH;
-
-  // Build Upper, Lower, and Median trajectories across all historical analogs
-  const { corridorUpper, corridorLower, medianPoints } = useMemo(() => {
-    const upper = [];
-    const lower = [];
-    const median = [];
-
-    if (!analogsList.length) return { corridorUpper: [], corridorLower: [], medianPoints: [] };
-
-    for (let day = 0; day < nDays; day++) {
-      const dayVals = analogsList
-        .map((a) => a.values?.[day])
-        .filter((v) => v != null)
-        .sort((a, b) => a - b);
-
-      if (dayVals.length > 0) {
-        const minVal = dayVals[0];
-        const maxVal = dayVals[dayVals.length - 1];
-        const midVal = dayVals[Math.floor(dayVals.length / 2)];
-        const x = toX(day);
-
-        upper.push({ x, y: toY(maxVal) });
-        lower.push({ x, y: toY(minVal) });
-        median.push({ x, y: toY(midVal) });
-      }
-    }
-    return { corridorUpper: upper, corridorLower: lower, medianPoints: median };
-  }, [analogsList, nDays, minV, maxV]);
-
-  // Points for current series
-  const currentPoints = useMemo(() => {
-    return currentVals.map((v, i) => ({ x: toX(i), y: toY(v) }));
-  }, [currentVals, minV, maxV]);
-
-  // Points for individual analogs
-  const analogPaths = useMemo(() => {
-    return analogsList.map((a) => {
-      const pts = (a.values || []).map((v, i) => ({ x: toX(i), y: toY(v) }));
-      return {
-        label: a.label,
-        shock_date: a.shock_date,
-        shock_pct: a.shock_pct,
-        path: getSmoothPath(pts),
-        points: pts,
-      };
-    });
-  }, [analogsList, minV, maxV]);
-
   // Grid Ticks
   const numYTicks = 5;
   const yTicks = Array.from({ length: numYTicks }, (_, idx) => {
@@ -225,28 +248,6 @@ export default function AnalogChart({
   const xTicks = isFullPage
     ? [0, 15, 30, 45, 60, 75, nDays - 1].filter((d) => d < nDays)
     : [0, 30, 60, nDays - 1].filter((d) => d < nDays);
-
-  // Hover Crosshair Data
-  const hoverData = useMemo(() => {
-    if (hoveredDay === null) return null;
-    const cur = currentVals[hoveredDay];
-    const medVal = analogsList.map((a) => a.values?.[hoveredDay]).filter((v) => v != null).sort((a, b) => a - b);
-    const median = medVal.length ? medVal[Math.floor(medVal.length / 2)] : null;
-    const minVal = medVal.length ? medVal[0] : null;
-    const maxVal = medVal.length ? medVal[medVal.length - 1] : null;
-
-    return {
-      day: hoveredDay,
-      current: cur,
-      median,
-      min: minVal,
-      max: maxVal,
-      analogs: analogsList.map((a) => ({
-        date: a.shock_date,
-        val: a.values?.[hoveredDay],
-      })),
-    };
-  }, [hoveredDay, currentVals, analogsList]);
 
   const handleFocus = (idx) => {
     setInternalFocused(idx);
