@@ -175,11 +175,6 @@ export default function ChatInterface({
                         {msg.input.note && ` · ${msg.input.note}`}
                       </p>
                     )}
-                    {msg.noEvent && msg.emptyReason && (
-                      <p style={{ fontSize: 12.5, color: '#92400e', lineHeight: 1.5 }}>
-                        {msg.emptyReason} {msg.emptyHint}
-                      </p>
-                    )}
                     {msg.hypothesis && msg.hypothesis.background && (
                       <p style={{ fontSize: 11.5, color: '#71717a', borderLeft: '3px solid #e4e4e7', paddingLeft: 8 }}>
                         <strong>Background (model knowledge, not from the article):</strong> {msg.hypothesis.background}

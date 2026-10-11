@@ -202,7 +202,7 @@ export default function InteractiveGraph({
   const [pan, setPan] = useState({ x: 20, y: 10 });
   const [isPanning, setIsPanning] = useState(false);
   const [legendCollapsed, setLegendCollapsed] = useState(false);
-  const [canvasTheme, setCanvasTheme] = useState('dark');
+  const [canvasTheme, setCanvasTheme] = useState('light');
   const isDark = canvasTheme === 'dark';
   const rawNodes = data?.nodes || [];
   const rawEdges = data?.edges || [];
@@ -743,7 +743,7 @@ export default function InteractiveGraph({
         overflow: 'hidden',
         background: isDark
           ? 'radial-gradient(ellipse at 50% 35%, #242938 0%, #191c26 55%, #11141b 100%)'
-          : '#fcfdfd',
+          : '#ffffff',
         border: isDark ? '1px solid #2d3444' : '1px solid #e2e8f0',
         borderRadius: 12,
         transition: 'background 0.3s ease, border-color 0.3s ease',
@@ -1953,28 +1953,7 @@ export default function InteractiveGraph({
         >
           <Maximize2 size={15} />
         </button>
-        {onResetDefaults && (
-          <button
-            className="graph-zoom-btn"
-            onClick={onResetDefaults}
-            disabled={isResetting}
-            title="Reset Graph to Baseline Defaults (Undo all demo edits & edge overrides)"
-            style={{
-              width: 32,
-              height: 32,
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              background: 'none',
-              border: 'none',
-              cursor: isResetting ? 'not-allowed' : 'pointer',
-              borderRadius: 6,
-              color: isResetting ? '#94a3b8' : '#e11d48',
-            }}
-          >
-            <RotateCcw size={14} className={isResetting ? 'spin' : ''} />
-          </button>
-        )}
+
       </div>
     </div>
   );

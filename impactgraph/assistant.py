@@ -247,7 +247,7 @@ def answer(kg, version, question, history=(), use_llm=True, library=None, analys
     links = []
     if use_llm and llm.available():
         unk = retrieval.unknown_terms(kg, question)
-        if unk["names"] or (not focus and unk["words"]):
+        if unk["names"]:
             links = llm.link_question(question, [(n, d["label"], d["type"]) for n, d in g.nodes(data=True)]) or []
     for l in links:
         if l["node"] not in ents:
