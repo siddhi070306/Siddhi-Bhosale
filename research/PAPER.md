@@ -107,7 +107,7 @@ The design follows five requirements derived from the problem statement.
 
 ### 4.1 Content
 
-The curated graph contains **56 entities** and **90 directed links** (E1 in `results.json`), referred to by 194 aliases.
+The curated graph contains **56 entities** and **90 directed links** (E1 in `results.json`), referred to by 215 aliases.
 
 | Tier | Level | Node types | Entities |
 |---|---|---|---|
@@ -251,9 +251,11 @@ each analysis records the graph version it ran on.
 **Grounded question answering.** The graph is exported as plain-text *cards* with stable identifiers (node `n:`, link `l:`, sector `s:`,
 tier `t:`, path `p:`), each built only from stored facts, pinned to the graph version and summarised by a fingerprint that changes exactly
 when the graph's facts change. To answer a question, the assistant finds the entities it names (follow-up questions may borrow the
-previous subject), retrieves node, link and path cards between them (or a *gap* card when the graph holds no path), and asks the language
+previous subject), retrieves node, link and path cards between them (or, when the graph holds no path, a *gap* card and a *shared-drivers*
+card listing the variables that move both, which is co-movement through common causes and is labelled as such), and asks the language
 model to answer from those cards only, citing card identifiers. Citations not in the retrieved set are removed; an answer with no valid
-citation is replaced by the cards themselves. The assistant never changes the graph.
+citation gets one retry in which the model is shown its answer and asked to cite, and is otherwise replaced by the cards themselves. The
+assistant never changes the graph.
 
 For a question about one entity ("what happens if crude oil rises?") the strongest chains are short and share the strongest first link,
 because a chain's score is a product. Retrieval therefore takes the strongest chain through each *different* first link, then through each

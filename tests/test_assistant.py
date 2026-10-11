@@ -4,7 +4,7 @@ from unittest import mock
 
 os.environ["ZENITH_REQUIRE_LLM"] = "0"
 
-from impactgraph import assistant, llm
+from impactgraph import assistant, cards as cardlib, llm
 from impactgraph.service import Analyzer
 
 V = {"version": 0, "epoch": 0}
@@ -92,6 +92,37 @@ class AnswerTests(unittest.TestCase):
         self.assertTrue(r["grounded"])
         self.assertIn("cited no card", r["note"])
         self.assertIn("[l:crude_oil>airlines]", r["answer"])
+
+    def test_funds_are_found_by_their_everyday_names(self):
+        for q in ("What effect does gold have on long-term ETF?", "how does gold affect long-term bonds?",
+                  "how does gold affect the long term treasury ETF?"):
+            self.assertEqual(assistant.find_entities(q), ["gold", "tlt"], q)
+        self.assertEqual(assistant.find_entities("how does a gold ETF move with an airline ETF?"), ["gld", "jets"])
+
+    def test_unconnected_pair_gets_its_shared_drivers_not_only_a_gap(self):
+        ids = [c["id"] for c in assistant.build_cards(self.kg, ["gold", "tlt"])]
+        self.assertIn("x:gold>tlt", ids)
+        self.assertIn("d:gold&tlt", ids)
+        sd = {x["driver"]: (x["a"]["sign"], x["b"]["sign"]) for x in cardlib.shared_drivers(self.kg, "gold", "tlt")}
+        self.assertEqual(sd["risk_aversion"], (1, 1))            # flight to safety: both rise
+        self.assertEqual(sd["rate_exp"], (-1, -1))               # higher rate expectations: both fall
+        self.assertNotIn("fed", sd)                              # acts only through rate expectations, already listed
+        card = cardlib.get_card(self.kg, "d:gold&tlt")
+        self.assertIn("not an effect of one on the other", card["text"])
+        self.assertIsNone(cardlib.shared_drivers_card(self.kg, "wheat", "tcs"))   # nothing moves both: the gap card stands alone
+
+    def test_an_uncited_answer_gets_one_retry_and_a_cited_retry_is_kept(self):
+        replies = ["The graph does not say how gold affects the Nifty 50.",
+                   "The graph does not say how gold affects the Nifty 50 [x:gold>nifty50]."]
+        with mock.patch.object(llm, "available", return_value=True), mock.patch.object(llm, "_chat", side_effect=replies) as chat:
+            r = assistant.answer(self.kg, V, "what effect does gold have on nifty 50 ?")
+        self.assertEqual(chat.call_count, 2)
+        self.assertIn("Previous answer:", chat.call_args_list[1][0][1])
+        self.assertEqual((r["mode"], [s["id"] for s in r["sources"]], r["note"]), ("llm", ["x:gold>nifty50"], None))
+        with mock.patch.object(llm, "available", return_value=True), \
+                mock.patch.object(llm, "_chat", return_value=replies[1]) as chat:
+            assistant.answer(self.kg, V, "what effect does gold have on nifty 50 ?")
+        self.assertEqual(chat.call_count, 1)                    # a cited first answer needs no retry
 
     def test_without_an_llm_it_answers_from_the_cards(self):
         with mock.patch.object(llm, "available", return_value=False):

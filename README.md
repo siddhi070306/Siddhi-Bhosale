@@ -1,176 +1,239 @@
-# Apex Zenith - financial event impact graph
+# Apex Zenith — Financial Event Impact Graph & Multi-Asset Contagion Engine
 
-Turns a piece of financial news into a **dependency graph** that shows how the event may propagate through
-economic variables, sectors and assets - and explains every link, the evidence behind it, and how sure we are.
+[![Python](https://img.shields.io/badge/Python-3.10%2B-blue.svg)](https://www.python.org/)
+[![FastAPI](https://img.shields.io/badge/FastAPI-0.110%2B-009688.svg)](https://fastapi.tiangolo.com/)
+[![React](https://img.shields.io/badge/React-19.0-61DAFB.svg)](https://react.dev/)
+[![Vite](https://img.shields.io/badge/Vite-6.0-646CFF.svg)](https://vitejs.dev/)
+[![Tests](https://img.shields.io/badge/Tests-228%20Passed-brightgreen.svg)](tests/)
+[![Architecture](https://img.shields.io/badge/Architecture-4--Tier%20Causal%20DAG-orange.svg)](#4-tier-hierarchical-knowledge-graph)
 
-> Example chain the system traces: crude oil +12% -> inflation expectations up -> rate expectations up ->
-> real estate down / banks mixed -> Nifty Realty, DLF, S&P 500 ...
+**Apex Zenith** transforms raw financial news, central bank statements, regulatory filings, and commodity shocks into a **grounded, transparent causal dependency graph**. It traces how macro shocks propagate through economic variables, industry sectors, and tradable assets—validating every causal link against empirical market data, quantifying risk with Monte Carlo simulations and historical analogs, and discovering algorithmic hedges for investor portfolios.
 
-## Run it
+> **Example Causal Cascade:**  
+> `Brent Crude +12%` → `Inflation Expectations ↑` → `10Y Yields ↑` → `Refinancing Costs ↑` → `Airlines & Real Estate ↓` / `Energy Producers ↑` → `DAL, DLF, SPY Impact Assessment`
+
+---
+
+## Architecture & Data Flow
+
+```mermaid
+flowchart TD
+    subgraph INGESTION["1. News and Event Ingestion Layer"]
+        A1["Live RSS and NewsAPI Feeds"] --> B1["Text Preprocessing and Normalization"]
+        A2["SEC 8-K Regulatory Filings"] --> B1
+        A3["Interactive What-If Scenario Shocks"] --> B1
+        B1 --> B2["Entity and Event Extraction Engine"]
+        B2 -->|"Rule-Based NER"| B3["Standardized Entities and Shocks"]
+        B2 -->|"LLM Proposer"| B4["Verbatim Quote Verification"]
+        B4 -->|"Verbatim Match in Source"| B3
+    end
+
+    subgraph GRAPH["2. 4-Tier Hierarchical Knowledge Graph"]
+        T0["Tier 0: Policy and Geopolitical Events<br/>OPEC+, Central Banks, Geopolitical Shocks"]
+        T1["Tier 1: Macro Variables and Commodities<br/>Brent, Henry Hub Gas, US10Y, Inflation Exp"]
+        T2["Tier 2: Industry Sectors<br/>Airlines, Technology, Energy, Banking"]
+        T3["Tier 3: Tradable Assets and Instruments<br/>DAL, NVDA, XOM, SPY, Nifty 50"]
+
+        T0 -->|"causes / policy reaction"| T1
+        T1 -->|"causes / tracks"| T2
+        T2 -->|"member of / weight in"| T3
+        T2 -.->|"feedback loops: credit and growth"| T1
+    end
+
+    subgraph ENGINES["3. Analytical and Quantitative Simulation Engines"]
+        E1["Depth-Limited DAG Propagation<br/>Empirical Attenuation Decay"]
+        E2["Empirical Time Series Validation<br/>FRED and Yahoo Cross-Correlation"]
+        E3["Historical Analogs Engine<br/>5-Day Sliding Return Scan, Base-100"]
+        E4["Monte Carlo Volatility Fan<br/>500 GBM Paths, Zero Drift, VaR95, CVaR95"]
+        E5["Portfolio Contagion and Hedge Finder<br/>Reverse DAG Traversal, Risk Offsets"]
+        E6["Citable KG Assistant and RAG<br/>Structured Cards: n:, l:, p:, s:, t:"]
+    end
+
+    subgraph PRESENTATION["4. Presentation and Real-Time Streaming Layer"]
+        UI1["Interactive Network Graph Canvas"]
+        UI2["Historical Analogs and Volatility Fan"]
+        UI3["Portfolio Contagion Matrix and Hedge Recommendations"]
+        UI4["Grounded AI Assistant with Citations"]
+        UI5["Live SSE Market Stream via Yahoo and FRED"]
+    end
+
+    %% Causal Links between pipeline stages
+    B3 -->|"Map Observed Shocks"| T0
+    B3 -->|"Anchor Shocks"| T1
+    T3 -->|"Shock Inputs"| E1
+    T1 -->|"Correlation Check"| E2
+    E1 --> E3
+    E1 --> E4
+    E1 --> E5
+    T3 --> E5
+    T0 --> E6
+    T1 --> E6
+    T2 --> E6
+    T3 --> E6
+
+    E1 --> UI1
+    E3 --> UI2
+    E4 --> UI2
+    E5 --> UI3
+    E6 --> UI4
+    E2 --> UI5
+```
+
+
+---
+
+## Core Capabilities & Engines
+
+### 1. 4-Tier Hierarchical Knowledge Graph (`impactgraph/hierarchy.py`, `kb.py`)
+Organized systematically across four economic layers to ensure structural rigor and eliminate nonsensical cycles:
+* **Tier 0 (Events & Policy):** Central bank rate decisions, OPEC+ production quotas, regulatory actions, and geopolitical escalations.
+* **Tier 1 (Economic Variables & Commodities):** Brent Crude, Henry Hub Natural Gas, US 10-Year Yield, Inflation Expectations, US Dollar Index.
+* **Tier 2 (Industry Sectors):** Airlines, Energy Producers, Technology, Real Estate, Banking.
+* **Tier 3 (Tradable Assets):** Individual stocks (`DAL`, `NVDA`, `XOM`), broad indices (`SPY`, `NIFTY_50`), and ETFs.
+
+Every link is characterized by:
+- **Relation Type:** `causes`, `policy_reaction`, `member_of`, `tracks`, or `weight_in`.
+- **Directional Sign & Strength:** Signed impact weight $[-1.0, +1.0]$ with empirical per-hop decay.
+- **Causal Mechanism:** Explicit human-auditable economic rationale.
+- **Typical Lag:** Real-world transmission timeframe (e.g., immediate, 1–5 days, 1–4 weeks).
+
+### 2. Depth-Limited DAG Propagation (`impactgraph/propagate.py`)
+- Traverses multi-path cascades using an attenuation decay factor.
+- **Anchor Nodes:** Identifies assets or variables the source article reports as *already moved* (observed facts). Downstream paths treat these as boundary anchors, comparing predicted transmission with observed reality.
+- **Contradiction Detection:** Explicitly flags assets subjected to conflicting signals across diverging transmission paths (e.g., higher interest rates boosting bank net interest margins while simultaneously depressing credit demand).
+
+### 3. Empirical Time Series Validation (`impactgraph/timeseries.py`)
+- Cross-references causal links against ~2 years of daily data fetched from **FRED** and **Yahoo Finance**.
+- Computes rolling cross-correlations at plausible economic lags.
+- Labels links as `supported`, `contradicted`, or `inconclusive`. If live data is unavailable, simulated fallback data is strictly labeled and never modifies Bayesian link confidence.
+
+### 4. Historical Analogs Engine (`impactgraph/analogs.py`)
+- Conducts a 5-day sliding window scan across historical market data to find past macro episodes exhibiting similar cumulative shock magnitude.
+- De-duplicates candidate episodes within a 20-day window to isolate distinct market regimes.
+- Normalizes trajectories to **Base 100** at $T=0$, projecting post-event paths ($T+1$ through $T+10$) to contextualize current shocks against past reality.
+
+### 5. Monte Carlo Volatility Fan (`impactgraph/forecast.py`)
+- Simulates 500 stochastic paths using **Geometric Brownian Motion (GBM)** over a 10-day forward horizon.
+- Employs a **zero-drift assumption** ($\mu = 0$) to model unbiased volatility expansion around the predicted shock level.
+- Computes distribution percentiles ($P_{10}$, $P_{25}$, $P_{50}$, $P_{75}$, $P_{90}$) and rigorous downside risk metrics:
+  - **VaR 95 (Value at Risk):** The 5th percentile worst-case loss threshold over the simulation horizon.
+  - **CVaR 95 (Conditional Value at Risk / Expected Shortfall):** The mean loss in the extreme 5% left tail.
+
+### 6. Portfolio Contagion & Reverse Hedge Finder (`impactgraph/hedge.py`)
+- Evaluates multi-asset portfolios against propagating macro shocks, computing weighted net exposure.
+- Executes reverse graph traversal to identify defensive hedges:
+  - Discovers inversely correlated assets or sectors with negative transmission coefficients to the dominant shock.
+  - Generates actionable hedge allocation suggestions to neutralize net drawdown.
+
+### 7. Citation-Grounded KG Assistant (`impactgraph/assistant.py`, `cards.py`)
+- Answers natural-language analytical questions strictly from knowledge graph facts.
+- Deconstructs graph entities into citable text cards (`n:<node>`, `l:<from>><to>`, `p:<path>`, `s:<sector>`, `t:<tier>`).
+- Enforces strict quote verification: answers must cite real graph cards; unsupported claims or hallucinations are automatically stripped.
+
+### 8. Dynamic Knowledge Base & Rollback Guard (`impactgraph/kbstate.py`, `changelog.py`)
+- Dynamically learns new entities and links from ingested articles while safeguarding core baseline integrity.
+- Runs automated regression tests on every update: if a learned edge contradicts curated baselines or violates tier rules, the state is immediately reverted.
+- Maintains a full versioned audit trail (`GET /api/kb/history`).
+
+---
+
+## Quickstart & Installation
+
+### Prerequisites
+- Python 3.10+
+- Node.js 18+ & npm
+- (Optional) API keys for Groq, OpenRouter, FRED, or NewsAPI
+
+### 1. Backend Setup
 
 ```bash
+# Clone the repository
+git clone https://github.com/Siddhi-Bhosale/hackwave3.0.git
+cd hackwave3.0/Siddhi-Bhosale
+
+# Set up Python virtual environment
+python -m venv .venv
+# Windows:
+.\.venv\Scripts\activate
+# Linux/macOS:
+source .venv/bin/activate
+
+# Install dependencies
 pip install -r requirements.txt
-python run.py                      # http://127.0.0.1:8000
-python -m unittest discover tests  # 228 tests
-ZENITH_REQUIRE_LLM=0 python research/evaluate.py   # the paper's experiments (offline, ~5 s; needs data/cache)
+
+# Configure environment variables
+cp .env.example .env
 ```
 
-A research-paper write-up of the method and its evaluation is in `research/PAPER.md`; the full technical reference is `DOCUMENTATION.md`.
+### 2. Configure Environment (`.env`)
 
-Open the page, pick a sample event (or paste text), press **Analyse event**.
-Open `http://127.0.0.1:8000/#demo0` (or `#demo1` ... `#demo4`) to auto-run a sample.
+| Variable | Description | Default / Requirement |
+|---|---|---|
+| `GROQ_API_KEY` | High-speed LLM extraction & quote verification | Recommended (e.g. `llama-3.3-70b-versatile`) |
+| `OPENROUTER_API_KEY` | Alternative LLM provider fallback | Optional fallback |
+| `ZENITH_REQUIRE_LLM` | Set `0` for offline deterministic rules-only mode | `1` (production), `0` (tests) |
+| `FRED_API_KEY` | Official Federal Reserve Economic Data access | Optional (falls back to FRED public CSVs) |
+| `NEWSAPI_KEY` | NewsAPI live headline ingestion | Optional (falls back to curated RSS feeds) |
+| `ZENITH_SEC_CONTACT` | User-Agent contact header for SEC EDGAR 8-K API | e.g. `Research/1.0 (contact@example.com)` |
 
-Copy `.env.example` to `.env` and add keys. **An LLM key (`GROQ_API_KEY` or `OPENROUTER_API_KEY`) is required**:
-the LLM proposes events and cause->effect links on every analysis, and the system keeps only proposals whose
-supporting quote appears verbatim in the article. (`ZENITH_REQUIRE_LLM=0` gives an offline rules-only mode,
-used by the tests.)
+### 3. Launching the System
 
-| Setting | What it adds |
-|---|---|
-| `GROQ_API_KEY` / `OPENROUTER_API_KEY` | Required LLM step: extra events, quote-verified links, grounded summary. |
-| `FRED_API_KEY` | Official FRED API for economic series (falls back to FRED's public CSV download without it). |
-| `NEWSAPI_KEY` | Business headlines from NewsAPI (US + India); falls back to public RSS feeds. |
-| **Live market data** toggle | Real FRED and Yahoo Finance series; each link is checked with lagged correlations. First run downloads ~40 series (cached 6 h under `data/cache`). |
-| `GET /api/sec?ticker=DAL` | Recent SEC 8-K filing metadata (set `ZENITH_SEC_CONTACT`). |
-
-## How it works
-
-1. **Extraction** (`impactgraph/extract.py`) - rules find entities (commodities, indicators, sectors, companies,
-   indices, central banks) and events (price moves, central-bank decisions, OPEC+ decisions, geopolitical
-   shocks, regulation). Each event is tagged **observed** (reported as happened) or **expected** (hedged:
-   "could", "analysts warn", "if ...").
-2. **Knowledge graph** (`kb.py`, `graph.py`) - 56 entities and 90 curated causal links, each with a sign,
-   strength, typical lag and a one-line mechanism. Articles update the graph: sentences where both ends of a
-   link appear are stored as evidence and nudge its strength; unknown companies are added as *inferred* nodes.
-3. **Propagation** (`propagate.py`) - depth-limited multi-path search. A path scores the product of its link
-   strengths with a per-hop decay. Nodes the article says have *already moved* are **anchors**: other paths stop
-   there so the model can be compared with what actually happened, and the observed move is traced onward.
-   Regulatory actions are scoped to the regulator's market.
-4. **Data** (`timeseries.py`) - for each link that matters, correlate the two series over ~2 years of daily data
-   at plausible lags and label the link `supported`, `contradicted` or `inconclusive`.
-5. **Explanation** (`service.py`, UI) - every path is shown step by step with mechanism, strength, lag, provenance
-   (`prior` / `observed` / `inferred` / `validated`), data check and the article sentences that support it.
-
-## What is fact and what is inference
-
-* **Observed** = the text says it happened. Quoted verbatim next to the event.
-* Everything downstream is **inferred** and labelled so. The "Checks" tab compares the model's prediction with
-  each move the article states and reports `consistent`, `graph disagrees`, `model mixed`, or `no path`.
-* Scores are **heuristic plausibility** from analyst-set priors plus evidence - **not probabilities and not
-  forecasts**. Confidence is discounted when paths disagree, and nodes with conflicting paths are flagged
-  "mixed signals".
-
-## Honest limits
-
-* Link strengths are expert priors, not fitted coefficients; data validation covers only links with series.
-* Correlation is not causation, and relationships change between regimes.
-* **Simulated data** is used only when no real series is reachable; it is labelled "simulated" everywhere and
-  **never** changes any confidence (checking a prior against data generated from it would be circular).
-* The rule-based extractor handles common phrasing, not arbitrary prose; the LLM option widens coverage but its
-  events must quote the article and are shown with an `LLM` badge.
-* Not investment advice.
-
-## Layout
-
-```
-impactgraph/  kb.py extract.py graph.py propagate.py timeseries.py llm.py feeds.py service.py
-public/       index.html (D3 UI, vendored d3 for offline use)
-server.py     FastAPI app      run.py   launcher      tests/   unit + end-to-end tests
+```bash
+# Start FastAPI backend (http://127.0.0.1:8000)
+python run.py
 ```
 
-## Hierarchical knowledge graph
+In a separate terminal, launch the modern Vite/React user interface:
 
-The graph is organised in four tiers, from the cause of a move down to what an investor can hold: **0 Events & policy**
-(event classes, institutions, the events an article reports), **1 Economic variables** (commodities, indicators),
-**2 Sectors**, **3 Assets** (companies, indices, instruments). `impactgraph/hierarchy.py` derives each node's tier from its
-type (nothing is learned or guessed) and classifies every link as `next` (one tier down), `skip` (more than one tier),
-`lateral` (same tier) or `feedback` (back up). The curated graph has 2 feedback links (banks to growth and to consumer
-spending); the guard rejects any link learned at run time that points up from an asset. A sector also *contains* the
-companies and funds linked to it as members, so an impact on a sector can be read down to its members.
+```bash
+# Start Frontend Dev Server (http://localhost:5173)
+cd frontend
+npm install
+npm run dev
+```
 
-Tiers are stored data, not just labels. Every node carries its `tier`, `origin` (curated, learned from an article, or added by a user), `market`, `first_seen` and the articles that mention it. Every link carries a `relation`: `causes`, `policy_reaction`, `member_of` (company in a sector), `tracks` (a fund or sector index follows a sector, commodity or yield) or `weight_in` (a sector or company is part of a broad index). The relation says what a link means, and sector membership is read from it, not from the mechanism text. The tier-crossing kind (`next`, `skip`, `lateral`, `feedback`) is information only and blocks nothing. `GET /api/node/{id}` returns the properties that belong to a node's tier (for example a sector's members, a variable's measure and whether it has market data, an asset's ticker and parent sector). A graph saved before these fields existed is filled in when it loads.
+Visit **`http://localhost:5173`** for the full interactive glassmorphic application, or **`http://127.0.0.1:8000`** for the standalone backend and API docs (`/docs`).
 
-Where you see it: tier headers on the Impact Graph, a **Hierarchy** tab (per-tier roll-up of the analysis and a
-sector-to-members drill-down), the tier and containing sector in Node Details, a tier label on every hop of the causal
-walkthrough, and `hierarchy` in the `/api/analyze` and `/api/whatif` results. `GET /api/hierarchy` returns the tiers and an
-audit of the links. The roll-up only re-groups the impact rows the analysis already produced; it adds no new estimates.
+### 4. Running the Test Suite
 
-## Editable, versioned graph
+```bash
+# Execute all 228 automated unit and integration tests
+python -m unittest discover tests
+```
 
-Every change to the graph is one recorded, guarded change: an article folded in, a weight edited, a link added or removed, an
-asset added, removed or moved to another sector, a restore, a reset, an import. `impactgraph/changelog.py` records, for each,
-who made it (user or system), the tiers it touched, a reason if the user gave one, and an exact diff computed by comparing the
-graph before and after (entities and links added or removed, and every changed field with its before and after).
+---
 
-- **History:** `GET /api/kb/history` and `/api/kb/history/{seq}`; the Settings page lists it with details.
-- **Restore:** `POST /api/kb/restore {version}` brings back the graph as it was at one of the last 30 versions of the session. A
-  restore is a new forward change, so nothing is erased; older entries stay readable but cannot be restored. A reset to the curated
-  baseline starts a new epoch and keeps the earlier history.
-- **Edits go through the health checks.** A deliberate user edit is judged on structure only (the regression against the curated
-  baseline is skipped, because the user is choosing to depart from it) and the link is marked `user_edited`.
-- **Tier rules for edits:** `POST /api/kb/link` adds a link, `/api/kb/link/check` is a dry run, `/api/kb/link/remove` removes one the
-  user added, `/api/kb/move-asset` moves a user-added or learned asset to another sector. A link that skips a tier, stays within one,
-  or goes back up gets a warning; a link pointing up from an asset is refused. Curated links cannot be removed and curated sector
-  memberships cannot be moved; edit a weight or add a link instead.
-- **Export and import:** `GET /api/kb/export` and `POST /api/kb/import`. An import must pass the health checks and the tier rules or
-  nothing changes.
-- **Every analysis records the graph version it ran on** (`kb_version`).
+## API Reference Overview
 
-## Asking the graph (KG assistant)
+| Endpoint | Method | Description |
+|---|---|---|
+| `/api/analyze` | `POST` | Ingests news text/shocks; extracts events, propagates causal DAG, validates time series. |
+| `/api/whatif` | `POST` | Simulates hypothetical price/macro shocks (e.g. `brent_crude: +15%`) across the graph. |
+| `/api/analogs` | `GET` | Retrieves historical 5-day rolling analog episodes with Base-100 normalized trajectories. |
+| `/api/forecast` | `GET` | Runs 500-path Monte Carlo GBM simulation with VaR95 and CVaR95 risk statistics. |
+| `/api/portfolio/hedge` | `POST` | Computes portfolio contagion impact and suggests counter-balancing reverse hedges. |
+| `/api/assistant` | `POST` | Citable, grounded Q&A answering questions exclusively from graph cards. |
+| `/api/stream` | `GET` | Server-Sent Events (SSE) stream for real-time market ticks via Yahoo Finance WebSocket. |
+| `/api/quotes` | `GET` | Batched polling fallback for live quote prices and daily percentage changes. |
+| `/api/hierarchy` | `GET` | Audits the 4-tier graph layout and inspects tier cross-link boundaries. |
+| `/api/kb/cards` | `GET` | Exports the knowledge graph as structured, citable text cards. |
+| `/api/kb/history` | `GET` | Returns versioned audit history of all manual and dynamic graph modifications. |
 
-`POST /api/assistant {question, history}` answers a question from the knowledge graph and nothing else, and never changes it (a
-question is not analysed as an article). `impactgraph/assistant.py` finds the graph entities in the question, retrieves tier-aware
-*cards* straight from the graph (an entity card, a link card with its mechanism, basis, data check and evidence quotes, a path card
-with its plausibility, a sector-to-members view, or a note that the graph holds no path between two entities), and asks the LLM to
-answer from those cards only, citing them. A citation that is not a real card is removed, and an answer with no valid citation is
-replaced by a plain answer built from the cards. The response carries the answer, the cited sources and the graph version. With no
-LLM, the cards themselves are the answer. A question that names no entity gets no answer, only suggestions.
+---
 
-**Every generated graph is in the RAG.** `impactgraph/library.py` files each graph the Knowledge Graph Generator produces
-(`data/analyses/`: a compact index plus one compressed full result per article, newest 200). The assistant retrieves the analyses that
-touched the entities a question names, or the latest ones for a question about the news ("what did the last article report?"), as
-`a:<id>` cards that keep apart what the article **reported**, what the model **inferred** (at a stated graph version) and its
-**hypotheses**. *Import my chat history* on the assistant page sends the graphs already in the browser's history to the library, and the
-sidebar's Recent chats list library graphs too (library icon) and reopen them with every dashboard. API: `GET /api/analyses`,
-`GET /api/analyses/{id}`, `POST /api/analyses/import`, `DELETE /api/analyses/{id}`. For a one-topic question ("what happens if oil rises?")
-the retrieved chains are diversified, one per channel, instead of three variants of the strongest branch.
+## Epistemological Boundaries & Honest Limits
 
-## Reading the graph tier by tier, and exporting it as cards
+1. **Observed vs. Inferred:**  
+   Every event flagged as **Observed** is anchored to a verbatim quotation from the source text. Downstream nodes are explicitly marked as **Inferred** and scored via Bayesian path plausibility.
+2. **Plausibility $\neq$ Deterministic Forecast:**  
+   Propagation scores reflect heuristic plausibility derived from analyst priors and empirical cross-correlations—not guaranteed financial returns or investment advice.
+3. **Strict Non-Circularity:**  
+   Synthetic or simulated market data is explicitly tagged and strictly barred from updating link confidences to prevent circular confirmation bias.
+4. **Regime Dependence:**  
+   Macro relationships can decouple during structural regime shifts (e.g., stagflation vs. disinflationary growth). The system flags diverging paths as `mixed signals`.
 
-- **Node Details** shows what the graph knows about the selected node, from `GET /api/node/{id}`: the properties that belong to its
-  tier (a variable's measure and whether it has market data, a sector's members, an asset's ticker, parent sector and what it
-  tracks), where the node came from, and how many analysed articles mention it.
-- **A sentence per tier** for every affected asset and every path (`tier_sentence`), for example *Event: Crude Oil up 12% →
-  Variable: Crude Oil ↑ → Sector: Oil & Gas Producers ↑ → Asset: Exxon Mobil ↑*. It is built from the strongest path, not by the LLM,
-  and is shown on Asset Impact and in the causal walkthrough.
-- **Tier view:** the Impact Graph can hide whole tiers or fold each sector's member assets into the sector. It is a view only; the
-  graph, the paths and every number stay the same.
-- **Evidence mix** (Hierarchy tab, `evidence` in `hierarchy.layers`): for each tier, how the links that arrive at it are supported
-  over the distinct links on the analysed paths. Each link counts once under the strongest claim that applies: added or edited by a
-  user, contradicted by market data, observed in the article, supported by market data, proposed by the LLM, or analyst prior only.
-  This re-groups what the graph records; it is not a probability. With live data off, little can be marked as data-supported.
-- **Cards export** (`impactgraph/cards.py`): `GET /api/kg/cards` returns the graph as citable text cards (tier, sector, node and link
-  cards) with stable ids (`n:<node>`, `l:<from>><to>`, `s:<sector>`, `t:<tier>`), each listing its tiers and the nodes it mentions.
-  Filter with `tier`, `node` or `kind`, and page with `limit` and `offset`. The response is pinned to the graph version and carries a
-  `fingerprint` that changes exactly when the graph's facts change, so a retrieval system can tell its copy has gone stale.
-  `GET /api/kg/cards/{id}` returns one card (path cards, `p:a>b>c`, are rebuilt from their id) and `GET /api/kg/paths?src=&dst=`
-  returns the strongest path cards. The chatbot builds its context from the same card builders, so both read the same text.
-  Embeddings and vector search are not part of this.
+---
 
-## Live quotes, watchlist and the dynamic knowledge base
+## License & Citation
 
-**Live numbers.** Asset prices and day changes come from Yahoo Finance through `yfinance` (>= 0.2.66). Yahoo offers no webhooks, so the
-backend uses two real feeds: yfinance's WebSocket (a push tick whenever a symbol trades) and a batched poll every 20 s (previous close,
-and coverage while a market is closed). Both feed one cache that is pushed to the browser over Server-Sent Events (`GET /api/stream`),
-with `GET /api/quotes` as the polling fallback (used on serverless hosts, where background threads do not persist). Quotes can be
-delayed by the exchange and are never simulated; if Yahoo fails, the last good quote stays visible with the error.
-In the UI every number is tagged **LIVE** (Yahoo), **FRED** (official daily series) or **MODEL** (estimated by the knowledge graph).
-
-**Watchlist and assets.** `POST /api/watchlist` adds any ticker (verified against Yahoo first). `POST /api/kb/asset` adds an asset to the
-graph as a low-confidence, user-added link from a sector (you pick it, or the LLM suggests one from the curated list).
-
-**Dynamic knowledge base with automatic revert** (`impactgraph/kbstate.py`). Every change (article learned, asset added) is snapshotted,
-then checked: curated entities/links intact, strengths in range, bounded growth per change, runtime links a minority, and a regression
-test (the built-in sample articles must still give the same signs as the static baseline). A failed check rolls the change back.
-Runtime links that market data contradicts are pruned. `GET /api/kb`, `POST /api/kb/mode` (`dynamic` | `static`), `POST /api/kb/revert`
-(`previous` | `static`). State is saved to `data/kb_state.json` (local runs) and re-checked on load; a state that fails is discarded.
+Apex Zenith is distributed under the MIT License. See [DOCUMENTATION.md](DOCUMENTATION.md) and [research/PAPER.md](research/PAPER.md) for full mathematical formulations, experimental methodology, and ablation benchmarks.

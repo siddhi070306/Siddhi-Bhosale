@@ -197,6 +197,7 @@ export default function InteractiveGraph({
   onResetDefaults = null,
   isResetting = false,
 }) {
+  const containerRef = useRef(null);
   const [zoom, setZoom] = useState(1);
   const [pan, setPan] = useState({ x: 20, y: 10 });
   const [isPanning, setIsPanning] = useState(false);
@@ -313,11 +314,23 @@ export default function InteractiveGraph({
     setDraggedNode(null);
   };
 
-  const handleWheel = (e) => {
-    e.preventDefault();
-    const zoomFactor = e.deltaY < 0 ? 1.08 : 0.92;
-    setZoom((z) => Math.min(Math.max(z * zoomFactor, 0.5), 2.5));
-  };
+  // Attach non-passive wheel listener directly to container DOM node
+  // to avoid "[Violation] Unable to preventDefault inside passive event listener invocation"
+  useEffect(() => {
+    const el = containerRef.current;
+    if (!el) return;
+
+    const onWheel = (e) => {
+      e.preventDefault();
+      const zoomFactor = e.deltaY < 0 ? 1.08 : 0.92;
+      setZoom((z) => Math.min(Math.max(z * zoomFactor, 0.5), 2.5));
+    };
+
+    el.addEventListener('wheel', onWheel, { passive: false });
+    return () => {
+      el.removeEventListener('wheel', onWheel);
+    };
+  }, []);
 
   const getNodeCoord = (id) => {
     if (nodePositions[id]) return nodePositions[id];
@@ -670,12 +683,12 @@ export default function InteractiveGraph({
 
   return (
     <div
+      ref={containerRef}
       className="graph-canvas-wrapper"
       onMouseDown={handleMouseDown}
       onMouseMove={handleMouseMove}
       onMouseUp={handleMouseUp}
       onMouseLeave={handleMouseUp}
-      onWheel={handleWheel}
       style={{ userSelect: 'none', position: 'relative', width: '100%', height: '100%', overflow: 'hidden' }}
     >
       {/* Floating Start-to-End Causal Pipeline Simulation HUD Bar */}
