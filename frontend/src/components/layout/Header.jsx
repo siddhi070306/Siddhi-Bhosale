@@ -7,7 +7,10 @@ import {
   SquarePen,
   ChevronDown,
   Sparkles,
+  Clock,
+  Activity,
 } from 'lucide-react';
+import { prefs } from '../../services/api';
 
 export default function Header({
   activeTab = 'chat',
@@ -24,6 +27,7 @@ export default function Header({
   onStartTour,
 }) {
   const [now, setNow] = useState(new Date());
+  const isLive = prefs.getLive();
 
   useEffect(() => {
     const t = setInterval(() => setNow(new Date()), 30000);
@@ -31,7 +35,6 @@ export default function Header({
   }, []);
 
   const isChat = activeTab === 'chat';
-
 
   return (
     <header className={`top-header ${isChat ? 'chatgpt-header' : ''}`}>
@@ -83,6 +86,23 @@ export default function Header({
 
       {/* Right Actions & Meta */}
       <div className="header-right">
+        {/* Live Market Data / Engine Connection Chip */}
+        <div
+          className="header-status-badge"
+          title={
+            status?.error
+              ? `Backend offline: ${status.error}`
+              : isLive
+              ? 'Real-time market data active via FRED & Yahoo Finance'
+              : 'Knowledge-graph prior transmission weights mode'
+          }
+        >
+          <span className={`status-dot ${status?.error ? 'error' : isLive ? 'pulsing' : 'priors'}`} />
+          <span className="header-status-text">
+            {status?.error ? 'Offline' : isLive ? 'Live FRED/YF' : 'Priors'}
+          </span>
+        </div>
+
         {/* New Chat Button (ChatGPT style in top header) */}
         {isChat && onNewChat && (
           <button
@@ -91,29 +111,36 @@ export default function Header({
             title="Start a new chat"
           >
             <SquarePen size={16} />
-            <span>New chat</span>
+            <span className="new-chat-text">New chat</span>
           </button>
         )}
 
-
         {/* Quick Tour Button - Visible everywhere */}
-        <button className="btn btn-outline badge-outline" onClick={onStartTour} style={{ padding: '6px 12px', fontSize: 12.5, display: 'flex', alignItems: 'center', gap: 6, fontWeight: 600 }}>
+        <button
+          className="btn btn-outline badge-outline header-tour-btn"
+          onClick={onStartTour}
+          title="Take a Quick Tour"
+        >
           <Sparkles size={13} style={{ color: '#52525b' }} />
-          Take a Quick Tour
+          <span className="tour-btn-text">Quick Tour</span>
         </button>
 
         {/* Live Date / Time Badge (when on dashboards) */}
         {!isChat && (
-          <>
-            <div className="live-time-badge">
-            <span className="live-time-text">
-              {now.toLocaleString([], { dateStyle: 'medium', timeStyle: 'short' })}
+          <div className="live-time-badge" title="Market clock (click arrow to re-fetch real-time data)">
+            <Clock size={12} className="live-clock-icon" />
+            <span className="live-time-full">
+              {now.toLocaleString([], { dateStyle: 'short', timeStyle: 'short' })}
+            </span>
+            <span className="live-time-compact">
+              {now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
             </span>
             <button
               className={`refresh-spin-btn ${refreshing ? 'spinning' : ''}`}
               onClick={onRefresh}
               disabled={refreshing}
-              title="Re-fetch market levels, headlines and backend status (bypasses the cache)"
+              title="Re-fetch market levels, headlines and backend status"
+              aria-label="Refresh market data"
             >
               <RotateCw
                 size={13}
@@ -124,7 +151,6 @@ export default function Header({
               />
             </button>
           </div>
-          </>
         )}
 
         {/* Action Icons */}

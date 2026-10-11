@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import Sidebar from './Sidebar';
 import Header from './Header';
+import TopNavTabStrip from './TopNavTabStrip';
 import { UiContext } from '../../context/UiContext';
 import { api } from '../../services/api';
 
@@ -89,6 +90,10 @@ export default function Layout({
             onToggleCollapse={() => setIsSidebarCollapsed(!isSidebarCollapsed)}
             onNewChat={onNewChat}
             onStartTour={onStartTour}
+          />
+          <TopNavTabStrip
+            activeTab={activeTab}
+            setActiveTab={setActiveTab}
           />
           <main className={`page-content ${activeTab === 'chat' ? 'chat-mode-content' : ''}`}>
             {children}

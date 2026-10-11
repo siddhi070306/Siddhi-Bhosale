@@ -370,6 +370,158 @@
   border-radius: var(--radius-full);
   border: 1px solid var(--border-subtle);
   white-space: nowrap;
+  flex-shrink: 0;
+}
+
+.live-clock-icon {
+  color: var(--text-dim);
+  flex-shrink: 0;
+}
+
+.live-time-full {
+  display: inline;
+}
+
+.live-time-compact {
+  display: none;
+}
+
+/* Live Market & Engine Status Badge */
+.header-status-badge {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  font-weight: 600;
+  padding: 5px 11px;
+  border-radius: var(--radius-full);
+  background-color: var(--bg-surface-subtle);
+  border: 1px solid var(--border-subtle);
+  color: var(--text-main);
+  white-space: nowrap;
+  flex-shrink: 0;
+  transition: all 0.2s ease;
+}
+
+.header-status-badge:hover {
+  background-color: var(--bg-white);
+  border-color: var(--border-strong);
+}
+
+.status-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  display: inline-block;
+  flex-shrink: 0;
+}
+
+.status-dot.pulsing {
+  background-color: #16a34a;
+  box-shadow: 0 0 0 0 rgba(22, 163, 74, 0.4);
+  animation: pulse-green 2s infinite;
+}
+
+.status-dot.priors {
+  background-color: #71717a;
+}
+
+.status-dot.error {
+  background-color: #dc2626;
+}
+
+@keyframes pulse-green {
+  0% {
+    box-shadow: 0 0 0 0 rgba(22, 163, 74, 0.6);
+  }
+  70% {
+    box-shadow: 0 0 0 5px rgba(22, 163, 74, 0);
+  }
+  100% {
+    box-shadow: 0 0 0 0 rgba(22, 163, 74, 0);
+  }
+}
+
+.header-tour-btn {
+  padding: 6px 12px;
+  font-size: 12.5px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-weight: 600;
+  flex-shrink: 0;
+  white-space: nowrap;
+}
+
+/* Secondary Top Navigation Tab Strip */
+.top-nav-tabstrip {
+  display: none;
+  background: rgba(255, 255, 255, 0.95);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  border-bottom: 1px solid var(--border-subtle);
+  position: sticky;
+  top: 60px;
+  z-index: 45;
+  width: 100%;
+}
+
+.top-nav-tabstrip-inner {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 14px;
+  overflow-x: auto;
+  scrollbar-width: none;
+  -webkit-overflow-scrolling: touch;
+  mask-image: linear-gradient(to right, black calc(100% - 24px), transparent 100%);
+  -webkit-mask-image: linear-gradient(to right, black calc(100% - 24px), transparent 100%);
+}
+
+.top-nav-tabstrip-inner::-webkit-scrollbar {
+  display: none;
+}
+
+.top-nav-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 11px;
+  border-radius: var(--radius-full);
+  font-size: 12px;
+  font-weight: 500;
+  color: #52525b;
+  background: #f4f4f5;
+  border: 1px solid transparent;
+  white-space: nowrap;
+  cursor: pointer;
+  flex-shrink: 0;
+  transition: all 0.15s ease;
+  user-select: none;
+}
+
+.top-nav-chip:hover {
+  background: #e4e4e7;
+  color: #18181b;
+}
+
+.top-nav-chip.active {
+  background: #18181b;
+  color: #ffffff;
+  font-weight: 600;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
+}
+
+.top-nav-chip-icon {
+  flex-shrink: 0;
+}
+
+.top-nav-chip-short-label {
+  display: none;
+}
+
+.top-nav-chip-label {
+  display: inline;
 }
 
 .refresh-spin-btn {
@@ -756,8 +908,96 @@
   }
 }
 
-/* Mobile Screens (< 640px) */
-@media (max-width: 640px) {
+/* Sidebar Collapsed State: Reveal Top Tab Strip for 1-Click Access */
+.app-container.sidebar-is-collapsed .top-nav-tabstrip {
+  display: block;
+}
+
+/* Mid-size Laptops & Split Windows (1024px - 1280px) */
+@media (max-width: 1280px) {
+  .top-header {
+    padding: 0 20px;
+    gap: 12px;
+  }
+
+  .header-left {
+    max-width: 320px;
+  }
+
+  .header-search {
+    max-width: 260px;
+  }
+
+  .header-search-input {
+    font-size: 13px;
+    height: 38px;
+  }
+
+  .header-right {
+    gap: 10px;
+  }
+
+  .live-time-full {
+    display: none;
+  }
+
+  .live-time-compact {
+    display: inline;
+  }
+
+  .tour-btn-text {
+    display: inline;
+  }
+}
+
+/* Tablet & Compact Screens (768px - 1024px) */
+@media (max-width: 1024px) {
+  .top-nav-tabstrip {
+    display: block;
+  }
+
+  .top-header {
+    padding: 0 16px;
+    height: 60px;
+    gap: 10px;
+  }
+
+  .header-left {
+    max-width: 260px;
+  }
+
+  .header-search {
+    max-width: 200px;
+  }
+
+  .header-right {
+    gap: 8px;
+  }
+
+  .tour-btn-text {
+    display: none;
+  }
+
+  .header-tour-btn {
+    padding: 6px 10px !important;
+  }
+
+  .live-time-full {
+    display: none;
+  }
+
+  .live-time-compact {
+    display: inline;
+  }
+}
+
+/* Mobile Screens (< 768px) */
+@media (max-width: 768px) {
+  .top-nav-tabstrip {
+    display: block;
+    top: 56px;
+  }
+
   .top-header {
     padding: 0 12px;
     height: 56px;
@@ -766,46 +1006,106 @@
 
   .header-left {
     max-width: none;
+    flex: 1;
+    min-width: 0;
     gap: 8px;
   }
 
   .header-search {
-    max-width: 150px;
+    max-width: 160px;
   }
 
   .header-search-input {
     height: 34px;
     font-size: 12px;
-    padding-left: 32px;
+    padding-left: 28px;
+    padding-right: 10px;
   }
 
   .header-search-icon {
-    left: 10px;
-    width: 14px;
-    height: 14px;
+    left: 8px;
+    width: 13px;
+    height: 13px;
   }
 
   .header-right {
     gap: 6px;
   }
 
-  .live-time-badge {
-    padding: 4px 8px;
-    font-size: 11px;
-  }
-
-  .live-time-text {
+  .header-status-text {
     display: none;
   }
 
-  .icon-btn {
-    width: 32px;
-    height: 32px;
+  .header-status-badge {
+    padding: 5px 8px;
+  }
+
+  .live-time-badge {
+    padding: 4px 8px;
+    font-size: 11.5px;
+    gap: 4px;
+  }
+
+  .live-time-full,
+  .live-time-compact {
+    display: none;
+  }
+
+  .header-tour-btn {
+    display: none;
+  }
+
+  .new-chat-text {
+    display: none;
+  }
+
+  .header-actions {
+    gap: 4px;
   }
 
   .user-avatar {
     width: 32px;
     height: 32px;
     font-size: 12px;
+  }
+
+  .top-nav-chip-label {
+    display: none;
+  }
+
+  .top-nav-chip-short-label {
+    display: inline;
+  }
+
+  .top-nav-chip {
+    padding: 4px 9px;
+    font-size: 11.5px;
+    gap: 5px;
+  }
+}
+
+/* Ultra-Compact Mobile (< 480px) */
+@media (max-width: 480px) {
+  .top-header {
+    padding: 0 8px;
+    gap: 6px;
+  }
+
+  .header-search {
+    max-width: 120px;
+  }
+
+  .chatgpt-model-selector {
+    padding: 4px 8px;
+    gap: 4px;
+  }
+
+  .chatgpt-model-selector .model-name {
+    font-size: 13px;
+  }
+
+  .top-nav-tabstrip-inner {
+    padding: 4px 8px;
+    gap: 4px;
   }
 }
