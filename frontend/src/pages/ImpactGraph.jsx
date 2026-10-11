@@ -1,9 +1,8 @@
 import React, { useState } from 'react';
-import { Search, ShieldCheck, Fuel, Landmark, Building2, Sparkles, ArrowRight, Sliders, RefreshCw, Check } from 'lucide-react';
+import { Search, ShieldCheck, Sparkles, ArrowRight, Sliders, RefreshCw, Check } from 'lucide-react';
 import InteractiveGraph from '../components/graph/InteractiveGraph';
 import CausalChainWalkthrough from '../components/common/CausalChainWalkthrough';
 import { useUi } from '../context/UiContext';
-import { useSamples } from '../context/useSamples';
 import { api } from '../services/api';
 
 function EmptyState({ onNavigateToChat, onSelectEvent }) {
