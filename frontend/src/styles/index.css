@@ -54,9 +54,9 @@
   --indicator-down-text: #991b1b;
   --indicator-down-bg: #fef2f2;
 
-  /* Custom Trend Cursors */
-  --cursor-positive: url("/assets/cursor-positive.png") 24 24, pointer;
-  --cursor-negative: url("/assets/cursor-negative.png") 24 24, pointer;
+  /* Custom Trend Cursors (Minimal 24x24, centered hotspot 12 12) */
+  --cursor-positive: url("/assets/cursor-positive.png") 12 12, pointer;
+  --cursor-negative: url("/assets/cursor-negative.png") 12 12, pointer;
 }
 
 /* Custom mouse cursors for trend-aware cards and children */
