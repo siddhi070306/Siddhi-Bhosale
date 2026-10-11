@@ -50,6 +50,13 @@ export default function TrendChart({ name = '', spark = null }) {
         </span>
       )}
       <svg width="100%" height={height} viewBox={`0 0 ${width} ${height}`}>
+        <defs>
+          <linearGradient id="trend-area-grad" x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0%" stopColor={total >= 0 ? '#10b981' : '#f43f5e'} stopOpacity="0.25" />
+            <stop offset="100%" stopColor={total >= 0 ? '#10b981' : '#f43f5e'} stopOpacity="0.01" />
+          </linearGradient>
+        </defs>
+
         {ticks.map((lvl) => {
           const y = height - paddingY - ((lvl - min) / span) * (height - paddingY * 2);
           return (
@@ -61,7 +68,41 @@ export default function TrendChart({ name = '', spark = null }) {
             </g>
           );
         })}
-        <polyline fill="none" stroke="#18181b" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" points={pts.map((p) => `${p.x},${p.y}`).join(' ')} />
+
+        {/* Luminous Area Fill under the curve */}
+        {pts.length > 1 && (
+          <polygon
+            points={`${pts[0].x},${height - paddingY} ${pts.map((p) => `${p.x},${p.y}`).join(' ')} ${pts[pts.length - 1].x},${height - paddingY}`}
+            fill="url(#trend-area-grad)"
+          />
+        )}
+
+        {/* Main Price Polyline */}
+        <polyline
+          fill="none"
+          stroke={total >= 0 ? '#16a34a' : '#dc2626'}
+          strokeWidth="2.4"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+          points={pts.map((p) => `${p.x},${p.y}`).join(' ')}
+        />
+
+        {/* Live Animated Endpoint Pulsing Radar Dot */}
+        {pts.length > 0 && (
+          <g transform={`translate(${pts[pts.length - 1].x}, ${pts[pts.length - 1].y})`}>
+            <circle r={8} fill={total >= 0 ? '#10b981' : '#f43f5e'} opacity="0.3">
+              <animate attributeName="r" values="4;10;4" dur="2s" repeatCount="indefinite" />
+              <animate attributeName="opacity" values="0.45;0.05;0.45" dur="2s" repeatCount="indefinite" />
+            </circle>
+            <circle
+              r={3.8}
+              fill={total >= 0 ? '#16a34a' : '#dc2626'}
+              stroke="#ffffff"
+              strokeWidth="1.8"
+            />
+          </g>
+        )}
+
         {[0, Math.floor(pts.length / 2), pts.length - 1].map((i) => (
           <text key={i} x={pts[i].x} y={height - 2} textAnchor="middle" fontSize="10" fill="#71717a">
             {pts[i].date.slice(5)}

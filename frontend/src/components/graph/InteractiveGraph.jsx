@@ -1,5 +1,76 @@
-import React, { useState, useRef, useEffect } from 'react';
-import { ZoomIn, ZoomOut, RotateCcw, Maximize2 } from 'lucide-react';
+import React, { useState, useRef, useEffect, useMemo } from 'react';
+import { ZoomIn, ZoomOut, RotateCcw, Maximize2, Play, Zap } from 'lucide-react';
+
+// Closed-form cubic Bezier curve evaluation for smooth, exact path tracking
+function evalCubicBezier(p1, cx1, cy1, cx2, cy2, p2, t) {
+  const mt = 1 - t;
+  const mt2 = mt * mt;
+  const mt3 = mt2 * mt;
+  const t2 = t * t;
+  const t3 = t2 * t;
+  return {
+    x: mt3 * p1.x + 3 * mt2 * t * cx1 + 3 * mt * t2 * cx2 + t3 * p2.x,
+    y: mt3 * p1.y + 3 * mt2 * t * cy1 + 3 * mt * t2 * cy2 + t3 * p2.y,
+  };
+}
+
+// Extract primary start-to-end causal chain sequence for animated shock cascade
+function extractCausalPath(nodes, edges) {
+  if (!nodes || nodes.length === 0) return { pathNodes: [], pathEdges: [] };
+
+  // 1. Trace edges marked isActive: true (the primary causal pathway)
+  const activeEdges = (edges || []).filter((e) => e.isActive);
+  if (activeEdges.length > 0) {
+    const targetSet = new Set(activeEdges.map((e) => e.to));
+    let startNodeId = activeEdges.find((e) => !targetSet.has(e.from))?.from;
+    if (!startNodeId) {
+      const anchor = nodes.find((n) => n.isAnchor);
+      startNodeId = anchor ? anchor.id : activeEdges[0].from;
+    }
+
+    const pathNodes = [startNodeId];
+    const pathEdges = [];
+    let currentId = startNodeId;
+
+    while (true) {
+      const nextEdge = activeEdges.find((e) => e.from === currentId);
+      if (!nextEdge || pathNodes.includes(nextEdge.to)) break;
+      pathEdges.push(nextEdge);
+      pathNodes.push(nextEdge.to);
+      currentId = nextEdge.to;
+    }
+
+    if (pathNodes.length >= 2) {
+      return { pathNodes, pathEdges };
+    }
+  }
+
+  // 2. Fallback: Column-wise progression from the anchor/source node
+  const anchor = nodes.find((n) => n.isAnchor) || nodes.find((n) => n.col === 0) || nodes[0];
+  const pathNodes = [anchor.id];
+  const pathEdges = [];
+  let currentId = anchor.id;
+
+  for (let c = (anchor.col || 0) + 1; c <= 4; c++) {
+    const candidates = (edges || []).filter((e) => e.from === currentId);
+    let chosenEdge = candidates.find((e) => {
+      const target = nodes.find((n) => n.id === e.to);
+      return target && target.col === c;
+    });
+    if (!chosenEdge && candidates.length > 0) {
+      chosenEdge = candidates[0];
+    }
+    if (chosenEdge && !pathNodes.includes(chosenEdge.to)) {
+      pathEdges.push(chosenEdge);
+      pathNodes.push(chosenEdge.to);
+      currentId = chosenEdge.to;
+    } else {
+      break;
+    }
+  }
+
+  return { pathNodes, pathEdges };
+}
 
 export default function InteractiveGraph({
   data,
@@ -33,6 +104,32 @@ export default function InteractiveGraph({
     setNodePositions(initialPos);
   }, [data]);
 
+  // Extract start-to-end causal chain sequence
+  const causalPath = useMemo(() => {
+    return extractCausalPath(rawNodes, rawEdges);
+  }, [rawNodes, rawEdges]);
+
+  // Start-to-End simulation state & shockwave refs
+  const [isSimulating, setIsSimulating] = useState(true);
+  const isSimulatingRef = useRef(true);
+  const simStartTimeRef = useRef(performance.now());
+  const simPhotonPartsRef = useRef({});
+
+  // Automatically trigger start-to-end simulation whenever new graph/event loads
+  useEffect(() => {
+    if (causalPath.pathEdges.length > 0) {
+      simStartTimeRef.current = performance.now();
+      isSimulatingRef.current = true;
+      setIsSimulating(true);
+    }
+  }, [data, causalPath.pathEdges.length]);
+
+  const handleRestartSimulation = () => {
+    simStartTimeRef.current = performance.now();
+    isSimulatingRef.current = true;
+    setIsSimulating(true);
+  };
+
   const [draggedNode, setDraggedNode] = useState(null);
   const [hoveredNode, setHoveredNode] = useState(null);
   const [hoveredEdge, setHoveredEdge] = useState(null);
@@ -40,6 +137,12 @@ export default function InteractiveGraph({
 
   const dragStartRef = useRef({ x: 0, y: 0 });
   const svgRef = useRef(null);
+
+  // High-performance direct DOM references for 60 FPS RAF particle animation
+  const particleElsRef = useRef({});
+  const arrivalRingRefs = useRef({});
+  const activeArrivalsRef = useRef({});
+  const rafIdRef = useRef(null);
 
   const handleZoomIn = () => setZoom((z) => Math.min(z + 0.15, 2.5));
   const handleZoomOut = () => setZoom((z) => Math.max(z - 0.15, 0.5));
@@ -50,7 +153,6 @@ export default function InteractiveGraph({
 
   // Canvas Pan Handlers
   const handleMouseDown = (e) => {
-    // If clicking directly on a node circle/text, dragging the node takes precedence
     if (e.target.closest('.graph-node')) return;
     setIsPanning(true);
     dragStartRef.current = { x: e.clientX - pan.x, y: e.clientY - pan.y };
@@ -60,7 +162,6 @@ export default function InteractiveGraph({
     if (draggedNode) {
       const svgRect = svgRef.current?.getBoundingClientRect();
       if (!svgRect) return;
-      // Convert screen coords to SVG viewBox coords
       const newX = (e.clientX - svgRect.left - pan.x) / zoom;
       const newY = (e.clientY - svgRect.top - pan.y) / zoom;
       setNodePositions((prev) => ({
@@ -122,6 +223,294 @@ export default function InteractiveGraph({
     return false;
   };
 
+  // Store interactive states in refs so RAF animation loop reads real-time interaction without re-attaching
+  const hoveredNodeRef = useRef(hoveredNode);
+  const activeNodeIdRef = useRef(activeNodeId);
+  const selectedEdgeRef = useRef(selectedEdge);
+  const hoveredEdgeRef = useRef(hoveredEdge);
+
+  useEffect(() => {
+    hoveredNodeRef.current = hoveredNode;
+  }, [hoveredNode]);
+
+  useEffect(() => {
+    activeNodeIdRef.current = activeNodeId;
+  }, [activeNodeId]);
+
+  useEffect(() => {
+    selectedEdgeRef.current = selectedEdge;
+  }, [selectedEdge]);
+
+  useEffect(() => {
+    hoveredEdgeRef.current = hoveredEdge;
+  }, [hoveredEdge]);
+
+  // Compute all directional particle descriptors along exact cubic Bezier edge trajectories
+  const particlesList = useMemo(() => {
+    const list = [];
+    rawEdges.forEach((edge, idx) => {
+      const p1 = getNodeCoord(edge.from);
+      const p2 = getNodeCoord(edge.to);
+      const isPos = edge.sign > 0;
+      const isNeg = edge.sign < 0;
+      const isEdgeSelected = selectedEdge && selectedEdge.from === edge.from && selectedEdge.to === edge.to;
+
+      let pColor = isPos ? '#10b981' : isNeg ? '#f43f5e' : '#06b6d4';
+      if (isEdgeSelected || edge.isActive) {
+        pColor = '#2563eb';
+      }
+
+      const dx = Math.abs(p2.x - p1.x);
+      const cx1 = p1.x + Math.max(dx * 0.45, 25);
+      const cy1 = p1.y;
+      const cx2 = p2.x - Math.max(dx * 0.45, 25);
+      const cy2 = p2.y;
+
+      const dist = Math.hypot(p2.x - p1.x, p2.y - p1.y);
+      // Speed guidelines: short ~1.4s, med ~2.2s, long ~3.2s
+      const duration = Math.max(1.3, Math.min(3.4, 1.1 + (dist / 190)));
+      const gap = 0.85 + ((idx % 4) * 0.22);
+      const period = duration + gap;
+
+      // Progressive network flow stagger based on source node causal layer/column
+      const srcNode = rawNodes.find((n) => n.id === edge.from);
+      const col = srcNode?.col != null ? srcNode.col : 1;
+      const baseStagger = (col * 0.38) + ((idx * 0.17) % 0.4);
+
+      // Primary particle
+      list.push({
+        id: `pt-${edge.from}-${edge.to}-0`,
+        edge,
+        from: edge.from,
+        to: edge.to,
+        p1,
+        p2,
+        cx1,
+        cy1,
+        cx2,
+        cy2,
+        color: pColor,
+        duration,
+        gap,
+        period,
+        stagger: baseStagger,
+        isSecondary: false,
+      });
+
+      // Secondary particle for active / selected / highlighted pathways for rich stream density
+      if (isEdgeSelected || edge.isActive || isEdgeHighlighted(edge)) {
+        list.push({
+          id: `pt-${edge.from}-${edge.to}-1`,
+          edge,
+          from: edge.from,
+          to: edge.to,
+          p1,
+          p2,
+          cx1,
+          cy1,
+          cx2,
+          cy2,
+          color: pColor,
+          duration,
+          gap,
+          period,
+          stagger: baseStagger + (period * 0.5),
+          isSecondary: true,
+        });
+      }
+    });
+    return list;
+  }, [rawEdges, rawNodes, nodePositions, selectedEdge, hoveredEdge, hoveredNode, activeNodeId]);
+
+  // High-performance 60 FPS requestAnimationFrame Particle & Destination Ripple Animation Engine
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    if (window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
+      return;
+    }
+
+    let isRunning = true;
+    const startTime = performance.now();
+    const arrivalTracker = {};
+
+    const loop = (now) => {
+      if (!isRunning) return;
+
+      const nowSec = (now - startTime) / 1000;
+      const hNode = hoveredNodeRef.current;
+      const aNode = activeNodeIdRef.current;
+      const sEdge = selectedEdgeRef.current;
+      const hEdge = hoveredEdgeRef.current;
+
+      // 1. Update traveling particles along exact Bezier paths
+      for (let i = 0; i < particlesList.length; i++) {
+        const pt = particlesList[i];
+        const dom = particleElsRef.current[pt.id];
+        if (!dom || !dom.group) continue;
+
+        // Check if this connection is highlighted
+        const isConn = (hNode && (pt.from === hNode || pt.to === hNode)) ||
+                       (aNode && (pt.from === aNode || pt.to === aNode)) ||
+                       (sEdge && sEdge.from === pt.from && sEdge.to === pt.to) ||
+                       (hEdge && hEdge.from === pt.from && hEdge.to === pt.to) ||
+                       pt.edge.isActive;
+
+        let baseOpacity = 0.90;
+        if (hNode || aNode) {
+          baseOpacity = isConn ? 1.0 : 0.08;
+        } else if (pt.edge.isActive || (sEdge && sEdge.from === pt.from && sEdge.to === pt.to)) {
+          baseOpacity = 1.0;
+        }
+
+        // Relative cycle time
+        let relTime = (nowSec - pt.stagger) % pt.period;
+        if (relTime < 0) relTime += pt.period;
+
+        if (relTime < pt.duration) {
+          const t = relTime / pt.duration;
+
+          // Smooth fade-in at source endpoint, smooth fade-out at destination endpoint
+          const fade = t < 0.08 ? (t / 0.08) : (t > 0.93 ? ((1 - t) / 0.07) : 1.0);
+          const finalOpacity = (baseOpacity * fade).toFixed(3);
+
+          // Calculate parametric positions along exact cubic Bezier spline
+          const pos = evalCubicBezier(pt.p1, pt.cx1, pt.cy1, pt.cx2, pt.cy2, pt.p2, t);
+          const t1 = Math.max(0, t - 0.038);
+          const pos1 = evalCubicBezier(pt.p1, pt.cx1, pt.cy1, pt.cx2, pt.cy2, pt.p2, t1);
+          const t2 = Math.max(0, t - 0.076);
+          const pos2 = evalCubicBezier(pt.p1, pt.cx1, pt.cy1, pt.cx2, pt.cy2, pt.p2, t2);
+
+          // Direct hardware-accelerated transforms
+          if (dom.head) dom.head.setAttribute('transform', `translate(${pos.x.toFixed(1)}, ${pos.y.toFixed(1)})`);
+          if (dom.tail1) dom.tail1.setAttribute('transform', `translate(${pos1.x.toFixed(1)}, ${pos1.y.toFixed(1)})`);
+          if (dom.tail2) dom.tail2.setAttribute('transform', `translate(${pos2.x.toFixed(1)}, ${pos2.y.toFixed(1)})`);
+
+          dom.group.style.opacity = finalOpacity;
+          dom.group.style.display = 'inline';
+
+          // Trigger Phase 3 Destination Node Arrival Ripple
+          if (t >= 0.94 && !arrivalTracker[pt.id]) {
+            arrivalTracker[pt.id] = true;
+            const existing = activeArrivalsRef.current[pt.to];
+            if (!existing || (now - existing.startTime > 160)) {
+              activeArrivalsRef.current[pt.to] = {
+                startTime: now,
+                color: pt.color,
+                duration: 440,
+              };
+            }
+          }
+        } else {
+          // Gap resting period before next repeated particle
+          arrivalTracker[pt.id] = false;
+          dom.group.style.display = 'none';
+        }
+      }
+
+      // 1b. Animate Start-to-End Causal Cascade Simulation Shockwave
+      if (isSimulatingRef.current && causalPath.pathEdges.length > 0) {
+        const simElapsed = (now - simStartTimeRef.current) / 1000;
+        const hopDuration = 1.6;
+        const totalHops = causalPath.pathEdges.length;
+        const totalSimTime = totalHops * hopDuration;
+
+        if (simElapsed < totalSimTime) {
+          const hopIdx = Math.floor(simElapsed / hopDuration);
+          const hopProgress = (simElapsed % hopDuration) / hopDuration;
+          const currentEdge = causalPath.pathEdges[hopIdx];
+
+          if (currentEdge) {
+            const p1 = getNodeCoord(currentEdge.from);
+            const p2 = getNodeCoord(currentEdge.to);
+            const dx = Math.abs(p2.x - p1.x);
+            const cx1 = p1.x + Math.max(dx * 0.45, 25);
+            const cy1 = p1.y;
+            const cx2 = p2.x - Math.max(dx * 0.45, 25);
+            const cy2 = p2.y;
+
+            // Direct Bézier shockwave position along the active hop
+            const sPos = evalCubicBezier(p1, cx1, cy1, cx2, cy2, p2, hopProgress);
+            const sTail1 = evalCubicBezier(p1, cx1, cy1, cx2, cy2, p2, Math.max(0, hopProgress - 0.045));
+            const sTail2 = evalCubicBezier(p1, cx1, cy1, cx2, cy2, p2, Math.max(0, hopProgress - 0.090));
+
+            const simDom = simPhotonPartsRef.current;
+            if (simDom && simDom.group) {
+              simDom.group.style.display = 'inline';
+              if (simDom.head) simDom.head.setAttribute('transform', `translate(${sPos.x.toFixed(1)}, ${sPos.y.toFixed(1)})`);
+              if (simDom.tail1) simDom.tail1.setAttribute('transform', `translate(${sTail1.x.toFixed(1)}, ${sTail1.y.toFixed(1)})`);
+              if (simDom.tail2) simDom.tail2.setAttribute('transform', `translate(${sTail2.x.toFixed(1)}, ${sTail2.y.toFixed(1)})`);
+            }
+
+            // Trigger Destination Node arrival ripple upon impact
+            if (hopProgress >= 0.88 && !arrivalTracker[`sim-hop-${hopIdx}`]) {
+              arrivalTracker[`sim-hop-${hopIdx}`] = true;
+              activeArrivalsRef.current[currentEdge.to] = {
+                startTime: now,
+                color: '#2563eb',
+                duration: 550,
+              };
+            }
+          }
+        } else {
+          isSimulatingRef.current = false;
+          setIsSimulating(false);
+          const simDom = simPhotonPartsRef.current;
+          if (simDom && simDom.group) {
+            simDom.group.style.display = 'none';
+          }
+        }
+      } else {
+        const simDom = simPhotonPartsRef.current;
+        if (simDom && simDom.group) {
+          simDom.group.style.display = 'none';
+        }
+      }
+
+      // 2. Update Destination Node Arrival Ripple Effects (Phase 3)
+      for (const nodeId in activeArrivalsRef.current) {
+        const arrival = activeArrivalsRef.current[nodeId];
+        const elapsed = now - arrival.startTime;
+        const el = arrivalRingRefs.current[nodeId];
+        if (elapsed < arrival.duration) {
+          const progress = elapsed / arrival.duration;
+          // Cubic ease-out expansion
+          const ease = 1 - Math.pow(1 - progress, 3);
+          const r = (15 + ease * 14).toFixed(1);
+          const strokeW = (2.4 * (1 - ease * 0.5)).toFixed(1);
+          const op = ((1 - ease) * 0.78).toFixed(2);
+          if (el) {
+            el.setAttribute('r', r);
+            el.setAttribute('stroke', arrival.color);
+            el.setAttribute('stroke-width', strokeW);
+            el.style.opacity = op;
+          }
+        } else {
+          if (el) el.style.opacity = '0';
+          delete activeArrivalsRef.current[nodeId];
+        }
+      }
+
+      rafIdRef.current = requestAnimationFrame(loop);
+    };
+
+    rafIdRef.current = requestAnimationFrame(loop);
+
+    const handleVisibilityChange = () => {
+      if (document.hidden) {
+        if (rafIdRef.current) cancelAnimationFrame(rafIdRef.current);
+      } else {
+        rafIdRef.current = requestAnimationFrame(loop);
+      }
+    };
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+
+    return () => {
+      isRunning = false;
+      if (rafIdRef.current) cancelAnimationFrame(rafIdRef.current);
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+    };
+  }, [particlesList, causalPath]);
+
   const getNodeColor = (type) => {
     switch (type) {
       case 'event_class':
@@ -150,6 +539,76 @@ export default function InteractiveGraph({
       onWheel={handleWheel}
       style={{ userSelect: 'none', position: 'relative', width: '100%', height: '100%', overflow: 'hidden' }}
     >
+      {/* Floating Start-to-End Causal Cascade Simulation HUD Bar */}
+      {causalPath.pathNodes.length >= 2 && (
+        <div
+          className="graph-sim-hud"
+          style={{
+            position: 'absolute',
+            top: 14,
+            left: '50%',
+            transform: 'translateX(-50%)',
+            zIndex: 25,
+            display: 'flex',
+            alignItems: 'center',
+            gap: 10,
+            background: 'rgba(255, 255, 255, 0.94)',
+            backdropFilter: 'blur(12px)',
+            WebkitBackdropFilter: 'blur(12px)',
+            border: isSimulating ? '1px solid #93c5fd' : '1px solid #e2e8f0',
+            boxShadow: isSimulating ? '0 4px 20px rgba(37, 99, 235, 0.16)' : '0 2px 10px rgba(0, 0, 0, 0.05)',
+            borderRadius: 30,
+            padding: '5px 14px 5px 8px',
+            transition: 'all 0.25s ease',
+            pointerEvents: 'auto',
+          }}
+        >
+          <button
+            className="btn btn-black btn-sm"
+            onClick={handleRestartSimulation}
+            style={{
+              borderRadius: 20,
+              padding: '4px 12px',
+              fontSize: 11.5,
+              fontWeight: 600,
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: 6,
+            }}
+          >
+            <Play size={12} fill="currentColor" />
+            <span>{isSimulating ? 'Restart' : 'Run Simulation'}</span>
+          </button>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12 }}>
+            <span
+              style={{
+                width: 8,
+                height: 8,
+                borderRadius: '50%',
+                backgroundColor: isSimulating ? '#2563eb' : '#10b981',
+                boxShadow: isSimulating ? '0 0 8px #2563eb' : '0 0 6px #10b981',
+              }}
+            />
+            <span style={{ fontWeight: 600, color: '#0f172a' }}>
+              {isSimulating ? (
+                <span>
+                  Simulating Shock Cascade:{' '}
+                  <span style={{ color: '#2563eb' }}>
+                    {causalPath.pathNodes.map((id) => rawNodes.find((n) => n.id === id)?.label || id).join(' → ')}
+                  </span>
+                </span>
+              ) : (
+                <span>
+                  Cascade Complete:{' '}
+                  <span style={{ color: '#64748b' }}>
+                    {causalPath.pathNodes.map((id) => rawNodes.find((n) => n.id === id)?.label || id).join(' → ')}
+                  </span>
+                </span>
+              )}
+            </span>
+          </div>
+        </div>
+      )}
       <svg
         ref={svgRef}
         className="graph-canvas-svg"
@@ -201,6 +660,88 @@ export default function InteractiveGraph({
           <pattern id="graph-grid" width="28" height="28" patternUnits="userSpaceOnUse">
             <path d="M 28 0 L 0 0 0 28" fill="none" stroke="#f1f5f9" strokeWidth="1" />
           </pattern>
+
+          {/* Keyframe animations and graph motion styling */}
+          <style>{`
+            @keyframes nodeAmbientBreathe {
+              0%, 100% {
+                transform: scale(1);
+                opacity: 0.20;
+              }
+              50% {
+                transform: scale(1.30);
+                opacity: 0.46;
+              }
+            }
+            @keyframes nodeAnchorBreathe {
+              0%, 100% {
+                transform: scale(1);
+                opacity: 0.28;
+              }
+              50% {
+                transform: scale(1.36);
+                opacity: 0.58;
+              }
+            }
+            @keyframes nodeAnchorPulse {
+              0% {
+                transform: scale(1);
+                opacity: 0.65;
+              }
+              50% {
+                transform: scale(1.32);
+                opacity: 0.20;
+              }
+              100% {
+                transform: scale(1.55);
+                opacity: 0;
+              }
+            }
+            @keyframes nodeSelectedPulse {
+              0% {
+                transform: scale(0.96);
+                opacity: 0.90;
+              }
+              60% {
+                transform: scale(1.30);
+                opacity: 0.22;
+              }
+              100% {
+                transform: scale(1.52);
+                opacity: 0;
+              }
+            }
+            @keyframes nodeNeighborRotate {
+              from {
+                transform: rotate(0deg);
+              }
+              to {
+                transform: rotate(360deg);
+              }
+            }
+            @keyframes edgeFlowDash {
+              to {
+                stroke-dashoffset: -36;
+              }
+            }
+            .edge-traveling-dash {
+              animation: edgeFlowDash 1.6s linear infinite;
+            }
+            .graph-node {
+              transition: opacity 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+            }
+            .graph-node:hover .node-primary-circle {
+              filter: drop-shadow(0 4px 14px rgba(99, 102, 241, 0.45)) !important;
+            }
+            @media (prefers-reduced-motion: reduce) {
+              .graph-edge-particle, .edge-traveling-dash {
+                display: none !important;
+              }
+              .node-ambient-ring, .node-selected-ring, .node-anchor-ring, .node-neighbor-ring {
+                animation: none !important;
+              }
+            }
+          `}</style>
         </defs>
 
         <g transform={`translate(${pan.x}, ${pan.y}) scale(${zoom})`}>
@@ -223,30 +764,55 @@ export default function InteractiveGraph({
 
               const isHighlighted = isEdgeHighlighted(edge);
               const isPositive = edge.sign > 0;
+              const isNegative = edge.sign < 0;
               const isEdgeSelected = selectedEdge && selectedEdge.from === edge.from && selectedEdge.to === edge.to;
 
-              let strokeColor = isPositive ? '#34d399' : '#f43f5e';
-              let strokeWidth = 1.8;
-              let opacity = 0.45;
+              let strokeColor = isPositive ? '#10b981' : '#f43f5e';
+              let strokeWidth = 2.0;
+              let opacity = 0.52;
               let markerEnd = isPositive ? 'url(#arrow-pos)' : 'url(#arrow-neg)';
+
+              // High-visibility glowing particle styling based on relationship & state
+              let particleColor = isPositive ? '#10b981' : isNegative ? '#f43f5e' : '#06b6d4';
+              let particleRadius = 3.6;
+              let haloRadius = 8.5;
+              let particleOpacity = 0.90;
 
               // Special styling for the active causal path or selected edge
               if (isEdgeSelected) {
                 strokeColor = '#2563eb';
-                strokeWidth = 4.2;
+                strokeWidth = 4.4;
                 opacity = 1.0;
                 markerEnd = 'url(#arrow-active)';
+                particleColor = '#2563eb';
+                particleRadius = 4.8;
+                haloRadius = 11.0;
+                particleOpacity = 1.0;
               } else if (edge.isActive) {
                 strokeColor = '#09090b';
-                strokeWidth = 3.6;
+                strokeWidth = 3.8;
                 opacity = 1.0;
                 markerEnd = 'url(#arrow-active)';
+                particleColor = '#2563eb';
+                particleRadius = 4.4;
+                haloRadius = 10.0;
+                particleOpacity = 1.0;
               } else if (isHighlighted) {
-                strokeWidth = 2.4;
-                opacity = 0.85;
+                strokeWidth = 3.2;
+                opacity = 0.95;
+                particleRadius = 4.2;
+                haloRadius = 9.5;
+                particleOpacity = 1.0;
               } else if (hoveredNode || activeNodeId) {
-                opacity = 0.14; // Dim unrelated edges
+                opacity = 0.10; // Dim unrelated edges
+                particleOpacity = 0.08; // Fade unrelated particles
               }
+
+              // Dynamic distance-based speed & offset delay to prevent mechanical synchronized flow
+              const dist = Math.hypot(p2.x - p1.x, p2.y - p1.y);
+              const duration = Math.max(1.8, Math.min(3.8, (dist / 170) + ((idx % 4) * 0.28)));
+              const delay1 = -((idx * 0.61) % duration);
+              const delay2 = -(delay1 + duration * 0.5);
 
               return (
                 <g key={`edge-group-${edge.from}-${edge.to}-${idx}`}>
@@ -255,7 +821,7 @@ export default function InteractiveGraph({
                     d={pathData}
                     fill="none"
                     stroke="transparent"
-                    strokeWidth={16}
+                    strokeWidth={18}
                     style={{ cursor: 'pointer' }}
                     onClick={(e) => {
                       e.stopPropagation();
@@ -295,13 +861,170 @@ export default function InteractiveGraph({
                     markerEnd={markerEnd}
                     style={{
                       cursor: 'pointer',
-                      transition: 'stroke-opacity 0.2s ease, stroke-width 0.2s ease',
+                      transition: 'stroke-opacity 0.25s ease, stroke-width 0.25s ease, stroke 0.25s ease',
                       pointerEvents: 'none',
                     }}
                   />
-                </g>
+
+                  {/* High-visibility continuous traveling light stream along the connection */}
+                  <path
+                    d={pathData}
+                    fill="none"
+                    stroke={strokeColor}
+                    strokeWidth={strokeWidth + (isHighlighted ? 2.6 : 1.2)}
+                    strokeOpacity={isHighlighted ? 0.75 : 0.35}
+                    strokeDasharray={isHighlighted ? '14 22' : '8 32'}
+                    className="edge-traveling-dash"
+                    style={{ pointerEvents: 'none' }}
+                  />
+
+                  </g>
               );
             })}
+          </g>
+
+          {/* ===================== TRAVELING PARTICLES LAYER (60 FPS DIRECTIONAL MOTION) ===================== */}
+          <g className="graph-particles-layer">
+            {particlesList.map((pt) => (
+              <g
+                key={pt.id}
+                id={pt.id}
+                ref={(el) => {
+                  if (el) {
+                    particleElsRef.current[pt.id] = {
+                      group: el,
+                      head: el.querySelector('.pt-head'),
+                      tail1: el.querySelector('.pt-tail1'),
+                      tail2: el.querySelector('.pt-tail2'),
+                    };
+                  } else {
+                    delete particleElsRef.current[pt.id];
+                  }
+                }}
+                className="particle-track-group"
+                style={{ pointerEvents: 'none', opacity: 0 }}
+              >
+                {/* Luminous Comet Tail 2 (Farthest behind, smaller and softer) */}
+                <circle
+                  className="pt-tail2"
+                  cx="0"
+                  cy="0"
+                  r="1.9"
+                  fill={pt.color}
+                  opacity="0.32"
+                  style={{ pointerEvents: 'none' }}
+                />
+                {/* Luminous Comet Tail 1 (Midway behind, medium brightness) */}
+                <circle
+                  className="pt-tail1"
+                  cx="0"
+                  cy="0"
+                  r="2.8"
+                  fill={pt.color}
+                  opacity="0.62"
+                  style={{ pointerEvents: 'none' }}
+                />
+                {/* Primary Traveling Photon Head */}
+                <g className="pt-head" style={{ pointerEvents: 'none' }}>
+                  {/* Soft luminous aura halo */}
+                  <circle
+                    className="pt-halo"
+                    cx="0"
+                    cy="0"
+                    r={pt.isSecondary || pt.color === '#2563eb' ? 12 : 9.0}
+                    fill={pt.color}
+                    opacity="0.38"
+                    style={{ pointerEvents: 'none' }}
+                  />
+                  {/* High-contrast vibrant colored core */}
+                  <circle
+                    className="pt-core"
+                    cx="0"
+                    cy="0"
+                    r={pt.isSecondary || pt.color === '#2563eb' ? 4.8 : 3.9}
+                    fill={pt.color}
+                    opacity="1.0"
+                    style={{ pointerEvents: 'none' }}
+                  />
+                  {/* Specular pure white photon spark */}
+                  <circle
+                    className="pt-specular"
+                    cx="0"
+                    cy="0"
+                    r="1.7"
+                    fill="#ffffff"
+                    opacity="0.96"
+                    style={{ pointerEvents: 'none' }}
+                  />
+                </g>
+              </g>
+            ))}
+
+            {/* High-Energy Start-to-End Simulation Shockwave Photon */}
+            <g
+              id="sim-shockwave-group"
+              ref={(el) => {
+                if (el) {
+                  simPhotonPartsRef.current = {
+                    group: el,
+                    head: el.querySelector('.sim-shock-head'),
+                    tail1: el.querySelector('.sim-shock-tail1'),
+                    tail2: el.querySelector('.sim-shock-tail2'),
+                  };
+                } else {
+                  simPhotonPartsRef.current = {};
+                }
+              }}
+              style={{ display: 'none', pointerEvents: 'none' }}
+            >
+              {/* Shockwave Trail 2 */}
+              <circle
+                className="sim-shock-tail2"
+                cx="0"
+                cy="0"
+                r="3.5"
+                fill="#38bdf8"
+                opacity="0.45"
+                style={{ pointerEvents: 'none' }}
+              />
+              {/* Shockwave Trail 1 */}
+              <circle
+                className="sim-shock-tail1"
+                cx="0"
+                cy="0"
+                r="5.2"
+                fill="#2563eb"
+                opacity="0.75"
+                style={{ pointerEvents: 'none' }}
+              />
+              {/* Primary Shockwave Head */}
+              <g className="sim-shock-head" style={{ pointerEvents: 'none' }}>
+                <circle
+                  cx="0"
+                  cy="0"
+                  r="16"
+                  fill="#2563eb"
+                  opacity="0.45"
+                  style={{ pointerEvents: 'none' }}
+                />
+                <circle
+                  cx="0"
+                  cy="0"
+                  r="6.5"
+                  fill="#0284c7"
+                  opacity="1.0"
+                  style={{ pointerEvents: 'none' }}
+                />
+                <circle
+                  cx="0"
+                  cy="0"
+                  r="2.6"
+                  fill="#ffffff"
+                  opacity="1.0"
+                  style={{ pointerEvents: 'none' }}
+                />
+              </g>
+            </g>
           </g>
 
           {/* ===================== NODES ===================== */}
@@ -311,16 +1034,21 @@ export default function InteractiveGraph({
               const isSelected = selectedNode?.id === node.id;
               const isAnchor = !!node.isAnchor;
               const isHighlighted = isNodeHighlighted(node.id);
+              const isHovered = hoveredNode === node.id;
               const colors = getNodeColor(node.type);
 
-              const opacity = (hoveredNode || activeNodeId) && !isHighlighted ? 0.35 : 1.0;
+              const opacity = (hoveredNode || activeNodeId) && !isHighlighted ? 0.22 : 1.0;
 
               return (
                 <g
                   key={node.id}
-                  className="graph-node"
+                  className={`graph-node ${isHovered ? 'is-hovered' : ''}`}
                   transform={`translate(${pos.x}, ${pos.y})`}
-                  style={{ cursor: 'pointer', opacity, transition: 'opacity 0.2s ease' }}
+                  style={{
+                    cursor: 'pointer',
+                    opacity,
+                    transition: 'opacity 0.25s cubic-bezier(0.16, 1, 0.3, 1)',
+                  }}
                   onMouseDown={(e) => {
                     e.stopPropagation();
                     setDraggedNode(node.id);
@@ -346,24 +1074,100 @@ export default function InteractiveGraph({
                     setTooltip(null);
                   }}
                 >
-                  {/* Anchor Double Black Ring (Observed in Article) - Matches Crude Oil in Screenshot */}
-                  {isAnchor && (
+                  {/* Destination Node Particle Arrival Ripple (Phase 3) */}
+                  <circle
+                    ref={(el) => {
+                      if (el) arrivalRingRefs.current[node.id] = el;
+                      else delete arrivalRingRefs.current[node.id];
+                    }}
+                    className="node-arrival-ripple"
+                    r="15"
+                    fill="none"
+                    stroke="#10b981"
+                    strokeWidth="2.4"
+                    style={{ opacity: 0, pointerEvents: 'none', transformOrigin: '0px 0px' }}
+                  />
+                  {/* High-Visibility Ambient Breathing Glow Ring (All Nodes) */}
+                  <circle
+                    className="node-ambient-ring"
+                    r={isAnchor ? 24 : 20}
+                    fill={colors.stroke}
+                    opacity={isAnchor ? 0.36 : 0.22}
+                    style={{
+                      transformOrigin: '0px 0px',
+                      pointerEvents: 'none',
+                      animation: isAnchor
+                        ? 'nodeAnchorBreathe 3.2s ease-in-out infinite'
+                        : 'nodeAmbientBreathe 3.8s ease-in-out infinite',
+                      animationDelay: `${(rawNodes.indexOf(node) * 0.38) % 3.5}s`,
+                    }}
+                  />
+
+                  {/* Connected Direct Neighbor Ring (Soft Highlight Rotating Aura) */}
+                  {isHighlighted && !isSelected && !isAnchor && (
                     <circle
-                      r={22}
+                      className="node-neighbor-ring"
+                      r={20.5}
                       fill="none"
-                      stroke="#000000"
-                      strokeWidth="3.2"
+                      stroke={colors.stroke}
+                      strokeWidth="2.2"
+                      strokeDasharray="5 3"
+                      opacity="0.9"
+                      style={{
+                        transformOrigin: '0px 0px',
+                        animation: 'nodeNeighborRotate 10s linear infinite',
+                        pointerEvents: 'none',
+                      }}
                     />
                   )}
 
-                  {/* Selected Active Blue Ring - Matches Oil & Gas Producers in Screenshot */}
+                  {/* Anchor Double Black Ring with Ambient Breathing Pulse */}
+                  {isAnchor && (
+                    <>
+                      <circle
+                        r={22}
+                        fill="none"
+                        stroke="#000000"
+                        strokeWidth="3.4"
+                      />
+                      <circle
+                        className="node-anchor-ring"
+                        r={27}
+                        fill="none"
+                        stroke="#09090b"
+                        strokeWidth="1.6"
+                        opacity="0.55"
+                        style={{
+                          transformOrigin: '0px 0px',
+                          animation: 'nodeAnchorPulse 2.6s ease-in-out infinite',
+                          pointerEvents: 'none',
+                        }}
+                      />
+                    </>
+                  )}
+
+                  {/* Selected Active Blue Ring with Expanding Pulse Ripple */}
                   {isSelected && (
-                    <circle
-                      r={22}
-                      fill="none"
-                      stroke="#09090b"
-                      strokeWidth="3.2"
-                    />
+                    <>
+                      <circle
+                        r={22}
+                        fill="none"
+                        stroke="#2563eb"
+                        strokeWidth="3.4"
+                      />
+                      <circle
+                        className="node-selected-ring"
+                        r={28}
+                        fill="none"
+                        stroke="#3b82f6"
+                        strokeWidth="2.2"
+                        style={{
+                          transformOrigin: '0px 0px',
+                          animation: 'nodeSelectedPulse 2.0s cubic-bezier(0.25, 1, 0.5, 1) infinite',
+                          pointerEvents: 'none',
+                        }}
+                      />
+                    </>
                   )}
 
                   {/* Dashed Outer Ring (e.g. Airlines Sector, USD/INR) */}
@@ -387,15 +1191,25 @@ export default function InteractiveGraph({
                     />
                   )}
 
-                  {/* Primary Node Circle */}
+                  {/* Primary Node Circle (Smooth Interactive Hover & Scale) */}
                   <circle
-                    r={isSelected ? 15 : isAnchor ? 14 : 14}
+                    className="node-primary-circle"
+                    r={isHovered ? 15.0 : isSelected ? 14.8 : isAnchor ? 14 : 14}
                     fill={isSelected ? '#0284c7' : colors.fill}
-                    stroke={isSelected ? '#0369a1' : colors.stroke}
-                    strokeWidth={isSelected ? 2 : 1.8}
+                    stroke={isHovered ? '#4338ca' : isSelected ? '#0369a1' : colors.stroke}
+                    strokeWidth={isHovered ? 2.6 : isSelected ? 2.2 : 1.8}
                     strokeDasharray={node.isHypothesis && !isSelected ? '3,2' : undefined}
                     opacity={node.isHypothesis && !isSelected ? 0.8 : 1}
-                    filter="drop-shadow(0 1px 3px rgba(0,0,0,0.06))"
+                    filter={
+                      isHovered
+                        ? 'drop-shadow(0 4px 10px rgba(99, 102, 241, 0.35))'
+                        : isSelected
+                        ? 'drop-shadow(0 2px 8px rgba(37, 99, 235, 0.35))'
+                        : 'drop-shadow(0 1px 3px rgba(0,0,0,0.06))'
+                    }
+                    style={{
+                      transition: 'r 0.22s cubic-bezier(0.16, 1, 0.3, 1), stroke 0.22s ease, stroke-width 0.22s ease',
+                    }}
                   />
 
                   {/* Mixed Signals Badge (±) on bottom-right of node */}
@@ -420,9 +1234,13 @@ export default function InteractiveGraph({
                     x={node.col === 4 ? 20 : 0}
                     textAnchor={node.col === 4 ? 'start' : 'middle'}
                     fontSize={node.col === 4 ? '11' : '11.5'}
-                    fontWeight={isSelected || isAnchor ? '700' : '500'}
-                    fill={isSelected || isAnchor ? '#09090b' : '#334155'}
+                    fontWeight={isSelected || isAnchor || isHovered ? '700' : '500'}
+                    fill={isSelected || isAnchor ? '#09090b' : isHovered ? '#1e1b4b' : '#334155'}
                     letterSpacing="-0.1px"
+                    style={{
+                      transition: 'fill 0.2s ease, font-weight 0.2s ease',
+                      userSelect: 'none',
+                    }}
                   >
                     {node.label}
                   </text>

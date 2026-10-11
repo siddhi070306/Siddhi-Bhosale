@@ -106,7 +106,9 @@ export default function Layout({
             setActiveTab={setActiveTab}
           />
           <main className={`page-content ${activeTab === 'chat' ? 'chat-mode-content' : ''}`}>
-            {children}
+            <div key={activeTab} className="page-transition-wrapper">
+              {children}
+            </div>
           </main>
         </div>
       </div>

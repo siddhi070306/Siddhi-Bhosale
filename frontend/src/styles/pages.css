@@ -667,7 +667,7 @@
 }
 
 .pathway-card {
-  padding: 12px;
+  padding: 12px 14px;
   border: var(--glass-border-subtle);
   border-radius: var(--radius-md);
   margin-bottom: 12px;
@@ -675,36 +675,69 @@
   backdrop-filter: blur(8px);
   -webkit-backdrop-filter: blur(8px);
   cursor: pointer;
-  transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+  transition: all 0.22s cubic-bezier(0.16, 1, 0.3, 1);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.02);
 }
 
 .pathway-card:hover {
-  border-color: rgba(203, 213, 225, 0.9);
+  border-color: #3b82f6;
   background: var(--glass-bg-hover);
-  transform: translateY(-1px);
-  box-shadow: var(--glass-shadow);
+  transform: translateY(-2px);
+  box-shadow: 0 6px 16px rgba(59, 130, 246, 0.12);
 }
 
 .pathway-num {
   font-size: 11px;
   font-weight: 700;
-  width: 20px;
-  height: 20px;
+  width: 22px;
+  height: 22px;
   border-radius: 50%;
   background: #18181b;
   color: #fff;
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  margin-right: 6px;
+  flex-shrink: 0;
+  margin-top: 1px;
 }
 
 .pathway-chain {
-  font-size: 12.5px;
+  font-size: 12px;
   font-weight: 600;
   color: var(--text-main);
-  line-height: 1.4;
+  line-height: 1.45;
   margin-bottom: 6px;
+  flex: 1;
+}
+
+.pathway-step-pill {
+  font-size: 11px;
+  font-weight: 600;
+  color: #0f172a;
+  background: #f1f5f9;
+  padding: 2px 7px;
+  border-radius: 5px;
+  border: 1px solid #e2e8f0;
+  display: inline-block;
+  white-space: nowrap;
+}
+
+.pathway-step-arrow {
+  display: inline-flex;
+  align-items: center;
+  color: #2563eb;
+  animation: arrowPulseFlow 1.6s ease-in-out infinite;
+}
+
+@keyframes arrowPulseFlow {
+  0%, 100% {
+    transform: translateX(0);
+    opacity: 0.55;
+  }
+  50% {
+    transform: translateX(3px);
+    opacity: 1;
+  }
 }
 
 .pathway-score {
