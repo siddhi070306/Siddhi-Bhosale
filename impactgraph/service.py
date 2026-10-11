@@ -115,6 +115,30 @@ class Analyzer:
         report = self.guard.finish(before, "removed asset %s" % label)
         return {"ok": not report["rolled_back"], "guard": report}
 
+    def update_edge(self, source, target, weight=None, strength=None, sign=None):
+        """Update transmission weight/strength of an edge in the graph."""
+        if not self.kg.g.has_edge(source, target):
+            return {"error": "Edge (%s -> %s) does not exist in graph." % (source, target)}
+        if weight is not None:
+            w = float(weight)
+            sign = -1 if w < 0 else 1
+            strength = abs(w)
+        if strength is not None:
+            strength = max(0.01, min(0.99, float(strength)))
+        res = self.kg.update_edge_weight(source, target, strength=strength, sign=sign)
+        self.guard.version += 1
+        self.guard.save()
+        self.guard._note("edit-edge", "%s -> %s weight adjusted to %.2f" % (source, target, res["effective_weight"]))
+        return {
+            "ok": True,
+            "source": source,
+            "target": target,
+            "strength": res["strength"],
+            "sign": res["sign"],
+            "effective_weight": res["effective_weight"],
+            "before_strength": res["before_strength"],
+        }
+
     # ------------------------------------------------------------------------------------------
     def _build_sources(self, events):
         best = {}

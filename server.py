@@ -218,6 +218,22 @@ def kb_remove_asset(node_id: str):
     return res
 
 
+class EdgeWeightBody(BaseModel):
+    source: str
+    target: str
+    weight: Optional[float] = None
+    strength: Optional[float] = None
+    sign: Optional[int] = None
+
+
+@app.post("/api/kb/edge")
+def kb_update_edge(body: EdgeWeightBody):
+    res = analyzer.update_edge(body.source, body.target, weight=body.weight, strength=body.strength, sign=body.sign)
+    if res.get("error"):
+        raise HTTPException(status_code=400, detail=res["error"])
+    return res
+
+
 @app.get("/api/headlines")
 def headlines():
     return feeds.headlines()

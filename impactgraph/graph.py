@@ -128,6 +128,28 @@ class KnowledgeGraph:
         if val.get("adjusts") and val["verdict"] == "supported" and "validated" not in e["provenance"]:
             e["provenance"].append("validated")
 
+    def update_edge_weight(self, u, v, strength, sign=None):
+        if not self.g.has_edge(u, v):
+            raise KeyError("Edge (%s -> %s) does not exist in graph." % (u, v))
+        strength = max(0.01, min(0.99, float(strength)))
+        e = self.g[u][v]
+        before_st = e["strength"]
+        e["strength"] = round(strength, 4)
+        e["base_strength"] = round(strength, 4)
+        if sign is not None:
+            e["sign"] = int(sign)
+        prov = e.setdefault("provenance", [])
+        if "user_edited" not in prov:
+            prov.append("user_edited")
+        return {
+            "src": u,
+            "dst": v,
+            "strength": e["strength"],
+            "sign": e["sign"],
+            "effective_weight": round(e["sign"] * e["strength"], 4),
+            "before_strength": before_st,
+        }
+
     # ---- views -----------------------------------------------------------------------------
     def stats(self):
         return {"nodes": self.g.number_of_nodes(), "edges": self.g.number_of_edges(),

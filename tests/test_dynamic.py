@@ -195,6 +195,14 @@ class AssetTests(unittest.TestCase):
             self.assertIn("will not appear", r["note"])
         self.assertEqual(r["sector_source"] in ("none", "matched from the name", "suggested by the LLM"), True)
 
+    def test_update_edge_weight(self):
+        res = self.a.update_edge("crude_oil", "airlines", weight=-0.85)
+        self.assertTrue(res.get("ok"))
+        self.assertEqual(res["strength"], 0.85)
+        self.assertEqual(res["sign"], -1)
+        self.assertEqual(res["effective_weight"], -0.85)
+        self.assertEqual(self.a.kg.g["crude_oil"]["airlines"]["strength"], 0.85)
+
 
 class QuoteTests(unittest.TestCase):
     def test_watchlist_validates_with_a_real_quote(self):

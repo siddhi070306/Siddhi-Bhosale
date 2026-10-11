@@ -320,6 +320,12 @@ export const api = {
   addAsset: (ticker, name, sector) =>
     request('/api/kb/asset', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ticker, name: name || null, sector: sector || null }) }),
   removeAsset: (id) => request(`/api/kb/asset/${encodeURIComponent(id)}`, { method: 'DELETE' }),
+  updateEdge: (source, target, weight) =>
+    request('/api/kb/edge', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ source, target, weight }),
+    }),
 
   // Returns the raw backend result plus adapted views for the pages. Throws on any failure.
   async analyze(text, live = prefs.getLive(), source = null, link = null, title = null) {

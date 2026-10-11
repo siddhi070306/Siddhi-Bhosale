@@ -1,7 +1,7 @@
 import React, { useState, useRef } from 'react';
 import { ZoomIn, ZoomOut, RotateCcw } from 'lucide-react';
 
-export default function InteractiveGraph({ data, selectedNode, onSelectNode }) {
+export default function InteractiveGraph({ data, selectedNode, onSelectNode, selectedEdge = null, onSelectEdge = null }) {
   const [zoom, setZoom] = useState(1);
   const [pan, setPan] = useState({ x: 20, y: 10 });
   const [isPanning, setIsPanning] = useState(false);
@@ -206,14 +206,20 @@ export default function InteractiveGraph({ data, selectedNode, onSelectNode }) {
 
               const isHighlighted = isEdgeHighlighted(edge);
               const isPositive = edge.sign > 0;
+              const isEdgeSelected = selectedEdge && selectedEdge.from === edge.from && selectedEdge.to === edge.to;
 
               let strokeColor = isPositive ? '#34d399' : '#f43f5e';
               let strokeWidth = 1.8;
               let opacity = 0.45;
               let markerEnd = isPositive ? 'url(#arrow-pos)' : 'url(#arrow-neg)';
 
-              // Special styling for the active causal path (e.g. Crude Oil -> Oil & Gas Producers)
-              if (edge.isActive) {
+              // Special styling for the active causal path or selected edge
+              if (isEdgeSelected) {
+                strokeColor = '#2563eb';
+                strokeWidth = 4.2;
+                opacity = 1.0;
+                markerEnd = 'url(#arrow-active)';
+              } else if (edge.isActive) {
                 strokeColor = '#09090b';
                 strokeWidth = 3.6;
                 opacity = 1.0;
@@ -226,39 +232,57 @@ export default function InteractiveGraph({ data, selectedNode, onSelectNode }) {
               }
 
               return (
-                <path
-                  key={`edge-${edge.from}-${edge.to}-${idx}`}
-                  d={pathData}
-                  fill="none"
-                  stroke={strokeColor}
-                  strokeWidth={strokeWidth}
-                  strokeOpacity={opacity}
-                  markerEnd={markerEnd}
-                  style={{
-                    cursor: 'pointer',
-                    transition: 'stroke-opacity 0.2s ease, stroke-width 0.2s ease',
-                  }}
-                  onMouseEnter={(e) => {
-                    setHoveredEdge(edge);
-                    const rect = svgRef.current?.getBoundingClientRect();
-                    setTooltip({
-                      x: e.clientX - (rect?.left || 0) + 12,
-                      y: e.clientY - (rect?.top || 0) - 12,
-                      title: `${edge.from.replace('_', ' ').toUpperCase()} → ${edge.to.replace('_', ' ').toUpperCase()}`,
-                      mechanism: edge.mechanism || (isPositive ? 'Positive Transmission (+)' : 'Negative Transmission (-)'),
-                      strength: edge.strength,
-                      lag: edge.lag != null ? `${edge.lag}d lag` : null,
-                    });
-                  }}
-                  onMouseLeave={() => {
-                    setHoveredEdge(null);
-                    setTooltip(null);
-                  }}
-                  onClick={() => {
-                    const src = rawNodes.find((n) => n.id === edge.from);
-                    if (src) onSelectNode(src);
-                  }}
-                />
+                <g key={`edge-group-${edge.from}-${edge.to}-${idx}`}>
+                  {/* Wide invisible hit area for easy edge selection */}
+                  <path
+                    d={pathData}
+                    fill="none"
+                    stroke="transparent"
+                    strokeWidth={16}
+                    style={{ cursor: 'pointer' }}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      if (onSelectEdge) {
+                        onSelectEdge(edge);
+                      } else {
+                        const src = rawNodes.find((n) => n.id === edge.from);
+                        if (src) onSelectNode(src);
+                      }
+                    }}
+                    onMouseEnter={(e) => {
+                      setHoveredEdge(edge);
+                      const rect = svgRef.current?.getBoundingClientRect();
+                      setTooltip({
+                        x: e.clientX - (rect?.left || 0) + 12,
+                        y: e.clientY - (rect?.top || 0) - 12,
+                        title: `${edge.from.replace('_', ' ').toUpperCase()} → ${edge.to.replace('_', ' ').toUpperCase()}`,
+                        mechanism: edge.mechanism || (isPositive ? 'Positive Transmission (+)' : 'Negative Transmission (-)'),
+                        strength: edge.strength,
+                        weight: (edge.sign || 1) * (edge.strength || 0.5),
+                        lag: edge.lag != null ? `${edge.lag}d lag` : null,
+                      });
+                    }}
+                    onMouseLeave={() => {
+                      setHoveredEdge(null);
+                      setTooltip(null);
+                    }}
+                  />
+
+                  {/* Visible styled edge */}
+                  <path
+                    d={pathData}
+                    fill="none"
+                    stroke={strokeColor}
+                    strokeWidth={strokeWidth}
+                    strokeOpacity={opacity}
+                    markerEnd={markerEnd}
+                    style={{
+                      cursor: 'pointer',
+                      transition: 'stroke-opacity 0.2s ease, stroke-width 0.2s ease',
+                      pointerEvents: 'none',
+                    }}
+                  />
+                </g>
               );
             })}
           </g>

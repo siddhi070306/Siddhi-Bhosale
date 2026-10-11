@@ -144,6 +144,7 @@ export default function App() {
             analysis={analysis}
             onNavigateToChat={() => setActiveTab('chat')}
             onSelectEvent={handleSelectEvent}
+            onReanalyze={handleReanalyze}
             onNavigateToTab={(tabId, assetId, mode) => setActiveTab(tabId, assetId, mode)}
           />
         );
