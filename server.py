@@ -1,12 +1,12 @@
 import os
-from typing import Optional
+from typing import Optional, List, Dict, Any
 
 from fastapi import FastAPI, HTTPException, Query
 from fastapi.responses import FileResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
-from impactgraph import feeds, llm, market, quotes
+from impactgraph import feeds, llm, market, quotes, hedge
 from impactgraph.service import SAMPLES, Analyzer, llm_required
 
 app = FastAPI(title="Apex Zenith")
@@ -252,6 +252,45 @@ def sec(ticker: str = Query(..., min_length=1, max_length=10), form: str = "8-K"
     if not res:
         raise HTTPException(status_code=404, detail="No SEC record for this ticker (US-listed companies only), or EDGAR could not be reached.")
     return res
+
+
+class PortfolioHedgeBody(BaseModel):
+    holdings: Optional[List[Dict[str, Any]]] = None
+    preset: Optional[str] = "aviation_transport"
+    total_value_usd: Optional[float] = 50000000.0
+    text: Optional[str] = None
+    analysis: Optional[Dict[str, Any]] = None
+
+
+@app.get("/api/portfolio/presets")
+def portfolio_presets():
+    return {
+        "presets": hedge.PORTFOLIO_PRESETS,
+        "hedge_candidates": hedge.HEDGE_CANDIDATES,
+    }
+
+
+@app.post("/api/portfolio/hedge")
+def portfolio_hedge(body: PortfolioHedgeBody):
+    # Determine holdings: from preset or custom list
+    holdings = body.holdings
+    if not holdings and body.preset in hedge.PORTFOLIO_PRESETS:
+        holdings = hedge.PORTFOLIO_PRESETS[body.preset]["holdings"]
+    elif not holdings:
+        holdings = hedge.PORTFOLIO_PRESETS["aviation_transport"]["holdings"]
+
+    # Determine analysis: if not passed, analyze text or default shock
+    analysis_res = body.analysis
+    if not analysis_res:
+        txt = body.text or "Brent crude jumped 12% following Middle East supply disruption"
+        analysis_res = analyzer.analyze(txt, live=False)
+
+    return hedge.analyze_portfolio_hedge(
+        analyzer.kg,
+        analysis_res,
+        holdings,
+        total_value_usd=body.total_value_usd or 50000000.0
+    )
 
 
 app.mount("/vendor", StaticFiles(directory=os.path.join(ROOT, "public", "vendor")), name="vendor")

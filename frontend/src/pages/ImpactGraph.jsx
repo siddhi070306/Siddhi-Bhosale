@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Search, ShieldCheck, Sparkles, ArrowRight, Sliders, RefreshCw, Check } from 'lucide-react';
+import { Search, ShieldCheck, Sparkles, ArrowRight, Sliders, RefreshCw, Check, RotateCcw } from 'lucide-react';
 import InteractiveGraph from '../components/graph/InteractiveGraph';
 import CausalChainWalkthrough from '../components/common/CausalChainWalkthrough';
 import { useUi } from '../context/UiContext';
@@ -64,6 +64,8 @@ export default function ImpactGraph({ analysis, onNavigateToChat, onSelectEvent,
   const [edgeUpdating, setEdgeUpdating] = useState(false);
   const [edgeSuccessMsg, setEdgeSuccessMsg] = useState(null);
   const [edgeErrorMsg, setEdgeErrorMsg] = useState(null);
+  const [resettingGraph, setResettingGraph] = useState(false);
+  const [resetSuccessMsg, setResetSuccessMsg] = useState(null);
   const { search: searchQuery, setSearch: setSearchQuery } = useUi(); // shared with the header search box
   const [showEvidenceModal, setShowEvidenceModal] = useState(false);
 
@@ -92,6 +94,27 @@ export default function ImpactGraph({ analysis, onNavigateToChat, onSelectEvent,
       setEdgeErrorMsg(e.message);
     } finally {
       setEdgeUpdating(false);
+    }
+  };
+
+  const handleResetGraphToDefaults = async () => {
+    setResettingGraph(true);
+    setEdgeSuccessMsg(null);
+    setEdgeErrorMsg(null);
+    setResetSuccessMsg(null);
+    try {
+      await api.revertKb('static');
+      setSelectedEdge(null);
+      setEdgeWeight(null);
+      setResetSuccessMsg('Graph successfully reset to curated baseline defaults.');
+      if (onReanalyze) {
+        await onReanalyze('Restored graph to curated baseline defaults.');
+      }
+      setTimeout(() => setResetSuccessMsg(null), 4500);
+    } catch (e) {
+      setEdgeErrorMsg(`Reset failed: ${e.message}`);
+    } finally {
+      setResettingGraph(false);
     }
   };
 
@@ -160,21 +183,72 @@ export default function ImpactGraph({ analysis, onNavigateToChat, onSelectEvent,
           )}
         </div>
 
-        {/* Node search filter */}
-        <div style={{ position: 'relative', width: 320 }}>
-          <Search
-            size={14}
-            style={{ position: 'absolute', left: 12, top: '50%', transform: 'translateY(-50%)', color: '#71717a' }}
-          />
-          <input
-            type="text"
-            className="header-search-input"
-            placeholder="Search nodes (companies, sectors, assets...)"
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-          />
+        {/* Header Actions: Reset to Defaults + Node Search Filter */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
+          <button
+            type="button"
+            className="btn btn-outline"
+            style={{
+              fontSize: 12.5,
+              padding: '7px 13px',
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: 6,
+              background: '#ffffff',
+              borderColor: '#e4e4e7',
+              color: '#3f3f46',
+              fontWeight: 500,
+              borderRadius: 8,
+              cursor: resettingGraph ? 'not-allowed' : 'pointer',
+              boxShadow: '0 1px 2px rgba(0,0,0,0.04)',
+            }}
+            onClick={handleResetGraphToDefaults}
+            disabled={resettingGraph}
+            title="Revert all edge weight adjustments, demo edits, and dynamic nodes back to curated baseline"
+          >
+            <RotateCcw size={13} className={resettingGraph ? 'spin' : ''} />
+            <span>{resettingGraph ? 'Resetting…' : 'Reset Graph to Defaults'}</span>
+          </button>
+
+          {/* Node search filter */}
+          <div style={{ position: 'relative', width: 280 }}>
+            <Search
+              size={14}
+              style={{ position: 'absolute', left: 12, top: '50%', transform: 'translateY(-50%)', color: '#71717a' }}
+            />
+            <input
+              type="text"
+              className="header-search-input"
+              placeholder="Search nodes (companies, sectors...)"
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+            />
+          </div>
         </div>
       </div>
+
+      {/* Reset success feedback */}
+      {resetSuccessMsg && (
+        <div
+          className="card"
+          style={{
+            padding: '10px 16px',
+            marginBottom: 12,
+            background: '#f0fdf4',
+            border: '1px solid #bbf7d0',
+            color: '#166534',
+            fontSize: 12.5,
+            fontWeight: 500,
+            display: 'flex',
+            alignItems: 'center',
+            gap: 8,
+            boxShadow: '0 1px 3px rgba(0,0,0,0.05)',
+          }}
+        >
+          <Check size={14} />
+          <span>{resetSuccessMsg}</span>
+        </div>
+      )}
 
       {/* Hypothesis / thin-graph notices */}
       {analysis.hypothesis && analysis.hypothesis.themes.length > 0 && (
@@ -218,6 +292,8 @@ export default function ImpactGraph({ analysis, onNavigateToChat, onSelectEvent,
             }}
             selectedEdge={selectedEdge}
             onSelectEdge={handleSelectEdge}
+            onResetDefaults={handleResetGraphToDefaults}
+            isResetting={resettingGraph}
           />
 
           {/* Floating On-Canvas Live Edge Sensitivity Drawer */}
@@ -286,11 +362,23 @@ export default function ImpactGraph({ analysis, onNavigateToChat, onSelectEvent,
                 type="button"
                 className="btn btn-black btn-sm"
                 onClick={handleSaveEdge}
-                disabled={edgeUpdating}
+                disabled={edgeUpdating || resettingGraph}
                 style={{ fontSize: 11.5, display: 'flex', alignItems: 'center', gap: 5, padding: '5px 12px', whiteSpace: 'nowrap' }}
               >
                 <RefreshCw size={12} className={edgeUpdating ? 'spin' : ''} />
                 <span>{edgeUpdating ? 'Rebalancing…' : 'Rebalance Graph'}</span>
+              </button>
+
+              <button
+                type="button"
+                className="btn btn-outline btn-sm"
+                onClick={handleResetGraphToDefaults}
+                disabled={edgeUpdating || resettingGraph}
+                title="Revert all transmission weights, demo edits, and dynamic nodes back to curated baseline"
+                style={{ fontSize: 11.5, display: 'flex', alignItems: 'center', gap: 5, padding: '5px 10px', whiteSpace: 'nowrap', background: '#fff' }}
+              >
+                <RotateCcw size={12} className={resettingGraph ? 'spin' : ''} />
+                <span>Reset All</span>
               </button>
 
               <button
@@ -421,6 +509,30 @@ export default function ImpactGraph({ analysis, onNavigateToChat, onSelectEvent,
                           {selectedEdge.mechanism}
                         </div>
                       )}
+                      {/* Dynamic Rolling Transmission Lag & Volatility Regime */}
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: 8, paddingTop: 8, borderTop: '1px solid #e2e8f0', fontSize: 11 }}>
+                        <div>
+                          <span style={{ color: '#64748b' }}>Dynamic Lag: </span>
+                          <strong style={{ color: '#0f172a' }}>~{selectedEdge.lag || 0} day{selectedEdge.lag === 1 ? '' : 's'}</strong>
+                          {selectedEdge.baseLag != null && selectedEdge.baseLag !== selectedEdge.lag && (
+                            <span style={{ color: '#94a3b8', marginLeft: 4 }}>(prior: {selectedEdge.baseLag}d)</span>
+                          )}
+                        </div>
+                        {selectedEdge.volRegime && (
+                          <div style={{
+                            padding: '2px 7px',
+                            borderRadius: 4,
+                            background: selectedEdge.volRegime === 'high_volatility' ? '#fef2f2' : selectedEdge.volRegime === 'elevated' ? '#fffbeb' : '#f0fdf4',
+                            color: selectedEdge.volRegime === 'high_volatility' ? '#991b1b' : selectedEdge.volRegime === 'elevated' ? '#92400e' : '#166534',
+                            border: `1px solid ${selectedEdge.volRegime === 'high_volatility' ? '#fecaca' : selectedEdge.volRegime === 'elevated' ? '#fde68a' : '#bbf7d0'}`,
+                            fontSize: 10.5,
+                            fontWeight: 600,
+                            textTransform: 'capitalize',
+                          }}>
+                            {selectedEdge.volRegime.replace(/_/g, ' ')}
+                          </div>
+                        )}
+                      </div>
                     </div>
 
                     {/* Weight Adjustment Slider */}
@@ -508,17 +620,30 @@ export default function ImpactGraph({ analysis, onNavigateToChat, onSelectEvent,
                       </div>
                     )}
 
-                    {/* Apply Button */}
-                    <button
-                      type="button"
-                      className="btn btn-black"
-                      style={{ width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6, fontSize: 12.5 }}
-                      onClick={handleSaveEdge}
-                      disabled={edgeUpdating}
-                    >
-                      <RefreshCw size={13} className={edgeUpdating ? 'spin' : ''} />
-                      <span>{edgeUpdating ? 'Updating & Re-propagating…' : 'Apply & Rebalance Graph'}</span>
-                    </button>
+                    {/* Action Buttons */}
+                    <div style={{ display: 'flex', gap: 8 }}>
+                      <button
+                        type="button"
+                        className="btn btn-black"
+                        style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6, fontSize: 12.5 }}
+                        onClick={handleSaveEdge}
+                        disabled={edgeUpdating || resettingGraph}
+                      >
+                        <RefreshCw size={13} className={edgeUpdating ? 'spin' : ''} />
+                        <span>{edgeUpdating ? 'Updating…' : 'Apply & Rebalance Graph'}</span>
+                      </button>
+                      <button
+                        type="button"
+                        className="btn btn-outline"
+                        style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6, fontSize: 12, padding: '0 12px', whiteSpace: 'nowrap' }}
+                        onClick={handleResetGraphToDefaults}
+                        disabled={edgeUpdating || resettingGraph}
+                        title="Revert all transmission weights, demo edits, and dynamic nodes back to curated baseline"
+                      >
+                        <RotateCcw size={13} className={resettingGraph ? 'spin' : ''} />
+                        <span>Reset All</span>
+                      </button>
+                    </div>
                   </div>
                 )}
               </div>

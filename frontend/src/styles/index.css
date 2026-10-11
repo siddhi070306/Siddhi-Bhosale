@@ -57,6 +57,16 @@
   /* Custom Trend Cursors */
   --cursor-positive: url("/assets/cursor-positive.png") 24 24, pointer;
   --cursor-negative: url("/assets/cursor-negative.png") 24 24, pointer;
+
+  /* Glassmorphism System */
+  --glass-bg: rgba(255, 255, 255, 0.72);
+  --glass-bg-subtle: rgba(255, 255, 255, 0.52);
+  --glass-bg-hover: rgba(255, 255, 255, 0.88);
+  --glass-border: 1px solid rgba(255, 255, 255, 0.75);
+  --glass-border-subtle: 1px solid rgba(228, 228, 231, 0.65);
+  --glass-blur: blur(16px) saturate(180%);
+  --glass-shadow: 0 8px 32px 0 rgba(15, 23, 42, 0.05), inset 0 1px 0 0 rgba(255, 255, 255, 0.85);
+  --glass-shadow-hover: 0 16px 40px -8px rgba(15, 23, 42, 0.09), inset 0 1px 0 0 rgba(255, 255, 255, 0.95);
 }
 
 /* Custom mouse cursors for trend-aware cards and children */
@@ -80,6 +90,11 @@
 body {
   font-family: var(--font-sans);
   background-color: var(--bg-app);
+  background-image: 
+    radial-gradient(at 0% 0%, rgba(99, 102, 241, 0.05) 0px, transparent 50%),
+    radial-gradient(at 100% 0%, rgba(16, 185, 129, 0.04) 0px, transparent 50%),
+    radial-gradient(at 50% 100%, rgba(59, 130, 246, 0.04) 0px, transparent 50%);
+  background-attachment: fixed;
   color: var(--text-main);
   line-height: 1.5;
   -webkit-font-smoothing: antialiased;
@@ -112,17 +127,27 @@ a {
   background: #a1a1aa;
 }
 
-/* Stitched Utilities */
+/* Stitched & Glass Utilities */
 .stitched-box {
-  background: var(--bg-white);
-  border: 1px solid var(--border-subtle);
+  background: var(--glass-bg);
+  backdrop-filter: var(--glass-blur);
+  -webkit-backdrop-filter: var(--glass-blur);
+  border: var(--glass-border-subtle);
   border-radius: var(--radius-md);
-  box-shadow: var(--shadow-sm);
+  box-shadow: var(--glass-shadow);
   position: relative;
+  transition: all 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.stitched-box:hover {
+  background: var(--glass-bg-hover);
+  box-shadow: var(--glass-shadow-hover);
 }
 
 .stitched-box-dashed {
-  background: var(--bg-white);
+  background: var(--glass-bg-subtle);
+  backdrop-filter: var(--glass-blur);
+  -webkit-backdrop-filter: var(--glass-blur);
   border: 1px dashed var(--border-strong);
   border-radius: var(--radius-md);
 }
@@ -138,7 +163,7 @@ a {
   display: flex;
   min-height: 100vh;
   width: 100vw;
-  background-color: var(--bg-app);
+  background-color: transparent;
 }
 
 .main-wrapper {
@@ -148,7 +173,7 @@ a {
   min-width: 0;
   height: 100vh;
   overflow-y: auto;
-  background-color: var(--bg-app);
+  background-color: transparent;
 }
 
 .page-content {
@@ -185,18 +210,42 @@ a {
   color: var(--text-muted);
 }
 
-/* Common Card */
-.card {
-  background-color: var(--bg-white);
-  border: 1px solid var(--border-subtle);
+/* Common Card & Glassmorphic Surface */
+.card,
+.glass-card {
+  background: var(--glass-bg);
+  backdrop-filter: var(--glass-blur);
+  -webkit-backdrop-filter: var(--glass-blur);
+  border: var(--glass-border-subtle);
   border-radius: var(--radius-md);
-  box-shadow: var(--shadow-card);
+  box-shadow: var(--glass-shadow);
   padding: 20px;
-  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+  transition: all 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+  position: relative;
 }
 
-.card:hover {
-  border-color: var(--border-strong);
+.card:hover,
+.glass-card:hover {
+  background: var(--glass-bg-hover);
+  border-color: rgba(203, 213, 225, 0.85);
+  box-shadow: var(--glass-shadow-hover);
+}
+
+.glass-panel {
+  background: var(--glass-bg);
+  backdrop-filter: var(--glass-blur);
+  -webkit-backdrop-filter: var(--glass-blur);
+  border: var(--glass-border-subtle);
+  box-shadow: var(--glass-shadow);
+  border-radius: var(--radius-md);
+}
+
+.glass-panel-subtle {
+  background: var(--glass-bg-subtle);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  border: 1px solid rgba(228, 228, 231, 0.5);
+  border-radius: var(--radius-sm);
 }
 
 .card-title {

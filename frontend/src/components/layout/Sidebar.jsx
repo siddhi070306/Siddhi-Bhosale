@@ -14,6 +14,8 @@ import {
   SquarePen,
   PanelLeftClose,
   Trash2,
+  Bot,
+  ShieldCheck,
 } from 'lucide-react';
 
 export default function Sidebar({
@@ -39,6 +41,7 @@ export default function Sidebar({
 
   const initialDashboards = [
     { id: 'home', label: 'Market Intelligence', icon: Home },
+    { id: 'portfolio-hedge', label: 'Portfolio & Hedging', icon: ShieldCheck },
     { id: 'asset-impact', label: 'Asset Impact', icon: TrendingUp },
     { id: 'econometrics', label: 'Analogs & Forecast', icon: History },
   ];
@@ -126,7 +129,20 @@ export default function Sidebar({
           <div className="nav-item-icon-wrap">
             <MessageSquare size={17} className="nav-item-icon" />
           </div>
-          <span className="nav-item-label">AI Chat Assistant</span>
+          <span className="nav-item-label">Knowledge Graph Generator</span>
+          <span className="nav-item-badge">Core</span>
+        </button>
+
+        {/* KG Powered AI Assistant */}
+        <button
+          className={`nav-item ${activeTab === 'kg-assistant' ? 'active' : ''}`}
+          onClick={() => handleTabClick('kg-assistant')}
+          title="KG Powered AI Assistant"
+        >
+          <div className="nav-item-icon-wrap">
+            <Bot size={17} className="nav-item-icon" />
+          </div>
+          <span className="nav-item-label">KG Powered AI Assistant</span>
           <span className="nav-item-badge">Core</span>
         </button>
 

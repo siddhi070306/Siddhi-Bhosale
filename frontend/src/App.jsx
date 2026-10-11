@@ -8,6 +8,8 @@ import AssetImpact from './pages/AssetImpact';
 import ScenarioSimulator from './pages/ScenarioSimulator';
 import EconometricAnalogs from './pages/EconometricAnalogs';
 import Settings from './pages/Settings';
+import KgAssistant from './pages/KgAssistant';
+import PortfolioHedge from './pages/PortfolioHedge';
 import { api } from './services/api';
 import ProductTour from './components/ui/ProductTour';
 import {
@@ -24,7 +26,7 @@ import './styles/layout.css';
 import './styles/pages.css';
 import './styles/chat.css';
 
-const VALID_TABS = ['chat', 'home', 'asset-impact', 'econometrics', 'event-analysis', 'impact-graph', 'scenario-simulator', 'settings'];
+const VALID_TABS = ['chat', 'kg-assistant', 'home', 'portfolio-hedge', 'asset-impact', 'econometrics', 'event-analysis', 'impact-graph', 'scenario-simulator', 'settings'];
 
 function getTabFromHash() {
   const hash = window.location.hash.replace(/^#\/?/, '').split('?')[0].trim();
@@ -279,6 +281,22 @@ export default function App() {
         );
       case 'settings':
         return <Settings />;
+      case 'portfolio-hedge':
+        return (
+          <PortfolioHedge
+            analysis={analysis}
+            onNavigateToTab={(tabId, assetId, mode) => setActiveTab(tabId, assetId, mode)}
+            onSelectEvent={handleSelectEvent}
+          />
+        );
+      case 'kg-assistant':
+        return (
+          <KgAssistant
+            analysis={analysis}
+            onNavigateToTab={(tabId, assetId, mode) => setActiveTab(tabId, assetId, mode)}
+            onSelectEventText={(text) => setCurrentEventText(text)}
+          />
+        );
       default:
         return (
           <ChatInterface

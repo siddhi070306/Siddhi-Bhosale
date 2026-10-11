@@ -276,12 +276,41 @@ def validate_edge(kg, u, v, live=True):
         verdict, mult = "supported", 1.0 + min(0.25, abs(c) / 2)
     else:
         verdict, mult = "contradicted", max(0.55, 1 - abs(c))
-    return {"verdict": verdict, "corr": round(c, 3), "lag_days": lag, "n": int(len(x)),
-            "threshold": round(thr, 3), "multiplier": round(mult, 3), "adjusts": not sim,
+
+    # ---- Dynamic Rolling Transmission Lag & Volatility Regime ----
+    # Shocks propagate faster in high-volatility regimes (margin calls, algorithmic de-risking)
+    # and slower in low-volatility regimes (delayed quarterly contract repricing).
+    vol_ratio = 1.0
+    vol_regime = "normal"
+    if len(x) >= 45:
+        recent_std = float(np.std(x[-30:]))
+        long_std = float(np.std(x))
+        if long_std > 1e-6:
+            vol_ratio = round(recent_std / long_std, 3)
+            if vol_ratio >= 1.35:
+                vol_regime = "high_volatility"
+            elif vol_ratio >= 1.15:
+                vol_regime = "elevated"
+            elif vol_ratio <= 0.80:
+                vol_regime = "low_volatility"
+            else:
+                vol_regime = "normal"
+
+    vol_mult = 0.65 if vol_regime == "high_volatility" else (0.85 if vol_regime == "elevated" else (1.25 if vol_regime == "low_volatility" else 1.0))
+    if kb_lag == 0:
+        dynamic_lag = 0  # identity / index-weight link remains instantaneous
+    else:
+        alpha = min(0.70, abs(c)) if abs(c) >= thr else 0.0
+        blended_lag = alpha * lag + (1.0 - alpha) * kb_lag
+        dynamic_lag = max(1, int(round(blended_lag * vol_mult)))
+
+    return {"verdict": verdict, "corr": round(c, 3), "lag_days": lag, "dynamic_lag": dynamic_lag,
+            "base_lag": kb_lag, "vol_regime": vol_regime, "vol_ratio": vol_ratio,
+            "n": int(len(x)), "threshold": round(thr, 3), "multiplier": round(mult, 3), "adjusts": not sim,
             "data": "%s -> %s" % (su[2]["source"], sv[2]["source"]), "simulated": sim,
             "mode": su[2]["mode"] if su[2]["mode"] == sv[2]["mode"] else "mixed",
             "note": ("Simulated data: shown for demonstration only, does not change confidence." if sim
-                     else "Return/diff correlation over ~%d trading days; correlation is not causation." % len(x))}
+                     else "Correlation over ~%d trading days; dynamic lag %d days (%s regime, vol ratio %.2f)." % (len(x), dynamic_lag, vol_regime, vol_ratio))}
 
 
 def sparkline(node_id, live=True, points=90):

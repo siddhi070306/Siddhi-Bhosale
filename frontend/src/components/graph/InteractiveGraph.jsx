@@ -1,7 +1,15 @@
-import React, { useState, useRef } from 'react';
-import { ZoomIn, ZoomOut, RotateCcw } from 'lucide-react';
+import React, { useState, useRef, useEffect } from 'react';
+import { ZoomIn, ZoomOut, RotateCcw, Maximize2 } from 'lucide-react';
 
-export default function InteractiveGraph({ data, selectedNode, onSelectNode, selectedEdge = null, onSelectEdge = null }) {
+export default function InteractiveGraph({
+  data,
+  selectedNode,
+  onSelectNode,
+  selectedEdge = null,
+  onSelectEdge = null,
+  onResetDefaults = null,
+  isResetting = false,
+}) {
   const [zoom, setZoom] = useState(1);
   const [pan, setPan] = useState({ x: 20, y: 10 });
   const [isPanning, setIsPanning] = useState(false);
@@ -15,6 +23,15 @@ export default function InteractiveGraph({ data, selectedNode, onSelectNode, sel
     });
     return initialPos;
   });
+
+  // Re-sync positions when data updates or graph is reset
+  useEffect(() => {
+    const initialPos = {};
+    (data?.nodes || []).forEach((n) => {
+      initialPos[n.id] = { x: n.x, y: n.y };
+    });
+    setNodePositions(initialPos);
+  }, [data]);
 
   const [draggedNode, setDraggedNode] = useState(null);
   const [hoveredNode, setHoveredNode] = useState(null);
@@ -453,19 +470,20 @@ export default function InteractiveGraph({ data, selectedNode, onSelectNode, sel
         </div>
       )}
 
-      {/* ===================== EVIDENCE TIERS LEGEND (Matches Screenshot Verbatim) ===================== */}
+      {/* ===================== EVIDENCE TIERS LEGEND ===================== */}
       <div
         className="evidence-tiers-legend"
         style={{
           position: 'absolute',
           bottom: 24,
           left: 24,
-          background: 'rgba(255, 255, 255, 0.96)',
-          backdropFilter: 'blur(8px)',
-          border: '1px solid #e2e8f0',
-          borderRadius: 12,
+          background: 'rgba(255, 255, 255, 0.78)',
+          backdropFilter: 'blur(16px) saturate(180%)',
+          WebkitBackdropFilter: 'blur(16px) saturate(180%)',
+          border: '1px solid rgba(255, 255, 255, 0.85)',
+          borderRadius: 14,
           padding: '14px 18px',
-          boxShadow: '0 4px 18px rgba(0, 0, 0, 0.06)',
+          boxShadow: '0 8px 32px rgba(15, 23, 42, 0.08), inset 0 1px 0 rgba(255, 255, 255, 0.95)',
           fontFamily: 'inherit',
           zIndex: 10,
           minWidth: 260,
@@ -557,7 +575,7 @@ export default function InteractiveGraph({ data, selectedNode, onSelectNode, sel
         </div>
       </div>
 
-      {/* ===================== ZOOM & FIT CONTROLS ===================== */}
+      {/* ===================== ZOOM & FIT CONTROLS (Glassmorphic) ===================== */}
       <div
         className="graph-zoom-controls"
         style={{
@@ -567,12 +585,13 @@ export default function InteractiveGraph({ data, selectedNode, onSelectNode, sel
           display: 'flex',
           flexDirection: 'column',
           gap: 6,
-          background: 'rgba(255, 255, 255, 0.96)',
-          backdropFilter: 'blur(8px)',
-          border: '1px solid #e2e8f0',
-          borderRadius: 10,
-          padding: 5,
-          boxShadow: '0 4px 14px rgba(0, 0, 0, 0.06)',
+          background: 'rgba(255, 255, 255, 0.78)',
+          backdropFilter: 'blur(16px) saturate(180%)',
+          WebkitBackdropFilter: 'blur(16px) saturate(180%)',
+          border: '1px solid rgba(255, 255, 255, 0.85)',
+          borderRadius: 12,
+          padding: 6,
+          boxShadow: '0 8px 24px rgba(15, 23, 42, 0.08), inset 0 1px 0 rgba(255, 255, 255, 0.95)',
           zIndex: 10,
         }}
       >
@@ -631,8 +650,30 @@ export default function InteractiveGraph({ data, selectedNode, onSelectNode, sel
             color: '#334155',
           }}
         >
-          <RotateCcw size={15} />
+          <Maximize2 size={15} />
         </button>
+        {onResetDefaults && (
+          <button
+            className="graph-zoom-btn"
+            onClick={onResetDefaults}
+            disabled={isResetting}
+            title="Reset Graph to Baseline Defaults (Undo all demo edits & edge overrides)"
+            style={{
+              width: 32,
+              height: 32,
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              background: 'none',
+              border: 'none',
+              cursor: isResetting ? 'not-allowed' : 'pointer',
+              borderRadius: 6,
+              color: isResetting ? '#94a3b8' : '#e11d48',
+            }}
+          >
+            <RotateCcw size={14} className={isResetting ? 'spin' : ''} />
+          </button>
+        )}
       </div>
     </div>
   );
