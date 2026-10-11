@@ -24,6 +24,7 @@ import re
 import threading
 import time
 
+from . import store
 from . import kb
 
 DIR = (None if os.environ.get("VERCEL") else
@@ -127,11 +128,14 @@ class AnalysisLibrary:
 
     def _load(self):
         p = self._index_path()
-        if not p or not os.path.exists(p):
+        if not p:
             return
         try:
-            with open(p, encoding="utf-8") as f:
-                data = json.load(f)
+            if os.path.exists(p):
+                with open(p, encoding="utf-8") as f:
+                    data = json.load(f)
+            else:                                    # after a restart on a wiped disk: the copy in Upstash, if any
+                data = store.get_json("lib:index") or {}
             self.records = [r for r in data.get("records", []) if isinstance(r, dict) and _ID_RE.match(str(r.get("id", "")))]
         except Exception:
             self.records = []
@@ -146,6 +150,7 @@ class AnalysisLibrary:
             with open(tmp, "w", encoding="utf-8") as f:
                 json.dump({"format": "apex-zenith-analyses", "schema": 1, "records": self.records}, f, default=str)
             os.replace(tmp, p)
+            store.set_json("lib:index", {"format": "apex-zenith-analyses", "schema": 1, "records": self.records})
         except Exception:
             pass                    # the library must never break an analysis
 
@@ -157,6 +162,7 @@ class AnalysisLibrary:
             os.makedirs(self.dir, exist_ok=True)
             with gzip.open(os.path.join(self.dir, rid + ".json.gz"), "wt", encoding="utf-8") as f:
                 json.dump(_slim(res), f, default=str)
+            store.set_json("lib:" + rid, _slim(res))
         except Exception:
             pass
 
@@ -167,6 +173,7 @@ class AnalysisLibrary:
                 os.remove(os.path.join(self.dir, rid + ".json.gz"))
             except OSError:
                 pass
+            store.delete("lib:" + rid)
 
     # -- writing
     def _put(self, rec, res):
@@ -240,7 +247,7 @@ class AnalysisLibrary:
             with gzip.open(os.path.join(self.dir, rid + ".json.gz"), "rt", encoding="utf-8") as f:
                 return json.load(f)
         except Exception:
-            return None
+            return store.get_json("lib:" + rid)       # after a restart on a wiped disk
 
     def summaries(self, limit=50, offset=0):
         rows = [{"id": r["id"], "title": r["title"], "t": r["t"], "origin": r["origin"], "quality": r.get("quality"),

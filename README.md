@@ -4,7 +4,7 @@
 [![FastAPI](https://img.shields.io/badge/FastAPI-0.110%2B-009688.svg)](https://fastapi.tiangolo.com/)
 [![React](https://img.shields.io/badge/React-19.0-61DAFB.svg)](https://react.dev/)
 [![Vite](https://img.shields.io/badge/Vite-6.0-646CFF.svg)](https://vitejs.dev/)
-[![Tests](https://img.shields.io/badge/Tests-293%20Passed-brightgreen.svg)](tests/)
+[![Tests](https://img.shields.io/badge/Tests-299%20Passed-brightgreen.svg)](tests/)
 [![Architecture](https://img.shields.io/badge/Architecture-4--Tier%20Causal%20DAG-orange.svg)](#4-tier-hierarchical-knowledge-graph)
 
 **Apex Zenith** transforms raw financial news, central bank statements, regulatory filings, and commodity shocks into a **grounded, transparent causal dependency graph**. It traces how macro shocks propagate through economic variables, industry sectors, and tradable assets—validating every causal link against empirical market data, quantifying risk with Monte Carlo simulations and historical analogs, and discovering algorithmic hedges for investor portfolios.
@@ -162,6 +162,20 @@ Every link is characterized by:
 
 ---
 
+## Deployment (Vercel + Render + Upstash)
+
+1. **Upstash**: create a free Redis database; copy its REST URL and REST token.
+2. **Render**: New > Blueprint > this repository (it reads `render.yaml`). Enter the secrets it asks for: `GROQ_API_KEY`
+   (and optionally `OPENROUTER_API_KEY`, `NEWSAPI_KEY`, `FRED_API_KEY`, `ZENITH_SEC_CONTACT`), `UPSTASH_REDIS_REST_URL`,
+   `UPSTASH_REDIS_REST_TOKEN`, and `ZENITH_CORS_ORIGINS` (the Vercel URL, or `*` until you know it). Check
+   `https://<service>.onrender.com/api/status`: `durable_store.enabled` should be `true`.
+3. **Vercel**: Add New > Project > this repository, **Root Directory `frontend`** (Vite is detected), environment variable
+   `VITE_API_URL` = the Render URL (no trailing slash). Deploy.
+4. **GitHub**: Settings > Secrets and variables > Actions > Variables: `BACKEND_URL` = the Render URL (keeps it awake by day).
+
+The free backend sleeps after 15 idle minutes and wakes in about a minute; its state survives restarts through Upstash.
+See DOCUMENTATION.md section 8.4.
+
 ## Quickstart & Installation
 
 ### Prerequisites
@@ -222,7 +236,7 @@ Visit **`http://localhost:5173`** for the full interactive glassmorphic applicat
 ### 4. Running the Test Suite
 
 ```bash
-# Execute all 293 automated unit and integration tests
+# Execute all 299 automated unit and integration tests
 python -m unittest discover tests
 ```
 

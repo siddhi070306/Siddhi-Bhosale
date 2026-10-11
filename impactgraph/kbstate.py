@@ -20,6 +20,7 @@ from collections import deque
 
 from networkx.readwrite import json_graph
 
+from . import store
 from . import extract as ex
 from . import changelog, hierarchy, kb, llm, propagate as pg
 
@@ -330,16 +331,22 @@ class KBGuard:
             with open(tmp, "w", encoding="utf-8") as f:
                 json.dump(data, f, default=str)
             os.replace(tmp, STATE_FILE)
+            store.set_json("kb_state", data)          # a host whose disk is wiped on restart keeps it in Upstash too
         except Exception as e:                        # persistence must never break an analysis
             self._note("save-failed", str(e))
 
     def load(self):
         """Restore the last saved state if it passes the health checks; otherwise stay on the baseline."""
-        if not (self.persist and os.path.exists(STATE_FILE)):
+        if not self.persist:
             return False
         try:
-            with open(STATE_FILE, encoding="utf-8") as f:
-                data = json.load(f)
+            if os.path.exists(STATE_FILE):
+                with open(STATE_FILE, encoding="utf-8") as f:
+                    data = json.load(f)
+            else:                                     # after a restart on a wiped disk: the copy in Upstash, if any
+                data = store.get_json("kb_state")
+                if not data:
+                    return False
             for spec in data.get("nodes", []):
                 spec["series"] = [tuple(s) for s in spec["series"]]
                 kb.NODES[spec["id"]] = spec

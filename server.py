@@ -8,15 +8,17 @@ from pydantic import BaseModel
 
 from fastapi.middleware.cors import CORSMiddleware
 
-from impactgraph import assistant, cards as cardlib, explain, feeds, hedge, hierarchy, library, llm, market, quotes
+from impactgraph import assistant, cards as cardlib, explain, feeds, hedge, hierarchy, library, llm, market, quotes, store
 from impactgraph.service import SAMPLES, Analyzer, llm_required
 
 app = FastAPI(title="Apex Zenith")
 
+# the frontend is served from another origin (Vercel). ZENITH_CORS_ORIGINS narrows it to that site, e.g.
+# "https://apex-zenith.vercel.app"; no cookies are used, so credentials stay off (a wildcard origin must not allow them)
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
-    allow_credentials=True,
+    allow_origins=[o.strip() for o in os.environ.get("ZENITH_CORS_ORIGINS", "*").split(",") if o.strip()] or ["*"],
+    allow_credentials=False,
     allow_methods=["*"],
     allow_headers=["*"],
 )
@@ -97,7 +99,7 @@ def status():
     has = lambda k: bool(os.environ.get(k, "").strip())
     return {"llm": p[0] if p else None, "llm_model": p[3] if p else None, "llm_required": llm_required(), "fred_key": has("FRED_API_KEY"),
             "news_key": has("NEWSAPI_KEY"), "graph": analyzer.kg.stats(),
-            "kb": {"mode": analyzer.guard.mode, "version": analyzer.guard.version}}
+            "kb": {"mode": analyzer.guard.mode, "version": analyzer.guard.version}, "durable_store": store.status()}
 
 
 @app.get("/api/graph")

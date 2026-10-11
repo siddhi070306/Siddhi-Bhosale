@@ -16,6 +16,7 @@ import re
 import threading
 import time
 
+from . import store
 from . import timeseries as ts
 
 SYMBOL_RE = re.compile(r"^[A-Za-z0-9^][A-Za-z0-9.=\-^]{0,14}$")
@@ -119,7 +120,8 @@ class QuoteHub:
             with open(self.watch_file, encoding="utf-8") as f:
                 return [s for s in json.load(f) if valid_symbol(s)]
         except Exception:
-            return []
+            saved = store.get_json("watchlist") if self.watch_file else None   # after a restart on a wiped disk
+            return [s for s in saved if valid_symbol(s)] if isinstance(saved, list) else []
 
     def _save_watch(self):
         if not self.watch_file:
@@ -128,6 +130,7 @@ class QuoteHub:
             os.makedirs(os.path.dirname(self.watch_file), exist_ok=True)
             with open(self.watch_file, "w", encoding="utf-8") as f:
                 json.dump(self.watch, f)
+            store.set_json("watchlist", self.watch)
         except Exception:
             pass
 

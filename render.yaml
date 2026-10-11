@@ -1,11 +1,16 @@
+# Render Blueprint: the FastAPI backend (the React frontend is deployed on Vercel from frontend/).
+# Free plan: the instance sleeps after 15 idle minutes and its disk is wiped on restart, so the knowledge-base state, the
+# analysis library and the watchlist are also kept in Upstash Redis (impactgraph/store.py) and read back after a restart.
 services:
   - type: web
     name: apex-zenith-backend
-    env: python
+    runtime: python
     region: oregon
     plan: free
     buildCommand: pip install -r requirements.txt
     startCommand: uvicorn server:app --host 0.0.0.0 --port $PORT
+    healthCheckPath: /api/status
+    autoDeploy: true
     envVars:
       - key: PYTHON_VERSION
         value: 3.11.9
@@ -13,7 +18,17 @@ services:
         value: "1"
       - key: GROQ_API_KEY
         sync: false
+      - key: OPENROUTER_API_KEY
+        sync: false
+      - key: NEWSAPI_KEY
+        sync: false
+      - key: FRED_API_KEY
+        sync: false
+      - key: ZENITH_SEC_CONTACT
+        sync: false
       - key: UPSTASH_REDIS_REST_URL
         sync: false
       - key: UPSTASH_REDIS_REST_TOKEN
+        sync: false
+      - key: ZENITH_CORS_ORIGINS
         sync: false

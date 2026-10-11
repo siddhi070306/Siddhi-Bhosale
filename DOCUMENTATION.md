@@ -578,6 +578,7 @@ User-adjustable assumptions (a shock size in the forecast, a link weight, a scen
 | `analogs.py` | 189 | Past-move analogs |
 | `cards.py` | 311 | Citable text cards (graph and saved analyses) and their export; diverse path retrieval |
 | `assistant.py` | 348 | Question answering: graph cards, then the specific article as backup, then the graph without AI |
+| `store.py` | 94 | Durable state in Upstash Redis for hosts whose disk is wiped on restart |
 | `channels.py` | 58 | The economic reason behind each link, and the links that share it |
 | `ripple.py` | 156 | What a link edit changes: the linked edits it implies and the before/after on chains, sectors and companies |
 | `retrieval.py` | 358 | Whole-graph entity matching with typo tolerance, keyword search over every card, the overview card, which story a question is about |
@@ -714,15 +715,36 @@ python -m unittest discover tests        # the test suite
 | `data/watchlist.json` | The user's watchlist |
 | `data/analyses/` | The analysis library: `index.json` (compact records) and one `<id>.json.gz` per saved graph (newest 200) |
 
-### 8.4 Deployment status
+### 8.4 Deployment: Vercel + Render + Upstash
 
-The system is **local-first**. A `vercel.json` exists, but it serves only `server.py` and the legacy page in `public/`; the React frontend is not built or routed there, there is no authentication or rate limiting on the editing endpoints, and the in-memory graph would reset on a cold start. It is not deployable as-is, and this has not been tested.
+| Part | Where | Configured by |
+|---|---|---|
+| React frontend | **Vercel** (project root `frontend/`, Vite) | `frontend/vercel.json` (every path serves `index.html`); `VITE_API_URL` = the Render URL, baked in at build time (`services/api.js` prefixes every call with it, the live-quote stream too) |
+| FastAPI backend | **Render** free web service | `render.yaml` (Blueprint): `uvicorn server:app`, health check `/api/status`, Python 3.11, secrets entered in Render |
+| Durable state and price cache | **Upstash Redis** (free: 256 MB, 500,000 commands a month) | `UPSTASH_REDIS_REST_URL` / `UPSTASH_REDIS_REST_TOKEN` on Render |
+
+**Why Upstash.** Render's free plan wipes its disk on every restart, redeploy and spin-down, so the learned knowledge graph, its
+history, the analysis library (the assistant's memory) and the watchlist would be lost. `impactgraph/store.py` also saves them
+to Upstash (gzip-compressed JSON) and reads them back when the local file is missing; the whole state is a few hundred KB. It is
+on only on Render (Render sets `RENDER`) or with `ZENITH_DURABLE_STORE=1`, so a laptop with the same `.env` never overwrites the
+live state; every call is best effort and an outage never breaks an analysis (`/api/status` reports `durable_store`). Market-data
+series are cached in Upstash for 6 hours (`timeseries.py`), so restarts do not refetch them.
+
+**Waking up.** The free instance sleeps after 15 idle minutes and takes about a minute to wake. `.github/workflows/keep-awake.yml`
+pings `/api/status` every 10 minutes from 08:30 to 00:30 India time once the repository variable `BACKEND_URL` is set (well
+inside Render's 750 free hours a month).
+
+**CORS.** The frontend is on another origin; `ZENITH_CORS_ORIGINS` narrows the allowed origins to the Vercel site (default `*`;
+no cookies are used, so credentials are off).
+
+**Not covered.** No authentication or rate limiting on the editing endpoints: anyone with the link can edit the graph (every
+edit is guarded, logged and undoable). One Render instance runs one process, which the in-memory graph requires.
 
 ---
 
 ## 9. Testing and verification
 
-### 9.1 Automated tests: 293 passing
+### 9.1 Automated tests: 299 passing
 
 | Suite | Tests | Covers |
 | --- | --- | --- |
@@ -735,6 +757,7 @@ The system is **local-first**. A `vercel.json` exists, but it serves only `serve
 | `test_enrich.py` | 16 | Headline text fallback chain |
 | `test_tiered_properties.py` | 15 | Stored tier properties, relations, back-fill of old states, node properties |
 | `test_assistant.py` | 12 | Retrieval, citations, read-only guarantee, endpoint |
+| `test_store.py` | 6 | Durable state on a wiped disk: off on a laptop, compressed round trip, the knowledge base, the library and the watchlist restored after a restart, an Upstash outage never breaks saving |
 | `test_linked_edits.py` | 13 | Every link's reason; same reason, same proportion, signs kept; sign flips and structural links not spread; links edited before not ticked; the preview is read only and re-scores the chains; one change and one undo for all; re-scoring calls no model, learns nothing and matches the preview; the endpoints |
 | `test_rag.py` | 23 | Events and their direction (hike, cut, recession, war, crash, rupee), a rate cut told as a cut, follow-ups, mapping names the graph does not contain (checked and cached), well-known people, typos, common words, learned entities, a card for every node and link, the overview, the open story, headline matching, a story missing from the library, the article backup (only that story is sent, quotes checked, retry), every model call failing still answers |
 | `test_explain.py` | 15 | Plain-English relationship and chain explanations: wording and grammar, data agreeing or disagreeing, article and LLM evidence, user edits, score arithmetic, every analysis link explained, the endpoint |
@@ -837,7 +860,7 @@ Matches the brief's demo expectation: *introduce an event; show entities, a conn
 * Chat sessions live in the browser; the analysis library and the learned graph are saved only on the machine running the backend, shared by everyone who uses it (no per-user separation). Imported analyses come from the user's own browser and are treated as data.
 * Only the last 30 versions of a session can be restored; after a restart only the saved version is restorable (the history itself is saved).
 * Moneycontrol, Business Standard and NDTV are not used (they refuse automated access); the OpenRouter fallback and the SEC endpoint are tested through the API, not heavily through the UI.
-* Not deployed; no authentication on the editing endpoints.
+* Deployed on free tiers (Vercel + Render + Upstash, section 8.4): the backend sleeps when idle; no authentication on the editing endpoints.
 
 ---
 
@@ -899,7 +922,7 @@ server.py            FastAPI application (endpoints, SSE, warm-up)
 run.py               Starts the backend on 127.0.0.1:8000
 requirements.txt     Python dependencies
 impactgraph/         The engine (modules in section 6.1)
-tests/               The 293 automated tests
+tests/               The 299 automated tests
 research/            PAPER.md (research write-up), evaluate.py (reproducible experiments), results.json (their output)
 frontend/            React 19 + Vite application (pages, components, services, context, storage)
 public/              Legacy offline cockpit served at "/" by the backend
