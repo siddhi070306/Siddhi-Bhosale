@@ -56,16 +56,23 @@ def reset():
     return {"ok": True, "graph": analyzer.kg.stats()}
 
 
+class ShockItem(BaseModel):
+    trigger: str
+    magnitude_pct: float
+
+
 class WhatIfBody(BaseModel):
     trigger: str = "crude_oil"
-    magnitude_pct: float
+    magnitude_pct: float = 0.0
     horizon_days: Optional[int] = None
     live: bool = False
+    shocks: Optional[list[ShockItem]] = None
 
 
 @app.post("/api/whatif")
 def whatif(body: WhatIfBody):
-    res = analyzer.whatif(body.trigger, body.magnitude_pct, body.horizon_days, body.live)
+    shocks_data = [s.dict() for s in body.shocks] if body.shocks else None
+    res = analyzer.whatif(body.trigger, body.magnitude_pct, body.horizon_days, body.live, shocks=shocks_data)
     if res.get("error"):
         raise HTTPException(status_code=400, detail=res["error"])
     return res

@@ -8,13 +8,6 @@ import { api } from '../services/api';
 
 function EmptyState({ onNavigateToChat, onSelectEvent }) {
   const [inputText, setInputText] = useState('');
-  const { samples, error: samplesError } = useSamples();
-  const STYLE = [
-    { icon: Fuel, colorClass: 'starter-icon-amber' },
-    { icon: Landmark, colorClass: 'starter-icon-indigo' },
-    { icon: Building2, colorClass: 'starter-icon-emerald' },
-  ];
-  const starters = samples.slice(0, 3).map((smp, i) => ({ ...STYLE[i % STYLE.length], title: smp.title, text: smp.text }));
 
   return (
     <div className="card" style={{ padding: '36px 28px', maxWidth: 860, margin: '24px auto', textAlign: 'center' }}>
@@ -25,7 +18,7 @@ function EmptyState({ onNavigateToChat, onSelectEvent }) {
         Interactive Financial Impact Graph
       </div>
       <p style={{ fontSize: 14, color: '#71717a', maxWidth: 580, margin: '0 auto 24px', lineHeight: 1.55 }}>
-        Enter any financial headline or choose a market scenario below to instantly generate the 5-column causal dependency graph:
+        Enter any financial headline below to instantly generate the 5-column causal dependency graph:
       </p>
 
       {/* Direct Prompt Input */}
@@ -52,35 +45,6 @@ function EmptyState({ onNavigateToChat, onSelectEvent }) {
           <span>Generate Graph</span>
           <ArrowRight size={14} />
         </button>
-      </div>
-
-      <div style={{ fontSize: 11, fontWeight: 700, color: '#a1a1aa', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 14 }}>
-        Or start with a sample market prompt:
-      </div>
-      {samplesError && <p style={{ fontSize: 12.5, color: '#991b1b', marginBottom: 10 }}>Could not load sample prompts: {samplesError}</p>}
-
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(250px, 1fr))', gap: 14, textAlign: 'left', marginBottom: 24 }}>
-        {starters.map((s, idx) => {
-          const Icon = s.icon;
-          return (
-            <div
-              key={idx}
-              className="chat-starter-card"
-              style={{ cursor: 'pointer' }}
-              onClick={() => onSelectEvent && onSelectEvent(s.text)}
-            >
-              <div className="chat-starter-title">
-                <div className={`chat-starter-icon-badge ${s.colorClass}`}>
-                  <Icon size={16} />
-                </div>
-                <span>{s.title}</span>
-              </div>
-              <p className="chat-starter-snippet" style={{ margin: 0 }}>
-                {s.text.slice(0, 95)}…
-              </p>
-            </div>
-          );
-        })}
       </div>
 
       {onNavigateToChat && (
@@ -158,8 +122,8 @@ export default function ImpactGraph({ analysis, onNavigateToChat, onSelectEvent,
 
   const filteredNodes = searchQuery
     ? graphData.nodes.filter((n) =>
-        n.label.toLowerCase().includes(searchQuery.toLowerCase())
-      )
+      n.label.toLowerCase().includes(searchQuery.toLowerCase())
+    )
     : graphData.nodes;
 
   const currentGraphData = {

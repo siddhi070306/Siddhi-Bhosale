@@ -380,21 +380,71 @@ class Analyzer:
         return result
 
     # ------------------------------------------------------------------------------------------
-    def whatif(self, trigger, magnitude_pct, horizon_days=None, live=False):
-        """Re-run propagation for a hypothetical shock. Read-only: never ingests or edits the graph."""
-        if trigger not in kb.NODES:
-            return {"error": "unknown trigger node: %s" % trigger}
-        try:
-            mag = float(magnitude_pct)
-        except (TypeError, ValueError):
-            return {"error": "magnitude_pct must be a number"}
-        if mag == 0:
-            return {"error": "magnitude_pct must be non-zero"}
-        direction = 1 if mag > 0 else -1
-        intensity = ex._price_intensity(abs(mag))
-        label = "%s %s%.4g%% (hypothetical)" % (kb.NODES[trigger]["label"], "+" if mag > 0 else "-", abs(mag))
-        sources = [{"id": "whatif", "trigger": trigger, "direction": direction, "intensity": intensity,
-                    "anchor": True, "label": label, "market": None}]
+    def whatif(self, trigger="crude_oil", magnitude_pct=15.0, horizon_days=None, live=False, shocks=None):
+        """Re-run propagation for a hypothetical shock (or multiple concurrent shocks). Read-only: never ingests or edits the graph."""
+        if shocks and isinstance(shocks, list) and len(shocks) > 0:
+            sources = []
+            cleaned_shocks = []
+            for idx, s in enumerate(shocks):
+                t = s.get("trigger")
+                if not t or t not in kb.NODES:
+                    continue
+                try:
+                    m = float(s.get("magnitude_pct", s.get("change", 0)))
+                except (TypeError, ValueError):
+                    continue
+                if m == 0:
+                    continue
+                d = 1 if m > 0 else -1
+                inten = ex._price_intensity(abs(m))
+                lbl = "%s %s%.4g%% (hypothetical)" % (kb.NODES[t]["label"], "+" if m > 0 else "-", abs(m))
+                s_id = "whatif_%d" % (idx + 1)
+                sources.append({
+                    "id": s_id,
+                    "trigger": t,
+                    "direction": d,
+                    "intensity": inten,
+                    "anchor": False,
+                    "label": lbl,
+                    "market": None
+                })
+                cleaned_shocks.append({
+                    "trigger": t,
+                    "trigger_label": kb.NODES[t]["label"],
+                    "magnitude_pct": m,
+                    "direction": d,
+                    "intensity": round(inten, 3)
+                })
+            if not sources:
+                return {"error": "All provided shocks were invalid or 0%"}
+            exclude_nodes = tuple(s["trigger"] for s in sources)
+            primary_trigger = sources[0]["trigger"]
+            primary_mag = cleaned_shocks[0]["magnitude_pct"]
+        else:
+            if trigger not in kb.NODES:
+                return {"error": "unknown trigger node: %s" % trigger}
+            try:
+                mag = float(magnitude_pct)
+            except (TypeError, ValueError):
+                return {"error": "magnitude_pct must be a number"}
+            if mag == 0:
+                return {"error": "magnitude_pct must be non-zero"}
+            direction = 1 if mag > 0 else -1
+            intensity = ex._price_intensity(abs(mag))
+            label = "%s %s%.4g%% (hypothetical)" % (kb.NODES[trigger]["label"], "+" if mag > 0 else "-", abs(mag))
+            sources = [{"id": "whatif", "trigger": trigger, "direction": direction, "intensity": intensity,
+                        "anchor": False, "label": label, "market": None}]
+            exclude_nodes = (trigger,)
+            primary_trigger = trigger
+            primary_mag = mag
+            cleaned_shocks = [{
+                "trigger": trigger,
+                "trigger_label": kb.NODES[trigger]["label"],
+                "magnitude_pct": mag,
+                "direction": direction,
+                "intensity": round(intensity, 3)
+            }]
+
         paths = pg.propagate(self.kg, sources)
         if live:  # data-check the links on the strongest paths (validation is cached on the edge, not new knowledge)
             edges = {e for p in paths[:40] for e in p["edges"]}
@@ -402,15 +452,18 @@ class Analyzer:
             for (u, v) in edges:
                 self.kg.set_validation(u, v, ts.validate_edge(self.kg, u, v, True))
             paths = pg.propagate(self.kg, sources)
-        agg = pg.aggregate(paths, exclude=(trigger,))
-        src_label = {"whatif": label}
+        agg = pg.aggregate(paths, exclude=exclude_nodes)
+        src_label = {s["id"]: s["label"] for s in sources}
         rows = []
         for n, a in agg.items():
-            exp = self._explain_path(a["best_path"], -1, label)
+            bp = a["best_path"]
+            src_lbl = src_label.get(bp.get("source_id"), cleaned_shocks[0]["trigger_label"])
+            exp = self._explain_path(bp, -1, src_lbl)
             last = exp["steps"][-1] if exp["steps"] else None
             rows.append({"node": n, "label": self.kg.g.nodes[n]["label"], "type": self.kg.g.nodes[n]["type"],
                          "direction": a["direction"], "confidence": a["confidence"],
                          "confidence_label": a["confidence_label"], "mixed": a["mixed"], "agreement": a["agreement"],
+                         "pos_mass": a.get("pos_mass", 0.0), "neg_mass": a.get("neg_mass", 0.0),
                          "horizon_days": a["horizon_days"], "sensitivity": a["sensitivity"],
                          "sensitivity_label": a["sensitivity_label"], "n_paths": a["n_paths"],
                          "headline": exp["headline"], "why": last["mechanism"] if last else "",
@@ -423,7 +476,8 @@ class Analyzer:
             k = tuple(p["nodes"])
             if k not in seen and len(p["edges"]) > 1:
                 seen.add(k)
-                top.append(self._explain_path(p, len(top), label))
+                src_lbl = src_label.get(p.get("source_id"), cleaned_shocks[0]["trigger_label"])
+                top.append(self._explain_path(p, len(top), src_lbl))
             if len(top) >= 8:
                 break
         evidence, ev_seen = [], set()
@@ -438,8 +492,9 @@ class Analyzer:
                                  "lag_days": st["lag"], "provenance": st["provenance"],
                                  "data_check": val.get("verdict") if val and not val.get("simulated") else None,
                                  "r": val.get("r") if val and not val.get("simulated") else None})
-        return {"trigger": trigger, "trigger_label": kb.NODES[trigger]["label"], "magnitude_pct": mag,
-                "direction": direction, "intensity": round(intensity, 3), "horizon_days": horizon_days,
+        return {"trigger": primary_trigger, "trigger_label": kb.NODES[primary_trigger]["label"], "magnitude_pct": primary_mag,
+                "shocks": cleaned_shocks, "is_multi_shock": len(cleaned_shocks) > 1,
+                "direction": cleaned_shocks[0]["direction"], "intensity": cleaned_shocks[0]["intensity"], "horizon_days": horizon_days,
                 "assets": [r for r in rows if r["type"] in ASSET_TYPES],
                 "sectors": [r for r in rows if r["type"] == "sector"],
                 "variables": [r for r in rows if r["type"] in ("indicator", "commodity")],

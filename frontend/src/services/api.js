@@ -357,11 +357,17 @@ export const api = {
     };
   },
 
-  whatIf: (trigger, magnitudePct, horizonDays, live = prefs.getLive()) =>
+  whatIf: (trigger, magnitudePct, horizonDays, live = prefs.getLive(), shocks = null) =>
     request('/api/whatif', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ trigger, magnitude_pct: magnitudePct, horizon_days: horizonDays, live }),
+      body: JSON.stringify({
+        trigger: trigger || 'crude_oil',
+        magnitude_pct: typeof magnitudePct === 'number' ? magnitudePct : 0.0,
+        horizon_days: horizonDays,
+        live,
+        shocks: shocks && shocks.length ? shocks : undefined,
+      }),
     }),
 };
 

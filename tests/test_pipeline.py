@@ -218,6 +218,22 @@ class WhatIfTests(unittest.TestCase):
         self.assertIn("error", a.whatif("nope", 5))
         self.assertIn("error", a.whatif("crude_oil", 0))
 
+    def test_whatif_multi_shock_conflicting_forces(self):
+        a = Analyzer()
+        res = a.whatif(shocks=[
+            {"trigger": "crude_oil", "magnitude_pct": 10.0},
+            {"trigger": "airlines", "magnitude_pct": 8.0}
+        ])
+        self.assertTrue(res.get("is_multi_shock"))
+        self.assertEqual(len(res.get("shocks", [])), 2)
+        # Check that downstream asset delta has both positive and negative forces evaluated
+        delta_row = next((r for r in res["assets"] if r["node"] == "delta"), None)
+        self.assertIsNotNone(delta_row)
+        self.assertGreater(delta_row["pos_mass"], 0)
+        self.assertGreater(delta_row["neg_mass"], 0)
+        self.assertIn("direction", delta_row)
+        self.assertIn("agreement", delta_row)
+
 
 if __name__ == "__main__":
     unittest.main()
