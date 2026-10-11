@@ -173,7 +173,7 @@ export default function MarketIntelligence({
               </div>
               <div className="ticker-price">{t.price}</div>
               <div style={{ fontSize: 10.5, color: '#a1a1aa', marginBottom: 2 }} title={t.source}>as of {t.asof}</div>
-              <Sparkline data={t.sparkline} isPositive={t.isPositive} width={160} height={38} />
+              <Sparkline data={t.sparkline} isPositive={trend === 'flat' ? null : t.isPositive} width={160} height={38} />
             </div>
           );
         })}

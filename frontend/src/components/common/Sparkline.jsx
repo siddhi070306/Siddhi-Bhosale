@@ -15,10 +15,10 @@ export default function Sparkline({ data = [], isPositive = true, width = 120, h
   });
 
   const polylineStr = points.join(' ');
-  const strokeColor = '#18181b'; // Monochrome dark stroke
+  const strokeColor = isPositive === true ? '#15803d' : isPositive === false ? '#b91c1c' : '#18181b';
 
   return (
-    <svg width={width} height={height} className="ticker-sparkline" viewBox={`0 0 ${width} ${height}`}>
+    <svg width={width} height={height} className="ticker-sparkline sparkline" viewBox={`0 0 ${width} ${height}`}>
       <polyline
         fill="none"
         stroke={strokeColor}
@@ -33,7 +33,7 @@ export default function Sparkline({ data = [], isPositive = true, width = 120, h
           cx={points[points.length - 1].split(',')[0]}
           cy={points[points.length - 1].split(',')[1]}
           r="2.5"
-          fill="#18181b"
+          fill={strokeColor}
         />
       )}
     </svg>

@@ -142,6 +142,32 @@
   height: 40px;
 }
 
+/* Trend-based sparkline colors for macro market cards */
+[data-trend="up"] .sparkline polyline,
+[data-trend="up"] .sparkline path,
+[data-trend="up"] .ticker-sparkline polyline,
+[data-trend="up"] .ticker-sparkline path {
+  stroke: #15803d;
+}
+
+[data-trend="down"] .sparkline polyline,
+[data-trend="down"] .sparkline path,
+[data-trend="down"] .ticker-sparkline polyline,
+[data-trend="down"] .ticker-sparkline path {
+  stroke: #b91c1c;
+}
+
+[data-trend="up"] .sparkline circle,
+[data-trend="up"] .ticker-sparkline circle {
+  fill: #15803d;
+}
+
+[data-trend="down"] .sparkline circle,
+[data-trend="down"] .ticker-sparkline circle {
+  fill: #b91c1c;
+}
+
+
 /* Market Intelligence Grid */
 .market-grid {
   display: grid;
