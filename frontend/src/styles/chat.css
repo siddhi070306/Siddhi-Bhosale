@@ -26,16 +26,22 @@
 }
 
 .chat-welcome-avatar {
-  width: 76px;
-  height: 76px;
+  width: 175px;
+  height: 145px;
+  max-width: 100%;
   background: transparent;
   display: flex;
   align-items: center;
   justify-content: center;
-  margin-bottom: 20px;
+  margin: 0 auto 20px auto;
   border: none;
   box-shadow: none;
   padding: 0;
+  transition: transform 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.chat-welcome-avatar:hover {
+  transform: scale(1.03);
 }
 
 .welcome-logo-img {
@@ -43,6 +49,7 @@
   height: 100%;
   object-fit: contain;
   display: block;
+  filter: drop-shadow(0 4px 12px rgba(0, 0, 0, 0.05));
 }
 
 .chat-welcome-title {
@@ -475,10 +482,9 @@
   }
 
   .chat-welcome-avatar {
-    width: 44px;
-    height: 44px;
-    border-radius: 12px;
-    margin-bottom: 14px;
+    width: 110px;
+    height: 90px;
+    margin: 0 auto 14px auto;
   }
 
   .chat-welcome-title {
