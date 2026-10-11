@@ -54,7 +54,7 @@ export default function EconometricAnalogs({
   const [forecastLoading, setForecastLoading] = useState(false);
   const [forecastError, setForecastError] = useState(null);
   const [forecastHorizon, setForecastHorizon] = useState(30);
-  const [forecastShock, setForecastShock] = useState(5.0);
+  const [forecastShock, setForecastShock] = useState(0.0);
 
   // Load available assets from knowledge graph
   useEffect(() => {
@@ -173,7 +173,7 @@ export default function EconometricAnalogs({
             Historical Analogs & Monte Carlo Forecaster
           </h1>
           <p className="page-subtitle" style={{ fontSize: 13, color: '#71717a', margin: 0 }}>
-            Empirical multi-year shock alignment and calibrated stochastic forward simulations.
+            Past moves of the same size in real price history, and a volatility fan measured on real daily returns.
           </p>
         </div>
 
@@ -505,7 +505,7 @@ export default function EconometricAnalogs({
                   </span>
                 </div>
                 <p style={{ fontSize: 12.5, color: '#71717a', margin: '4px 0 0 0' }}>
-                  Stochastic path distribution generated via Geometric Brownian Motion calibrated on empirical daily returns.
+                  Volatility fan: Geometric Brownian Motion with zero drift, volatility measured on real daily returns. Not a forecast of direction. The event shock is your assumption.
                 </p>
               </div>
 
@@ -553,7 +553,7 @@ export default function EconometricAnalogs({
                 <span style={{ fontSize: 12, fontWeight: 700, color: '#09090b' }}>Methodology Note</span>
               </div>
               <p style={{ fontSize: 11.5, color: '#71717a', lineHeight: 1.5, margin: 0 }}>
-                Parameters are estimated by computing log return variances from historical FRED & Yahoo Finance series. 500 discrete Brownian increments simulate terminal asset distributions, projecting downside risk (VaR 95% and CVaR / Expected Shortfall) to assess worst-case exposures.
+                Volatility is measured on the real daily returns of the series (FRED or Yahoo Finance) and the drift is set to zero. 500 simulated paths give the VaR 95% and expected shortfall shown. No fan is drawn when only simulated data exists, or for yields and expectations. Real markets have fatter tails, so the bands understate extreme moves.
               </p>
             </div>
           </div>
