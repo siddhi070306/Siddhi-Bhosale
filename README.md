@@ -18,56 +18,58 @@
 
 ```mermaid
 flowchart TD
-    subgraph INGESTION["1. News & Event Ingestion Layer"]
-        A1["Live RSS & NewsAPI Feeds"] --> B1["Text Preprocessing & Normalization"]
+    subgraph INGESTION["1. News and Event Ingestion Layer"]
+        A1["Live RSS and NewsAPI Feeds"] --> B1["Text Preprocessing and Normalization"]
         A2["SEC 8-K Regulatory Filings"] --> B1
         A3["Interactive What-If Scenario Shocks"] --> B1
-        B1 --> B2{"Entity & Event Extraction"}
-        B2 -->|"Rule-Based NER"| B3["Standardized Entities & Shocks"]
-        B2 -->|"LLM Proposer (Groq / OpenRouter)"| B4["Verbatim Quote Verification"]
+        B1 --> B2["Entity and Event Extraction Engine"]
+        B2 -->|"Rule-Based NER"| B3["Standardized Entities and Shocks"]
+        B2 -->|"LLM Proposer"| B4["Verbatim Quote Verification"]
         B4 -->|"Verbatim Match in Source"| B3
     end
 
     subgraph GRAPH["2. 4-Tier Hierarchical Knowledge Graph"]
-        direction TB
-        T0["Tier 0: Policy & Geopolitical Events<br/>(OPEC+, Central Banks, Geopolitical Shocks)"]
-        T1["Tier 1: Macro Variables & Commodities<br/>(Brent, Henry Hub Gas, US10Y, Inflation Exp)"]
-        T2["Tier 2: Industry Sectors<br/>(Airlines, Technology, Energy, Banking)"]
-        T3["Tier 3: Tradable Assets & Instruments<br/>(DAL, NVDA, XOM, SPY, Nifty 50)"]
+        T0["Tier 0: Policy and Geopolitical Events<br/>OPEC+, Central Banks, Geopolitical Shocks"]
+        T1["Tier 1: Macro Variables and Commodities<br/>Brent, Henry Hub Gas, US10Y, Inflation Exp"]
+        T2["Tier 2: Industry Sectors<br/>Airlines, Technology, Energy, Banking"]
+        T3["Tier 3: Tradable Assets and Instruments<br/>DAL, NVDA, XOM, SPY, Nifty 50"]
 
-        T0 -->|"causes / policy_reaction"| T1
+        T0 -->|"causes / policy reaction"| T1
         T1 -->|"causes / tracks"| T2
-        T2 -->|"member_of / weight_in"| T3
-        T2 -.->|"feedback loops (credit/growth)"| T1
+        T2 -->|"member of / weight in"| T3
+        T2 -.->|"feedback loops: credit and growth"| T1
     end
 
-    B3 -->|"Map Observed Anchors & Shocks"| GRAPH
-
-    subgraph ENGINES["3. Analytical & Quantitative Simulation Engines"]
-        direction TB
-        E1["Depth-Limited DAG Propagation<br/>(Empirical Attenuation Decay, Multi-Path Synthesis)"]
-        E2["Empirical Time Series Validation<br/>(FRED & Yahoo Finance Cross-Correlation)"]
-        E3["Historical Analogs Engine<br/>(5-Day Sliding Return Scan, Base-100 Matching)"]
-        E4["Monte Carlo Volatility Fan<br/>(500 GBM Paths, Zero Drift, VaR95, CVaR95)"]
-        E5["Portfolio Contagion & Hedge Finder<br/>(Reverse DAG Traversal, Risk-Offsetting Hedges)"]
-        E6["Citable KG Assistant & RAG<br/>(Structured Text Cards: n:, l:, p:, s:, t:)"]
+    subgraph ENGINES["3. Analytical and Quantitative Simulation Engines"]
+        E1["Depth-Limited DAG Propagation<br/>Empirical Attenuation Decay"]
+        E2["Empirical Time Series Validation<br/>FRED and Yahoo Cross-Correlation"]
+        E3["Historical Analogs Engine<br/>5-Day Sliding Return Scan, Base-100"]
+        E4["Monte Carlo Volatility Fan<br/>500 GBM Paths, Zero Drift, VaR95, CVaR95"]
+        E5["Portfolio Contagion and Hedge Finder<br/>Reverse DAG Traversal, Risk Offsets"]
+        E6["Citable KG Assistant and RAG<br/>Structured Cards: n:, l:, p:, s:, t:"]
     end
 
-    GRAPH --> E1
-    E1 --> E2
+    subgraph PRESENTATION["4. Presentation and Real-Time Streaming Layer"]
+        UI1["Interactive Network Graph Canvas"]
+        UI2["Historical Analogs and Volatility Fan"]
+        UI3["Portfolio Contagion Matrix and Hedge Recommendations"]
+        UI4["Grounded AI Assistant with Citations"]
+        UI5["Live SSE Market Stream via Yahoo and FRED"]
+    end
+
+    %% Causal Links between pipeline stages
+    B3 -->|"Map Observed Shocks"| T0
+    B3 -->|"Anchor Shocks"| T1
+    T3 -->|"Shock Inputs"| E1
+    T1 -->|"Correlation Check"| E2
     E1 --> E3
     E1 --> E4
     E1 --> E5
-    GRAPH --> E6
-
-    subgraph PRESENTATION["4. Presentation & Real-Time Streaming Layer"]
-        direction TB
-        UI1["Interactive D3 / React Network Graph Canvas"]
-        UI2["Historical Analogs & Monte Carlo Fan Visualizer"]
-        UI3["Portfolio Contagion Matrix & Hedge Recommendations"]
-        UI4["Grounded AI Assistant with Verifiable Citations"]
-        UI5["Live SSE Market Stream (/api/stream via Yahoo Finance & FRED)"]
-    end
+    T3 --> E5
+    T0 --> E6
+    T1 --> E6
+    T2 --> E6
+    T3 --> E6
 
     E1 --> UI1
     E3 --> UI2
@@ -76,6 +78,7 @@ flowchart TD
     E6 --> UI4
     E2 --> UI5
 ```
+
 
 ---
 
