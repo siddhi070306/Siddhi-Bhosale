@@ -8,9 +8,25 @@
  * - Provides clean CRUD APIs for multi-session chat histories.
  */
 
+import { adaptResult } from '../services/api';
+
 const STORAGE_KEY = 'apex_zenith_chat_sessions_v1';
 const ACTIVE_SESSION_KEY = 'apex_zenith_active_session_id';
 const MAX_SAVED_SESSIONS = 35;
+
+// Store only the backend result and its context; the page views (graph, assets, events) are rebuilt from it when a chat is
+// opened. Storing the views as well doubled every chat's size and filled the browser's storage after a handful of chats.
+function compactAnalysis(a) {
+  if (!a || !a.raw) return a || null;
+  return { raw: a.raw, text: a.text, source: a.source, link: a.link, title: a.title, at: a.at };
+}
+
+function restoreAnalysis(a) {
+  if (!a) return null;
+  if (a.view && a.graphView) return a; // saved before compaction: already complete
+  if (!a.raw) return null;
+  return { ...adaptResult(a.raw, a.text, a.source || null, a.link || null, a.title || null), at: a.at || Date.now() };
+}
 
 /**
  * Generate a clean human-readable title from headline text or message.
@@ -44,7 +60,8 @@ export function getAllSessions() {
 export function getSessionById(sessionId) {
   if (!sessionId) return null;
   const sessions = getAllSessions();
-  return sessions.find((s) => s.id === sessionId) || null;
+  const s = sessions.find((x) => x.id === sessionId);
+  return s ? { ...s, analysis: restoreAnalysis(s.analysis) } : null;
 }
 
 /**
@@ -68,7 +85,7 @@ export function saveSession({ id, title, messages = [], analysis = null, current
         ...existing,
         title: newTitle,
         messages: messages.length ? messages : existing.messages,
-        analysis: analysis !== undefined ? analysis : existing.analysis,
+        analysis: analysis !== undefined ? compactAnalysis(analysis) : existing.analysis,
         currentEventText: currentEventText || existing.currentEventText,
         updatedAt: now,
       };
@@ -82,25 +99,33 @@ export function saveSession({ id, title, messages = [], analysis = null, current
         createdAt: now,
         updatedAt: now,
         messages,
-        analysis,
+        analysis: compactAnalysis(analysis),
         currentEventText,
       };
       sessions.unshift(sessionToSave);
     }
 
-    // Cap sessions to prevent localStorage overflow
-    const trimmed = sessions.slice(0, MAX_SAVED_SESSIONS);
-
-    try {
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(trimmed));
-      if (sessionToSave.id) {
-        localStorage.setItem(ACTIVE_SESSION_KEY, sessionToSave.id);
+    // newest first, capped; if the browser's storage is full, drop the oldest chats until this one fits. As a last resort keep
+    // this chat's messages without its graph: every graph is also saved in the backend's analysis library.
+    let list = sessions.sort((a, b) => (b.updatedAt || 0) - (a.updatedAt || 0)).slice(0, MAX_SAVED_SESSIONS);
+    for (;;) {
+      try {
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(list));
+        break;
+      } catch (quotaErr) {
+        if (list.length > 1) {
+          list = list.filter((s) => s.id === sessionToSave.id).concat(list.filter((s) => s.id !== sessionToSave.id).slice(0, -1));
+          console.warn('[chatStorage] Browser storage full: dropped the oldest saved chat', quotaErr);
+        } else if (list.length === 1 && list[0].analysis) {
+          list = [{ ...list[0], analysis: null }];
+          console.warn('[chatStorage] Browser storage full: saved this chat without its graph (the graph is in the analysis library)');
+        } else {
+          throw quotaErr;
+        }
       }
-    } catch (quotaErr) {
-      // If quota exceeded, trim more aggressively
-      console.warn('[chatStorage] Storage quota reached, trimming old sessions...', quotaErr);
-      const aggressivelyTrimmed = trimmed.slice(0, 15);
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(aggressivelyTrimmed));
+    }
+    if (sessionToSave.id) {
+      localStorage.setItem(ACTIVE_SESSION_KEY, sessionToSave.id);
     }
 
     return sessionToSave;

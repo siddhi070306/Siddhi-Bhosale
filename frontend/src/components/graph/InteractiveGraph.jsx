@@ -339,7 +339,8 @@ export default function InteractiveGraph({
   };
 
   // Determine active/highlighted path or connections
-  const activeNodeId = selectedNode?.id || data?.centerNode?.id || null;
+  // a context graph has no chain to follow from its start node: show the whole picture until a node is picked
+  const activeNodeId = selectedNode?.id || (data?.contextOnly ? null : data?.centerNode?.id) || null;
 
   const isEdgeHighlighted = (edge) => {
     if (causalPath.pathEdges.some((pe) => pe.from === edge.from && pe.to === edge.to)) return true;

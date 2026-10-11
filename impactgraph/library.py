@@ -55,7 +55,10 @@ def _slim(res):
 
 def compact(res, title=None, link=None, t=None, origin="generator"):
     """A compact record of one analysis, or None if it holds no event (nothing was drawn)."""
-    if not isinstance(res, dict) or not isinstance(res.get("events"), list) or not res["events"]:
+    if not isinstance(res, dict) or not isinstance(res.get("events"), list):
+        return None
+    ctx_only = res.get("context_only") if isinstance(res.get("context_only"), dict) else None
+    if not res["events"] and not ctx_only:
         return None
     text = str(res.get("text") or "")
     rid = str(res.get("article_id") or "")
@@ -63,12 +66,15 @@ def compact(res, title=None, link=None, t=None, origin="generator"):
         rid = hashlib.sha1(text.encode("utf-8")).hexdigest()[:10]
     events = []
     for e in res["events"][:20]:
-        if not isinstance(e, dict) or e.get("trigger") not in kb.NODES:
+        if not isinstance(e, dict):
+            continue
+        trig = e.get("trigger")       # a curated node, a company learned from an article, or none (an IPO of an unknown company)
+        if trig not in kb.NODES and not (trig is None or (isinstance(trig, str) and re.match(r"^ent_[a-z0-9]{1,30}$", trig))):
             continue
         events.append({"label": _clip(e.get("label"), 100), "trigger": e["trigger"], "direction": e.get("direction"),
                        "status": e.get("status") if e.get("status") in ("observed", "expected", "hypothesis") else "expected",
                        "type": e.get("type"), "source": e.get("source"), "quote": _clip(e.get("quote"), 240)})
-    if not events:
+    if not events and not ctx_only:
         return None
     paths = []
     for p in (res.get("paths") or [])[:6]:
@@ -86,7 +92,7 @@ def compact(res, title=None, link=None, t=None, origin="generator"):
     assets = [_row(r) for r in (res.get("assets") or [])[:8] if isinstance(r, dict)]
     sectors = [_row(r) for r in (res.get("sectors") or [])[:5] if isinstance(r, dict)]
     variables = [_row(r) for r in (res.get("variables") or [])[:5] if isinstance(r, dict)]
-    nodes = {e["trigger"] for e in events}
+    nodes = {e["trigger"] for e in events if e["trigger"]}
     for p in paths:
         nodes.update(p["nodes"])
     nodes.update(r["node"] for r in assets + sectors + variables if r["node"] in kb.NODES)
@@ -101,6 +107,8 @@ def compact(res, title=None, link=None, t=None, origin="generator"):
                         "verdict": c.get("verdict"), "status": c.get("status")}
                        for c in (res.get("comparison") or [])[:12] if isinstance(c, dict)],
         "hypotheses": hypotheses, "summary": _clip(res.get("summary"), 700), "nodes": sorted(nodes),
+        "context_only": {"focus": [_clip(f, 80) for f in (ctx_only.get("focus") or [])[:4]],
+                         "reason": _clip(ctx_only.get("reason"), 300)} if ctx_only else None,
     }
 
 

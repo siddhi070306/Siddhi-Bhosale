@@ -4,7 +4,7 @@ import os
 from concurrent.futures import ThreadPoolExecutor
 
 from . import extract as ex
-from . import hierarchy, kb, llm, propagate as pg, quotes, timeseries as ts, feeds
+from . import explain, hierarchy, kb, llm, propagate as pg, quotes, timeseries as ts, feeds
 from . import context as ctxmod
 from . import enrich
 from .graph import KnowledgeGraph
@@ -36,6 +36,10 @@ SAMPLES = [
      "text": "Natural gas surged 18% after cold weather and supply outages. Chemical makers warned that higher feedstock costs "
              "could squeeze margins, and utilities were expected to pass on part of the increase to customers."},
 ]
+
+
+CORPORATE_EVENT_LABEL = {"ipo": "IPO", "share_sale": "share sale", "stake_purchase": "stake purchase", "earnings": "earnings",
+                         "deal": "deal", "rating": "rating change", "other": "corporate news"}
 
 
 def llm_required():
@@ -139,6 +143,9 @@ class Analyzer:
 
         def mutate():
             out.update(self.kg.update_edge_weight(source, target, strength=strength, sign=sign))
+            # re-check the link against market data now: a stored verdict was judged against the old direction
+            self.kg.g[source][target]["validation"] = None
+            self.kg.set_validation(source, target, ts.validate_edge(self.kg, source, target, live=False))
 
         res = self._guarded_edit(mutate, "edited link %s -> %s to %+.2f" % (
             self.kg.g.nodes[source]["label"], self.kg.g.nodes[target]["label"],
@@ -291,7 +298,7 @@ class Analyzer:
         art_id = hashlib.sha1(text.encode("utf-8")).hexdigest()[:10]
         extraction = ex.extract(text)
         events = extraction["events"]
-        llm_note, llm_links = None, []
+        llm_note, llm_links, companies, llm_read = None, [], [], False
         if llm_required() or use_llm:
             if not llm.available():
                 if llm_required():
@@ -299,20 +306,29 @@ class Analyzer:
                                      "(in .env or the environment), or set ZENITH_REQUIRE_LLM=0 for rules-only mode."}
                 llm_note = "No GROQ_API_KEY / OPENROUTER_API_KEY set; rules only."
             else:
-                got = llm.extract_graph(text)
+                got = llm.extract_graph(text, with_companies=True)
                 if got is None:
                     if llm_required():
                         return {"error": "The LLM call failed (%s); graph building requires it." % (llm.last_error() or "unknown reason")}
                     llm_note, llm_links = "LLM call failed (%s); rules only." % llm.last_error(), []
                 else:
-                    extra, llm_links = got
+                    extra, llm_links, llm_read = got[0], got[1], True
+                    companies = got[2] if len(got) > 2 else []
                     have = {(e["trigger"], e["direction"]) for e in events}
                     for e in extra:
                         if (e["trigger"], e["direction"]) not in have:
                             e["id"] = "ev%d" % (len(events) + 1)
                             events.append(e)
-                    llm_note = "LLM added %d event(s) and proposed %d quote-verified link(s)." % (
-                        sum(1 for e in events if e["source"] == "llm"), len(llm_links))
+                    # companies the graph does not know yet become learned entities (in their sector, if the model placed one)
+                    known = {u["name"].lower() for u in extraction["unlinked"]}
+                    for c in companies:
+                        if c["name"].lower() not in known:
+                            extraction["unlinked"].append({"name": c["name"], "sector_guess": c["sector"], "by": "llm"})
+                    extraction["unlinked"] = sorted(extraction["unlinked"], key=lambda u: u.get("by") != "llm")[:5]
+                    llm_note = "LLM added %d event(s), proposed %d quote-verified link(s)%s." % (
+                        sum(1 for e in events if e["source"] == "llm"), len(llm_links),
+                        " and named %d new compan%s (%s)" % (len(companies), "y" if len(companies) == 1 else "ies",
+                                                            ", ".join(c["name"] for c in companies)) if companies else "")
 
         guard_report = {"rolled_back": False, "failed": [], "version": self.guard.version, "pruned": []}
         if self.guard.mode == "dynamic":
@@ -325,6 +341,21 @@ class Analyzer:
                 changes = []
         else:
             changes = []          # static mode: the graph is frozen at the curated baseline
+        company_nodes = []        # (graph id or None, company): the companies the story is about
+        for c in companies:
+            nid = "ent_" + "".join(ch for ch in c["name"].lower() if ch.isalnum())[:30]
+            in_graph = nid in self.kg.g
+            company_nodes.append((nid if in_graph else None, c))
+            if c["direction"] and in_graph:          # the article says its shares or value moved: a normal observed event
+                events.append({"id": "ev%d" % (len(events) + 1), "type": "price_move", "trigger": nid, "direction": c["direction"],
+                               "magnitude": None, "intensity": 0.5 * (0.7 if c["status"] == "expected" else 1), "status": c["status"],
+                               "confidence": 0.55, "quote": c["quote"] or "", "source": "llm",
+                               "label": "%s %s (LLM)" % (c["name"], "up" if c["direction"] > 0 else "down")})
+            elif c["event"]:                         # an IPO, stake purchase, deal ... with no stated move: recorded, not propagated
+                events.append({"id": "ev%d" % (len(events) + 1), "type": c["event"], "trigger": nid if in_graph else None, "direction": 0,
+                               "magnitude": None, "intensity": 0, "status": c["status"], "confidence": 0.55,
+                               "quote": c["quote"] or "", "source": "llm",
+                               "label": "%s: %s" % (c["name"], CORPORATE_EVENT_LABEL.get(c["event"], c["event"]))})
         sources, claims = self._build_sources(events)
         result = {"article_id": art_id, "events": events, "mentions": [
             {"node": m["node"], "label": kb.NODES[m["node"]]["label"], "type": kb.NODES[m["node"]]["type"],
@@ -335,7 +366,7 @@ class Analyzer:
         result["kb_version"] = {"version": self.guard.version, "epoch": self.guard.epoch}   # the graph this analysis ran on
         result["input"] = dict(input_info, chars=len(text))
         hypothesis = None
-        if not sources and (use_llm or llm_required()) and llm.available():
+        if not sources and not companies and (use_llm or llm_required()) and llm.available():
             # nothing we know was stated: ask the model for market themes the story could touch. Hypotheses only:
             # they are labelled, drawn dashed, and never ingested into the knowledge graph (ingest already ran).
             hyp = llm.suggest_themes(text)
@@ -352,9 +383,34 @@ class Analyzer:
         result["hypothesis"] = hypothesis if hypothesis and hypothesis["themes"] else (
             {"background": hypothesis["background"], "themes": []} if hypothesis and hypothesis["background"] else None)
         if not sources:
+            # nothing moved: show where the story's companies (and any graph entities it names) sit in the market, and what
+            # usually moves them. Context only: no direction or impact is claimed.
+            focus = [nid if nid else {"id": "new_" + "".join(ch for ch in c["name"].lower() if ch.isalnum())[:30],
+                                      "label": c["name"], "type": "company", "sector": c["sector"]} for nid, c in company_nodes]
+            # graph entities the rules matched count too, unless the model read the story and found nothing financial in it
+            # (a "gold medal" in a sports story is not about gold)
+            if not (llm_read and not companies):
+                for m in extraction["mentions"]:
+                    if m["node"] in self.kg.g and m["node"] not in focus and m["node"] != "central_banks":
+                        focus.append(m["node"])
+            ctx = ctxmod.entity_context(self.kg, focus[:4]) if focus else None
+            if ctx:
+                graph = {"nodes": ctx["nodes"], "links": ctx["links"]}
+                hierarchy.annotate_nodes(self.kg, graph["nodes"])
+                hierarchy.annotate_links(self.kg, graph["links"])
+                for l in graph["links"]:
+                    if self.kg.g.has_edge(l["source"], l["target"]):
+                        l["mechanism"] = self.kg.g[l["source"]][l["target"]].get("mechanism")
+                        l["story"] = explain.explain_link(self.kg, l["source"], l["target"])
+                result.update({"paths": [], "assets": [], "sectors": [], "variables": [], "graph": graph, "comparison": [],
+                               "sources": [], "sparks": {}, "data_modes": [], "macro": [],
+                               "hierarchy": hierarchy.rollup(self.kg, [], [], [], [], []),
+                               "context_only": {"focus": ctx["focus"], "reason": ctx["reason"]},
+                               "summary": ctx["summary"], "caveats": self._caveats(live, None)})
+                return result
             named = bool(extraction["mentions"])
             result.update({"paths": [], "assets": [], "sectors": [], "variables": [], "graph": {"nodes": [], "links": []},
-                           "comparison": [], "summary": "No actionable financial event was detected in this text.",
+                           "comparison": [], "summary": "No market-moving event was found in this text.",
                            "empty_reason": ("Entities were recognised but no price move, decision or event was stated about them."
                                             if named else
                                             "No known market entity, asset or driver is named in this text, so there is nothing to trace."),
@@ -395,6 +451,10 @@ class Analyzer:
                 break
         src_label = {s["id"]: s["label"] for s in sources}
         explained = [self._explain_path(p, i, src_label[p["source_id"]]) for i, p in enumerate(top)]
+        src_event = {s["id"]: s["event"] for s in sources}
+        observed_dir = {s["trigger"]: s["direction"] for s in sources if s["anchor"]}
+        for p, ex_p in zip(top, explained):     # each impact chain told in plain English, with the evidence behind every step
+            ex_p["story"] = explain.explain_chain(self.kg, ex_p, src_event.get(p["source_id"]), observed_dir)
         pid_of = {tuple(p["nodes"]): i for i, p in enumerate(top)}
 
         # per-node summaries
@@ -446,6 +506,10 @@ class Analyzer:
             result["context"] = {k: ctx[k] for k in ("drivers", "peers", "reason")}
         hierarchy.annotate_nodes(self.kg, graph["nodes"])
         hierarchy.annotate_links(self.kg, graph["links"])
+        for l in graph["links"]:          # every relationship drawn carries its reason and a plain-English explanation
+            if self.kg.g.has_edge(l["source"], l["target"]):
+                l["mechanism"] = self.kg.g[l["source"]][l["target"]].get("mechanism")
+                l["story"] = explain.explain_link(self.kg, l["source"], l["target"])
         sparks = {}
         for s in sources:
             sp = ts.sparkline(s["trigger"], live)

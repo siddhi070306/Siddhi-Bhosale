@@ -5,6 +5,9 @@ import CausalChainWalkthrough from '../components/common/CausalChainWalkthrough'
 import HierarchyPanel from '../components/graph/HierarchyPanel';
 import NodeFacts from '../components/graph/NodeFacts';
 import TierFilterBar from '../components/graph/TierFilterBar';
+import RelationshipStory, { ScorePill } from '../components/graph/RelationshipStory';
+import RelationshipsBoard from '../components/graph/RelationshipsBoard';
+import ChainsBoard from '../components/graph/ChainsBoard';
 import { useUi } from '../context/UiContext';
 import { api } from '../services/api';
 
@@ -92,7 +95,8 @@ function EmptyState({ onNavigateToChat, onSelectEvent }) {
 export default function ImpactGraph({ analysis, onNavigateToChat, onSelectEvent, onReanalyze, onNavigateToTab }) {
   const graphData = (analysis && analysis.graphView) || null;
   const [activeTab, setActiveTab] = useState('pathways');
-  const [selectedNode, setSelectedNode] = useState(graphData ? graphData.centerNode : null);
+  // a context graph opens with nothing selected so the whole picture shows (selecting a node dims the rest)
+  const [selectedNode, setSelectedNode] = useState(graphData && !graphData.contextOnly ? graphData.centerNode : null);
   const [selectedEdge, setSelectedEdge] = useState(null);
   const [edgeWeight, setEdgeWeight] = useState(null);
   const [edgeUpdating, setEdgeUpdating] = useState(false);
@@ -120,14 +124,15 @@ export default function ImpactGraph({ analysis, onNavigateToChat, onSelectEvent,
     };
   }, [selectedNodeId]);
 
-  const handleSelectEdge = (edge) => {
+  const handleSelectEdge = (edge, openEdgeTab = true) => {
     setSelectedEdge(edge);
+    if (!edge) return;
     const base = typeof edge.baseStrength === 'number' ? edge.baseStrength : edge.strength;
     const w = (edge.sign || 1) * base;
-    setEdgeWeight(Math.round(w * 100) / 100);
+    setEdgeWeight(Math.round(w * 100) / 100); // the slider always starts at the link's real weight, never 0
     setEdgeSuccessMsg(null);
     setEdgeErrorMsg(null);
-    setActiveTab('edge');
+    if (openEdgeTab) setActiveTab('edge');
   };
 
   const handleSaveEdge = async () => {
@@ -181,10 +186,11 @@ export default function ImpactGraph({ analysis, onNavigateToChat, onSelectEvent,
           </div>
           <div style={{ flex: 1 }}>
             <div style={{ fontSize: 18, fontWeight: 700, color: '#09090b', marginBottom: 4 }}>
-              No Direct Financial Entities Detected in Headline
+              Nothing in this story maps to the market graph
             </div>
             <p style={{ fontSize: 13.5, color: '#52525b', lineHeight: 1.5, margin: 0 }}>
-              The analysed text appears to be a general personal opinion or lifestyle article. The Knowledge Graph tracks specific economic drivers (commodities, central banks, interest rates, industry sectors, or corporate tickers).
+              No company, sector, commodity, index or policy maker the graph can place is named in the text, so no graph is drawn rather
+              than a made-up one. The Knowledge Graph tracks economic drivers (commodities, central banks, interest rates, sectors and companies).
             </p>
           </div>
         </div>
@@ -406,6 +412,12 @@ export default function ImpactGraph({ analysis, onNavigateToChat, onSelectEvent,
       )}
 
       {/* Hypothesis / thin-graph notices */}
+      {analysis.contextOnly && (
+        <div className="card" style={{ marginBottom: 12, padding: '10px 16px', fontSize: 12.5, color: '#1e3a8a', background: '#eff6ff' }}>
+          <strong>Context graph, no impact claimed:</strong> {analysis.contextOnly.reason}
+          <div style={{ marginTop: 4, color: '#334155' }}>{analysis.summary}</div>
+        </div>
+      )}
       {analysis.hypothesis && analysis.hypothesis.themes.length > 0 && (
         <div className="card" style={{ marginBottom: 12, padding: '10px 16px', fontSize: 12.5, color: '#92400e', background: '#fffbeb' }}>
           <strong>Hypothesis, not from the article:</strong> no stated event matched the graph, so the model suggested{' '}
@@ -595,6 +607,13 @@ export default function ImpactGraph({ analysis, onNavigateToChat, onSelectEvent,
             >
               Hierarchy
             </button>
+            <button
+              className={`panel-tab ${activeTab === 'relationships' ? 'active' : ''}`}
+              onClick={() => setActiveTab('relationships')}
+              title="Every relationship in this analysis, explained in plain English"
+            >
+              Relationships
+            </button>
           </div>
 
           {/* Panel Body */}
@@ -605,6 +624,12 @@ export default function ImpactGraph({ analysis, onNavigateToChat, onSelectEvent,
                   Top Propagation Paths
                 </div>
 
+                {graphData.contextOnly && graphData.pathways.length === 0 && (
+                  <p style={{ fontSize: 12.5, color: '#52525b', lineHeight: 1.5 }}>
+                    No propagation paths: the story states no price move or policy decision, so nothing is propagated. The graph shows
+                    context only. Click a node or a link to see what it is and why it is connected.
+                  </p>
+                )}
                 {graphData.pathways.map((p) => {
                   const chainSteps = p.path ? p.path.split(/\s*->\s*|\s*→\s*/) : [];
                   return (
@@ -650,6 +675,40 @@ export default function ImpactGraph({ analysis, onNavigateToChat, onSelectEvent,
                 <div style={{ fontSize: 12, color: '#71717a', lineHeight: 1.5 }}>
                   <strong>Propagation Engine:</strong> Multi-path graph scoring with depth attenuation and per-hop causal decay.
                 </div>
+              </div>
+            ) : activeTab === 'relationships' ? (
+              <div>
+                <div style={{ fontSize: 13, fontWeight: 700, color: '#09090b', marginBottom: 4 }}>Relationships, explained</div>
+                <p style={{ fontSize: 12, color: '#71717a', lineHeight: 1.5, margin: '0 0 12px' }}>
+                  Every relationship drawn for this event, strongest first. Each one says in plain words what it means, why it exists,
+                  how it was identified and how its score is calculated. Click one to highlight it on the graph.
+                </p>
+                {(() => {
+                  const rels = (graphData.edges || []).filter((e) => e.story).sort((x, y) => y.story.score_value - x.story.score_value);
+                  if (!rels.length) {
+                    return <div style={{ fontSize: 12, color: '#71717a' }}>No relationship explanations in this analysis. Re-run it to generate them.</div>;
+                  }
+                  return rels.map((e) => {
+                    const isOpen = selectedEdge && selectedEdge.from === e.from && selectedEdge.to === e.to;
+                    return (
+                      <div
+                        key={`${e.from}>${e.to}`}
+                        className="pathway-card"
+                        style={{ cursor: 'pointer', borderColor: isOpen ? '#93c5fd' : undefined }}
+                        onClick={() => handleSelectEdge(isOpen ? null : e, false)}
+                      >
+                        {isOpen ? (
+                          <RelationshipStory story={e.story} />
+                        ) : (
+                          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 8 }}>
+                            <span style={{ fontSize: 12.5, color: '#18181b', lineHeight: 1.45 }}>{e.story.headline}</span>
+                            <ScorePill story={e.story} />
+                          </div>
+                        )}
+                      </div>
+                    );
+                  });
+                })()}
               </div>
             ) : activeTab === 'hierarchy' ? (
               <HierarchyPanel
@@ -728,6 +787,16 @@ export default function ImpactGraph({ analysis, onNavigateToChat, onSelectEvent,
                         )}
                       </div>
                     </div>
+
+                    {/* The relationship in plain English: why it exists, how it was identified, how it is scored */}
+                    {selectedEdge.story && (
+                      <div style={{ marginBottom: 16 }}>
+                        <div style={{ fontSize: 11, fontWeight: 600, color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.04em', marginBottom: 6 }}>
+                          In plain words
+                        </div>
+                        <RelationshipStory story={selectedEdge.story} />
+                      </div>
+                    )}
 
                     {/* Weight Adjustment Slider */}
                     <div style={{ marginBottom: 16 }}>
@@ -949,6 +1018,27 @@ export default function ImpactGraph({ analysis, onNavigateToChat, onSelectEvent,
           </div>
         </aside>
       </div>
+
+      {/* Identify and score relationships between entities: every relationship, how it was identified, its data check and score */}
+      {graphData && (
+        <div style={{ marginTop: 20 }}>
+          <RelationshipsBoard edges={graphData.edges || []} selectedEdge={selectedEdge} onSelect={(e) => handleSelectEdge(e, false)} />
+        </div>
+      )}
+
+      {/* Explain each impact chain and the evidence behind it */}
+      {graphData && analysis && analysis.raw && (
+        <div style={{ marginTop: 20 }}>
+          <ChainsBoard
+            paths={analysis.raw.paths || []}
+            contextOnly={analysis.contextOnly || null}
+            onFocusNode={(id) => {
+              const n = (graphData.nodes || []).find((x) => x.id === id);
+              if (n) setSelectedNode(n);
+            }}
+          />
+        </div>
+      )}
 
       {/* Feature 1: Causal Transmission Walkthrough */}
       {analysis && analysis.raw && analysis.raw.paths && analysis.raw.paths.length > 0 && (

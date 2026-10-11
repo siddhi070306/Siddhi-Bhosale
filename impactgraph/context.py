@@ -98,3 +98,124 @@ def expand(kg, sources, graph):
         parts.append("sector peers added for context")
     return {"drivers": drivers, "peers": peers, "nodes": list(nodes.values()), "links": list(links.values()),
             "reason": "; ".join(parts) + ". These are hypotheses, not statements from the article."}
+
+
+CONTEXT_ASSETS = ("company", "index", "instrument")
+
+
+def entity_context(kg, focus, max_peers=3, max_drivers=3):
+    """A context graph for a story that names entities but states no move: where each named entity sits (its sector, the
+    sector's other members and the index it weighs in) and what usually moves that sector. No direction or impact is claimed.
+
+    `focus` holds graph node ids, or dicts {"id","label","type":"company","sector"} for a company the graph does not know.
+    -> {"nodes", "links", "summary", "reason", "focus"} or None when nothing can be placed."""
+    from . import hierarchy
+    g = kg.g
+    nodes, links = {}, {}
+    rank = {"via": 1, "driver": 2, "peer": 3, "focus": 4}
+
+    def add_node(n, role, label=None, ntype=None):
+        if n in nodes:
+            if rank[role] > rank[nodes[n]["role"]]:
+                nodes[n]["role"] = role
+            return
+        d = g.nodes[n] if n in g else {"label": label, "type": ntype}
+        nodes[n] = {"id": n, "label": d["label"], "type": d["type"], "direction": None, "confidence": None, "eta": None,
+                    "observed": False, "source": False, "mixed": False, "inferred": role != "focus", "role": role,
+                    "context": True}
+
+    def add_link(u, v, virtual=False):
+        if (u, v) in links:
+            return
+        if virtual or not g.has_edge(u, v):
+            links[(u, v)] = {"source": u, "target": v, "sign": 1, "strength": 0.5, "lag": 0, "provenance": ["inferred"],
+                             "inferred": True, "verdict": None, "paths": [], "kind": "context", "relation": "member_of"}
+            return
+        e = g[u][v]
+        links[(u, v)] = {"source": u, "target": v, "sign": e["sign"], "strength": round(kg.eff_strength(u, v), 3),
+                         "lag": e["lag"], "provenance": list(e.get("provenance") or []), "inferred": bool(e.get("inferred")),
+                         "verdict": (e.get("validation") or {}).get("verdict"), "paths": [], "kind": "context",
+                         "relation": hierarchy.rel(g, u, v)}
+
+    focus_labels, sectors, notes = [], [], []
+    for f in focus:
+        if isinstance(f, dict):                                       # a company the graph does not know (static mode)
+            add_node(f["id"], "focus", f["label"], f.get("type", "company"))
+            focus_labels.append(f["label"])
+            sec = f.get("sector") if f.get("sector") in g else None
+            if sec:
+                add_node(sec, "peer")
+                add_link(sec, f["id"], virtual=True)
+                sectors.append((sec, f["id"]))
+            continue
+        if f not in g:
+            continue
+        add_node(f, "focus")
+        focus_labels.append(g.nodes[f]["label"])
+        t = g.nodes[f]["type"]
+        if t == "sector":
+            sectors.append((f, None))
+        elif t in CONTEXT_ASSETS:
+            p = hierarchy.parent_sector(kg, f)
+            if p:
+                add_node(p["id"], "peer")
+                add_link(p["id"], f)
+                sectors.append((p["id"], f))
+        else:                                                         # a variable: show the sectors it usually moves
+            outs = sorted((v for v in g.successors(f) if g.nodes[v]["type"] == "sector"),
+                          key=lambda v: -kg.eff_strength(f, v))[:max_peers]
+            for v in outs:
+                add_node(v, "peer")
+                add_link(f, v)
+            if outs:
+                notes.append("%s usually moves %s" % (g.nodes[f]["label"], ", ".join(g.nodes[v]["label"] for v in outs)))
+
+    peers_txt, drivers_txt = [], []
+    for sec, member in sectors:
+        sibs = sorted((m for m in hierarchy.members_of(kg, sec) if m != member and g.nodes[m]["type"] == "company"),
+                      key=lambda m: -g[sec][m]["strength"])[:max_peers]
+        for m in sibs:
+            add_node(m, "peer")
+            add_link(sec, m)
+        idx = [v for v in g.successors(sec) if g.nodes[v]["type"] == "index"][:2]
+        for v in idx:
+            add_node(v, "peer")
+            add_link(sec, v)
+        best = {}
+        for p in pg.upstream_paths(kg, sec, 1, max_depth=2):
+            drv = p["nodes"][0]
+            if g.nodes[drv]["type"] in CONTEXT_ASSETS or drv in nodes and nodes[drv]["role"] == "focus":
+                continue
+            if drv not in best or p["score"] > best[drv]["score"]:
+                best[drv] = p
+        top = sorted(best.values(), key=lambda p: -p["score"])[:max_drivers]
+        for p in top:
+            for i, n in enumerate(p["nodes"][:-1]):
+                add_node(n, "driver" if i == 0 else "via")
+            for u, v in p["edges"]:
+                add_link(u, v)
+        lab = g.nodes[sec]["label"]
+        who = nodes[member]["label"] if member else lab
+        part = "%s sits in the %s sector" % (who, lab) if member else "%s is a sector" % lab
+        if sibs:
+            part += " (peers: %s)" % ", ".join(g.nodes[m]["label"] for m in sibs)
+        if idx:
+            part += ", part of the %s" % " and ".join(g.nodes[v]["label"] for v in idx)
+        peers_txt.append(part)
+        if top:
+            drivers_txt.append("what usually moves %s: %s" % (lab, ", ".join(
+                "%s (%s %s%s)" % (g.nodes[p["nodes"][0]]["label"],
+                                  "tighter policy" if g.nodes[p["nodes"][0]]["type"] == "institution" else "a rise",
+                                  "lifts it" if p["sign"] > 0 else "weighs on it",
+                                      ", via " + " and ".join(g.nodes[n]["label"] for n in p["nodes"][1:-1]) if len(p["nodes"]) > 2 else "")
+                for p in top)))
+
+    if not focus_labels or len(nodes) < 2:
+        return None
+    names = ", ".join(focus_labels)
+    summary = ("This story names %s but states no price move or policy decision, so no impact is claimed. " % names
+               + ". ".join(s[0].upper() + s[1:] for s in peers_txt + notes + drivers_txt) + ".").replace("..", ".")
+    return {"nodes": list(nodes.values()), "links": list(links.values()), "summary": summary, "focus": focus_labels,
+            "reason": "No price move or policy decision is stated, so this is a context graph: where %s sit%s in the market "
+                      "and what usually moves %s. It claims no direction or impact." % (
+                          names, "s" if len(focus_labels) == 1 else "", "it" if len(focus_labels) == 1 else "them")}

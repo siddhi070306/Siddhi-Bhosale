@@ -71,7 +71,9 @@ class KnowledgeGraph:
             if u.get("sector_guess"):
                 sec = u["sector_guess"]
                 self.g.add_edge(sec, nid, sign=1, strength=0.5, base_strength=0.5, lag=0,
-                                mechanism="Sector inferred from the company name (%s); unverified" % u["name"],
+                                mechanism=("%s placed in this sector by the language model from the article; unverified" % u["name"]
+                                           if u.get("by") == "llm" else
+                                           "Sector inferred from the company name (%s); unverified" % u["name"]),
                                 provenance=["inferred"], evidence=[], validation=None, inferred=True, relation="member_of")
                 changes.append({"kind": "new_edge", "src": sec, "dst": nid, "inferred": True})
 

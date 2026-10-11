@@ -187,7 +187,12 @@ export function toGraphView(res) {
   links.forEach((l) => {
     (into[l.target] = into[l.target] || []).push(l);
   });
+  const ctxOnly = !!res.context_only; // a story that names entities but states no move: context, no impact claimed
   const provenanceOf = (n) => {
+    if (n.role === 'focus') return { label: 'Named in the article (no move stated)', tone: 'observed' };
+    if (ctxOnly && n.role === 'driver') return { label: 'What usually moves this sector (from the graph; no impact claimed)', tone: 'hypothesis' };
+    if (ctxOnly && n.role === 'via') return { label: 'Step between a usual driver and the sector (no impact claimed)', tone: 'hypothesis' };
+    if (ctxOnly && n.role === 'peer') return { label: 'Where it sits in the market: sector, peers, index (no impact claimed)', tone: 'hypothesis' };
     if (n.role === 'driver') return { label: 'Possible driver (traced backwards from the stated move; not in the article)', tone: 'hypothesis' };
     if (n.role === 'via') return { label: 'Link in a possible chain of causes (hypothesis)', tone: 'hypothesis' };
     if (n.role === 'peer') return { label: 'Sector context (peers of the company in the article)', tone: 'hypothesis' };
@@ -219,12 +224,12 @@ export function toGraphView(res) {
         col: c,
         x: COL_X[c],
         y: Math.round(start + i * step),
-        change: n.role === 'driver' && n.direction ? `${ARROW(n.direction)} would explain it` : n.role ? 'context' : n.direction ? `${ARROW(n.direction)} ${n.confidence != null ? fmt(n.confidence) : 'reported'}` : '',
+        change: n.role === 'focus' ? 'in the article' : n.role === 'driver' && n.direction ? `${ARROW(n.direction)} would explain it` : n.role ? 'context' : n.direction ? `${ARROW(n.direction)} ${n.confidence != null ? fmt(n.confidence) : 'reported'}` : '',
         direction: n.direction,
         confidence: n.confidence,
-        isAnchor: !!(n.observed || srcIds.has(n.id)),
+        isAnchor: !!(n.observed || srcIds.has(n.id) || n.role === 'focus'),
         isDashed: !!n.inferred,
-        isHypothesis: !!n.role,
+        isHypothesis: !!n.role && n.role !== 'focus',
         role: n.role || null,
         hasMixedSignals: !!n.mixed,
         observed: n.observed,
@@ -261,6 +266,7 @@ export function toGraphView(res) {
       baseLag: l.base_lag,
       volRegime: l.vol_regime,
       mechanism: l.mechanism,
+      story: l.story || null, // plain-English explanation of the relationship (impactgraph/explain.py)
       isActive: (l.paths || []).includes(0),
       provenance: l.provenance,
       verdict: l.verdict,
@@ -279,11 +285,13 @@ export function toGraphView(res) {
       change: src0 ? `${ARROW(src0.direction)} ${ev0 && ev0.magnitude ? ev0.magnitude : 'shock'}` : '',
       confidence: ev0 ? ev0.confidence : null,
       evidence: ev0 ? `${ev0.status}: "${ev0.quote}"` : null,
-      provenance: ev0 ? { label: ev0.status === 'observed' ? 'Observed in article' : 'Stated as expected in article', tone: 'observed' } : null,
+      provenance: ev0 ? { label: ev0.status === 'observed' ? 'Observed in article' : 'Stated as expected in article', tone: 'observed' }
+        : ctxOnly ? { label: 'Named in the article (no move stated)', tone: 'observed' } : null,
       isAnchor: true,
     },
     nodes: out,
     edges,
+    contextOnly: ctxOnly,
     pathways: (res.paths || []).slice(0, 8).map((p) => ({
       id: p.id,
       endId: p.end,
@@ -323,10 +331,11 @@ export function adaptResult(res, text, source = null, link = null, title = null)
     kbGuard: res.kb_guard || null,
     context: res.context || null,
     hypothesis: res.hypothesis || null,
+    contextOnly: res.context_only || null, // {focus, reason}: a context graph, no impact claimed
     emptyReason: res.empty_reason || null,
     emptyHint: res.empty_hint || null,
     input: res.input || null,
-    noEvent: !(res.paths && res.paths.length),
+    noEvent: !(res.paths && res.paths.length) && !res.context_only,
   };
 }
 

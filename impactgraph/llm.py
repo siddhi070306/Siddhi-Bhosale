@@ -252,19 +252,56 @@ def _valid_links(items, text):
     return links
 
 
-def extract_graph(text):
+CORPORATE_EVENTS = ("ipo", "share_sale", "stake_purchase", "earnings", "deal", "rating", "other")
+MAX_COMPANIES = 4
+
+
+def _valid_companies(items, text):
+    """Companies the article names that the graph does not know yet. Kept only if the name is in the text; the sector must be
+    one of the graph's sectors (else none); a direction only if the text states that the company's shares or value moved."""
+    from . import extract as ex
+    sectors = [k for k, v in kb.NODES.items() if v["type"] == "sector"]
+    low_text, out, seen = text.lower(), [], set()
+    for c in items or []:
+        name = re.sub(r"\s+", " ", str((c or {}).get("name") or "")).strip(" .,'\"")
+        if not (2 <= len(name) <= 60) or name.lower() not in low_text or name.lower() in seen:
+            continue
+        hit = ex.find_mentions(name)
+        if hit and sum(m["end"] - m["start"] for m in hit) >= 0.6 * len(name):
+            continue                          # already a node in the graph (e.g. "HDFC Bank"): the rules handle it
+        seen.add(name.lower())
+        quote = (c.get("quote") or "").strip()
+        out.append({"name": name, "sector": c.get("sector") if c.get("sector") in sectors else None,
+                    "event": c.get("event") if c.get("event") in CORPORATE_EVENTS else None,
+                    "direction": c.get("direction") if c.get("direction") in (1, -1) else 0,
+                    "status": "expected" if c.get("status") == "expected" else "observed",
+                    "quote": quote if quote and quote[:40] in text else None})
+        if len(out) == MAX_COMPANIES:
+            break
+    return out
+
+
+def extract_graph(text, with_companies=False):
     """Events AND cause->effect links from one model call (half the tokens of two calls: the node list and the
     article are sent once). Every proposal is verified exactly as in extract_events / extract_links.
-    Returns (events, links) or None on failure."""
-    sys_p = ("You read a financial news article and extract (1) events and (2) cause->effect links, as JSON only: "
+    Returns (events, links) or None on failure; with_companies=True returns (events, links, companies), where companies are
+    the firms the article names that the graph does not know yet (see _valid_companies)."""
+    sectors = ", ".join(k for k, v in kb.NODES.items() if v["type"] == "sector")
+    sys_p = ("You read a financial news article and extract (1) events, (2) cause->effect links and (3) companies, as JSON only: "
              '{"events":[{"trigger":"<node id>","direction":1|-1,"status":"observed"|"expected","magnitude":"<e.g. 12%> or null",'
              '"type":"price_move|central_bank_decision|supply_decision|geopolitical|regulation","quote":"<exact sentence from the text>"}],'
              '"links":[{"src":"<node id>","dst":"<node id>","sign":1|-1,"mechanism":"<one short sentence>",'
-             '"quote":"<exact sentence from the text that supports it>"}]}. '
+             '"quote":"<exact sentence from the text that supports it>"}],'
+             '"companies":[{"name":"<company name exactly as written in the text>","sector":"<sector id or null>",'
+             '"event":"ipo|share_sale|stake_purchase|earnings|deal|rating|other|null","direction":1|-1|0,'
+             '"status":"observed"|"expected","quote":"<exact sentence from the text>"}]}. '
              "Use ONLY these node ids: " + _nodes_for_prompt() + ". "
              "Events: 'observed' = reported as having happened; hedged or forecast statements are 'expected'; for geopolitical "
              "escalation use geopolitical_tension direction 1. Links: sign=1 means dst moves the same way as src, -1 the opposite; "
              "include every relationship the text states or clearly implies, including multi-step chains as separate links. "
+             "Companies: every company, bank, insurer or fund named in the text that is NOT in the node list, at most four; sector "
+             "is the closest of these ids or null if none fits: " + sectors + "; direction is 1 or -1 ONLY if the text says that "
+             "company's shares or value rose or fell, otherwise 0; event is the corporate event the text reports about it, or null. "
              "Never invent anything the text does not support; quotes must be copied exactly.")
     out = _chat(sys_p, text[:6000], json_mode=True)
     if not out:
@@ -274,7 +311,8 @@ def extract_graph(text):
     except Exception:
         _LAST_ERROR[0] = "the model did not return valid JSON"
         return None
-    return _valid_events(data.get("events"), text), _valid_links(data.get("links"), text)
+    got = (_valid_events(data.get("events"), text), _valid_links(data.get("links"), text))
+    return got + (_valid_companies(data.get("companies"), text),) if with_companies else got
 
 
 def suggest_themes(text):

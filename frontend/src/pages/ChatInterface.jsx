@@ -78,6 +78,7 @@ export default function ChatInterface({
         entities: result.view.extractedEntities,
         details: result.view.details,
         noEvent: result.noEvent,
+        contextOnly: result.contextOnly,
         kbGuard: result.kbGuard,
         input: result.input,
         context: result.context,
@@ -154,7 +155,7 @@ export default function ChatInterface({
                         <Sparkles size={16} />
                         <span>Analysis & Causal Mapping</span>
                       </div>
-                      <span className="badge badge-black">{msg.noEvent ? 'No event detected' : 'Analysis Complete'}</span>
+                      <span className="badge badge-black">{msg.noEvent ? 'No event detected' : msg.contextOnly ? 'Context graph (no move stated)' : 'Analysis Complete'}</span>
                     </div>
 
                     {/* Summary text */}

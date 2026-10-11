@@ -51,6 +51,7 @@ function buildAiMessage(eventText, res) {
     entities: res.view.extractedEntities,
     details: res.view.details,
     noEvent: res.noEvent,
+    contextOnly: res.contextOnly,
     kbGuard: res.kbGuard,
     input: res.input,
     context: res.context,
@@ -295,6 +296,9 @@ export default function App() {
     setNotice('Analysing selected event…');
     try {
       const res = await api.analyze(eventText, undefined, source, link, title);
+      // a headline analysis is a new chat: never overwrite the chat that happened to be open
+      setActiveSessionIdState(null);
+      setActiveSessionId(null);
       handleAnalysisComplete(eventText, res);
       setMessages([
         { id: `usr-${Date.now()}`, sender: 'user', text: eventText },

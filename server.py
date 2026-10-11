@@ -6,7 +6,7 @@ from fastapi.responses import FileResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
-from impactgraph import assistant, cards as cardlib, feeds, hedge, hierarchy, library, llm, market, quotes
+from impactgraph import assistant, cards as cardlib, explain, feeds, hedge, hierarchy, library, llm, market, quotes
 from impactgraph.service import SAMPLES, Analyzer, llm_required
 
 app = FastAPI(title="Apex Zenith")
@@ -148,6 +148,14 @@ def kg_paths(src: str, dst: Optional[str] = None, limit: int = Query(3, ge=1, le
         shared = cardlib.shared_drivers_card(analyzer.kg, src, dst)
         cards = [cardlib.gap_card(analyzer.kg, src, dst)] + ([shared] if shared else [])
     return {"graph_version": {"version": analyzer.guard.version, "epoch": analyzer.guard.epoch}, "cards": cards}
+
+
+@app.get("/api/kg/explain")
+def kg_explain(src: str, dst: str):
+    """One relationship in plain English: what it says, why, how it was identified, the data check, how it is scored."""
+    if not analyzer.kg.g.has_edge(src, dst):
+        raise HTTPException(status_code=404, detail="the graph has no link %s -> %s" % (src, dst))
+    return explain.explain_link(analyzer.kg, src, dst)
 
 
 @app.get("/api/node/{node_id}")

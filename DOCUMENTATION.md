@@ -128,7 +128,7 @@ flowchart TD
 4. **Extract with the LLM** (`llm.extract_graph`): extra events and links. Each is kept only if its quote appears in the article. `ZENITH_REQUIRE_LLM=1` (the default) makes this step mandatory: if it fails, the analysis returns an error rather than silently degrading.
 5. **Update the graph** (dynamic mode only) inside a guarded change: ingest evidence and entities, add verified LLM links, run the health checks, roll back on failure, record a history entry.
 6. **Build sources.** Observed price moves become *anchored* sources; observed decisions and events become sources; expected (hedged) price moves become *claims* to compare with the model.
-7. **If nothing was stated**, either return an honest empty state with the reason, or (LLM available) ask for hedged *themes* that are drawn dashed and never ingested.
+7. **If nothing was stated**: when the story names companies or graph entities (an IPO, a stake purchase, a new branch network), build a **context graph** (where they sit in the market and what usually moves them, no impact claimed); otherwise (LLM available) ask for hedged *themes* that are drawn dashed and never ingested, or return an honest empty state with the reason.
 8. **Propagate, then validate.** Pass 1 propagates on priors. The edges of the strongest 80 paths are checked against real series. Contradicted runtime links are pruned. Pass 2 propagates again with data-adjusted strength and lag.
 9. **Aggregate** per node into asset, sector and variable rows; choose and explain the top 40 paths.
 10. **Compare** the model with what the article stated; add thin-graph context; build the graph view and the hierarchy roll-up; write the summary (LLM, constrained to the supplied facts) and the caveats.
@@ -289,6 +289,8 @@ Every change produces one **history entry** (`changelog.py`): an id, the version
 
 * **Hierarchy roll-up** (`hierarchy.rollup`): for each tier, the count of affected nodes, how many went up, down or are mixed, the top items, and a **drill-down from each affected sector to its member assets**. It only re-groups impact rows the analysis already produced.
 * **Evidence mix** (`hierarchy.evidence_mix`): for each tier, how the links *arriving* at it are supported (the basis categories above), over the distinct links on the analysed paths. It re-groups what the graph records; it is not a probability.
+* **Relationships in plain English** (`impactgraph/explain.py`): every relationship drawn in an analysis carries a short explanation built only from what the graph stores on that link, in five parts: what it says (*A rise in Crude Oil tends to push the Airlines sector down.*), why (its mechanism, or what its type means, e.g. a sector member), how it was identified (analyst prior, the article sentences that mention both ends, a quote-verified language-model reading, a user edit), what market data says (agrees or disagrees, with the correlation, the number of days and the lag), and how the score is calculated (*starts at 0.80, set by the analyst; market data raised it by 16% to 0.93*, plus the discount it gets as a later step of a chain), with the timing. The numbers in the text are the link's own, so they can be checked against it. Editing a link's weight re-checks it against market data straight away, so its stored verdict always matches its current direction. Shown in the Impact Graph's **Identify and score relationships between entities** table, its **Relationships** tab and when a link is clicked; `GET /api/kg/explain?src=&dst=` returns it.
+* **Impact chains in plain English** (`explain.explain_chain`): every explained path of an analysis carries a story: what the article says about the starting event (quoted, or labelled expected or hypothesis), the chain told step by step (*A rise in Crude Oil pushes Inflation Expectations up, because energy is a direct CPI input; that rise in Inflation Expectations pushes Interest-Rate Expectations up, because ...*), the evidence behind each step (who identified it, the market-data check, any article quote), an evidence summary for the chain, the score multiplied out (*0.93 × (0.85 × 0.93) × (0.70 × 0.82) = 0.42*), the weakest step and why, and the conclusion, labelled as an inference, or, when the chain ends on a move the article reports, whether the two agree. Shown in the Impact Graph's **Explain each impact chain and the evidence behind it** section.
 * **Tier sentence:** one line per path and per asset, for example `Event: Airlines down → Sector: Airlines ↓ → Asset: Delta Air Lines ↓`.
 * **Cards** (`cards.py`): the graph as **citable text documents**: tier, sector, node and link cards with stable ids (`n:<node>`, `l:<from>><to>`, `s:<sector>`, `t:<tier>`; path cards `p:a>b>c` are rebuilt from their id). Every fact is taken from the graph, so the same graph always yields the same cards. An export is pinned to the graph version and carries a **fingerprint** that changes exactly when the graph's facts change. The assistant and the export read the same card builders, so a retrieval system and the chatbot see the same text. Every saved analysis also has a card (`a:<id>`, section 4.14), available from `GET /api/kg/cards/a:<id>` and in the export with `analyses=true`; analysis cards are not part of the fingerprint, which covers the graph's own facts only. No embeddings or vector search are included.
 
@@ -368,6 +370,21 @@ For each stated event the system compares the direction the model predicts for t
 ### 4.7 Thin graphs: context and hypotheses (`context.py`, `llm.suggest_themes`)
 
 * When a story states a move but little downstream (fewer than 14 entities reached), the system adds **context**: possible *drivers* traced backwards (up to 8) and *sector peers* or index composition, all drawn dashed and labelled as hypotheses; none is learned.
+* When a story **names companies but states no move** (an IPO, a share sale, a stake purchase, earnings without a stated
+  reaction, a new branch network), the system builds a **context graph** (`context.entity_context`) instead of an empty screen.
+  The LLM extraction also returns up to 4 companies the graph does not know, each kept only if its name appears in the text, with a
+  sector from the graph's 13 sectors, an optional corporate event (`ipo`, `share_sale`, `stake_purchase`, `earnings`, `deal`,
+  `rating`, `other`), and a direction only when the text states that the company's shares or value moved. In dynamic mode a new
+  company is learned as an entity in its sector (an inferred `member_of` link, guarded like every other change); in static mode it is
+  drawn as a temporary node. A stated share move becomes a normal event and propagates; an event without a move is recorded
+  (*"Fusion CX: IPO"*) but not propagated. The context graph shows the named company (role *focus*), its sector, up to 3 sector
+  peers, the index the sector weighs in, and the sector's 3 strongest usual drivers found by walking the graph backwards. No node
+  carries a direction, no path is scored, and the summary says so: *"This story names HDFC Bank but states no price move or policy
+  decision, so no impact is claimed. HDFC Bank sits in the Banks sector (peers: JPMorgan Chase, State Bank of India), part of the
+  Nifty Bank and S&P 500. What usually moves Banks: Economic Growth (a rise lifts it), Interest-Rate Expectations (a rise lifts
+  it), ..."*. The Impact Graph page shows a "Context graph, no impact claimed" banner, the chat card is badged "Context graph (no
+  move stated)", and every link in it is explained in the relationships table. Rules-only mode does the same for graph entities the
+  rules recognise. When the LLM read the story and found no company, stray rule matches are not used (a "gold medal" is not gold).
 * When a text states **nothing recognisable**, the LLM may suggest hedged *themes* the story could touch, each with the quote that supports it and a background note; they form a dashed hypothesis graph (at most 20 paths) and are never ingested into the knowledge graph. If nothing can be drawn the page says why and what to try.
 
 ### 4.8 What-if and scenario simulation
@@ -481,7 +498,7 @@ User-adjustable assumptions (a shock size in the forecast, a link weight, a scen
 | `extract.py` | 305 | Rule-based entity and event extraction |
 | `llm.py` | 312 | Provider selection and fallback; extraction, summary, themes, sector suggestion |
 | `timeseries.py` | 360 | FRED and Yahoo data, cache, link validation, dynamic lag, simulated series |
-| `context.py` | 100 | Thin-graph context: drivers, peers |
+| `context.py` | 221 | Thin-graph context (drivers, peers) and context graphs for stories that state no move |
 | `enrich.py` | 92 | Fallback chain for headline text |
 | `feeds.py` | 356 | RSS, NewsAPI, safe article reader, SEC, caches |
 | `quotes.py` | 334 | Live quote hub, watchlist, SSE |
@@ -517,6 +534,7 @@ All paths are under the backend origin (`http://127.0.0.1:8000`); the frontend p
 | `GET /api/graph` | The full graph with tiers and relations |
 | `GET /api/hierarchy` | Tier definitions and an audit of the links (counts by kind and relation, feedback links) |
 | `GET /api/node/{id}` | Tier-specific properties of one node |
+| `GET /api/kg/explain?src=&dst=` | One relationship in plain English: what it says, why, how it was identified, the data check, how it is scored, timing |
 | `GET /api/kg/cards` | The graph as cards; filters `tier`, `node`, `kind`; `limit`, `offset`; `analyses=true` (or `kind=analysis`) adds saved-analysis cards; returns `graph_version` and `fingerprint` |
 | `GET /api/kg/cards/{id}` | One card (including `p:` path cards) |
 | `GET /api/kg/paths?src=&dst=` | Strongest path cards out of a node |
@@ -572,7 +590,7 @@ A React 19 single-page app (`frontend/src`), served by Vite on port 5173 in deve
 | **Asset Impact** (`#/asset-impact`) | Ranked affected assets next to live prices; the *Why* sentence per asset; trend chart; links to analogs and forecast; sector heatmap; add an asset to the graph; executive memo. Shows baseline assets before any analysis. |
 | **Analogs & Forecast** (`#/econometrics`) | Past-move analogs and the volatility fan, side by side or separately, for any of 38 assets; the shock is a stated assumption; refusals show their reason. |
 | **Event Diagnostics** (`#/event-analysis`) | Entities, event details, the source quote, model-vs-article checks, the step-by-step causal walkthrough, the executive memo. |
-| **Impact Graph** (`#/impact-graph`) | The interactive graph with tier headers, a tier bar (hide a tier or fold sector members), a pipeline cascade animation, and a side panel: **Pathways**, **Node Details** (including what the graph knows), **Edge Sensitivity** (edit a link's weight), **Hierarchy** (roll-up, evidence mix, sector to members). |
+| **Impact Graph** (`#/impact-graph`) | The interactive graph with tier headers, a **Relationships** tab that explains every relationship in plain English (strongest first), a full-width **Identify and score relationships between entities** table and an **Explain each impact chain and the evidence behind it** section below the graph (every chain told step by step with the evidence per step, the score arithmetic, the weakest step and the conclusion; the 12 strongest first; filter by where a chain ends) (one row per relationship: the sentence, how it was identified, what market data says, the score with its arithmetic, the delay; filter by strength; click a row for the full explanation and to highlight the link), a tier bar (hide a tier or fold sector members), a pipeline cascade animation, and a side panel: **Pathways**, **Node Details** (including what the graph knows), **Edge Sensitivity** (edit a link's weight), **Hierarchy** (roll-up, evidence mix, sector to members). |
 | **Scenario Simulator** (`#/scenario-simulator`) | Single and multi-shock what-ifs, presets (labelled as assumptions), scenario comparison, net force balance at a chosen asset. |
 | **Engine & Settings** (`#/settings`) | Backend and key status; live-data and full-article toggles; knowledge-base mode, undo and revert; the last health check; recent changes; the **change history** with details, restore and JSON export. |
 
@@ -628,7 +646,7 @@ The system is **local-first**. A `vercel.json` exists, but it serves only `serve
 
 ## 9. Testing and verification
 
-### 9.1 Automated tests: 228 passing
+### 9.1 Automated tests: 257 passing
 
 | Suite | Tests | Covers |
 | --- | --- | --- |
@@ -636,10 +654,12 @@ The system is **local-first**. A `vercel.json` exists, but it serves only `serve
 | `test_dynamic.py` | 22 | Guard, learning, rollback, assets, edge edit, persistence |
 | `test_history.py` | 22 | Diffs, guarded edits, undo, restore, link rules, move, export and import, persistence, API |
 | `test_context.py` | 24 | Thin-graph context, upstream paths, hypotheses |
+| `test_context_graph.py` | 11 | Context graphs for stories with no stated move: focus, sector, peers, index and drivers with no direction claimed; learned entity in dynamic mode, temporary node in static mode; a stated share move becomes an event; non-financial stories stay empty; library records; LLM company validation |
 | `test_step3.py` | 17 | Tier sentences, evidence mix (hand-counted), cards and their endpoints |
 | `test_enrich.py` | 16 | Headline text fallback chain |
 | `test_tiered_properties.py` | 15 | Stored tier properties, relations, back-fill of old states, node properties |
 | `test_assistant.py` | 12 | Retrieval, citations, read-only guarantee, endpoint |
+| `test_explain.py` | 15 | Plain-English relationship and chain explanations: wording and grammar, data agreeing or disagreeing, article and LLM evidence, user edits, score arithmetic, every analysis link explained, the endpoint |
 | `test_library.py` | 16 | Analysis records (reported vs inferred vs hypotheses), persistence, limits, import, delete, analysis cards, "the last article", diverse one-topic paths, endpoints |
 | `test_hierarchy.py` | 11 | Tiers, link kinds, roll-up, guard rule, score reproduction |
 | `test_forecast.py` | 10 | Zero drift, refusals, reproducibility |
@@ -801,7 +821,7 @@ server.py            FastAPI application (endpoints, SSE, warm-up)
 run.py               Starts the backend on 127.0.0.1:8000
 requirements.txt     Python dependencies
 impactgraph/         The engine (modules in section 6.1)
-tests/               The 228 automated tests
+tests/               The 257 automated tests
 research/            PAPER.md (research write-up), evaluate.py (reproducible experiments), results.json (their output)
 frontend/            React 19 + Vite application (pages, components, services, context, storage)
 public/              Legacy offline cockpit served at "/" by the backend

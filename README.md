@@ -4,7 +4,7 @@
 [![FastAPI](https://img.shields.io/badge/FastAPI-0.110%2B-009688.svg)](https://fastapi.tiangolo.com/)
 [![React](https://img.shields.io/badge/React-19.0-61DAFB.svg)](https://react.dev/)
 [![Vite](https://img.shields.io/badge/Vite-6.0-646CFF.svg)](https://vitejs.dev/)
-[![Tests](https://img.shields.io/badge/Tests-228%20Passed-brightgreen.svg)](tests/)
+[![Tests](https://img.shields.io/badge/Tests-257%20Passed-brightgreen.svg)](tests/)
 [![Architecture](https://img.shields.io/badge/Architecture-4--Tier%20Causal%20DAG-orange.svg)](#4-tier-hierarchical-knowledge-graph)
 
 **Apex Zenith** transforms raw financial news, central bank statements, regulatory filings, and commodity shocks into a **grounded, transparent causal dependency graph**. It traces how macro shocks propagate through economic variables, industry sectors, and tradable assets—validating every causal link against empirical market data, quantifying risk with Monte Carlo simulations and historical analogs, and discovering algorithmic hedges for investor portfolios.
@@ -135,6 +135,21 @@ Every link is characterized by:
 - Runs automated regression tests on every update: if a learned edge contradicts curated baselines or violates tier rules, the state is immediately reverted.
 - Maintains a full versioned audit trail (`GET /api/kb/history`).
 
+### 9. Relationships Explained in Plain English (`impactgraph/explain.py`)
+- Every relationship drawn for an event carries a short explanation built only from what the graph stores on that link.
+- Five parts: what it says (*"A rise in Crude Oil tends to push the Airlines sector down."*), why it exists, how it was identified (analyst prior, article sentences, a quote-verified LLM reading, user edits), what market data says (agrees or disagrees, with correlation, days and lag), and how the score is calculated step by step (*"starts at 0.80, set by the analyst; market data raised it by 16% to 0.93"*).
+- Shown on the Impact Graph page in the **Identify and score relationships between entities** table (one row per relationship, with how it was identified, the market-data check and the score arithmetic), in the **Relationships** tab, and when a link is clicked.
+
+### 10. Impact Chains Explained with Their Evidence (`impactgraph/explain.py`)
+- Every impact chain is told step by step in plain English (*"A rise in Crude Oil pushes Inflation Expectations up, because ...; that rise in Inflation Expectations pushes Interest-Rate Expectations up, because ..."*), starting from what the article says.
+- For each step: who identified it (analyst, article, LLM, user), what market data says, and any article quote; for the chain: an evidence summary, the score multiplied out, the weakest step, and a conclusion labelled as an inference (or whether it agrees with a move the article reports).
+- Shown on the Impact Graph page in the **Explain each impact chain and the evidence behind it** section.
+
+### 11. A Graph for Every Financial Story (`impactgraph/context.py`)
+- A story that names a company but states no move (an IPO, a stake purchase, a new branch network) gets a **context graph** instead of an empty screen: the company, its sector, sector peers, the index, and what usually moves that sector.
+- Companies the graph does not know are read by the LLM (name checked against the text, sector, corporate event) and learned in their sector in dynamic mode.
+- No direction or impact is claimed; the page and the chat card say so. Non-financial stories (sports, celebrity) still get an honest explanation, not an invented graph.
+
 ---
 
 ## Quickstart & Installation
@@ -197,7 +212,7 @@ Visit **`http://localhost:5173`** for the full interactive glassmorphic applicat
 ### 4. Running the Test Suite
 
 ```bash
-# Execute all 228 automated unit and integration tests
+# Execute all 257 automated unit and integration tests
 python -m unittest discover tests
 ```
 
@@ -216,7 +231,8 @@ python -m unittest discover tests
 | `/api/stream` | `GET` | Server-Sent Events (SSE) stream for real-time market ticks via Yahoo Finance WebSocket. |
 | `/api/quotes` | `GET` | Batched polling fallback for live quote prices and daily percentage changes. |
 | `/api/hierarchy` | `GET` | Audits the 4-tier graph layout and inspects tier cross-link boundaries. |
-| `/api/kb/cards` | `GET` | Exports the knowledge graph as structured, citable text cards. |
+| `/api/kg/cards` | `GET` | Exports the knowledge graph as structured, citable text cards. |
+| `/api/kg/explain` | `GET` | One relationship in plain English (`?src=&dst=`): what it says, why, how it was identified, the data check, how it is scored. |
 | `/api/kb/history` | `GET` | Returns versioned audit history of all manual and dynamic graph modifications. |
 
 ---
